@@ -4104,7 +4104,8 @@ function renderTabDatensicherung(){
     <div class="card card-pad stack">
       <h3>Export</h3>
       <p class="hint">Sichert den gesamten gemeinsamen Bestand (Personen, Hunde, Qualifikationen, Rollen-Zuordnungen, Termine, Trainings- und Lehrmaterial u. a.) als JSON-Datei.</p>
-      <button class="btn btn-primary" id="btn-export" style="align-self:flex-start">Bestand exportieren</button>
+      <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn btn-primary" id="btn-export">Bestand exportieren</button><button class="btn" id="btn-export-bilder">Bestand inkl. Einsatzfotos exportieren</button></div>
+      <p class="hint" style="margin:0">Einsatzfotos und -karten liegen aus Platzgründen getrennt im Gerätespeicher. „Inkl. Einsatzfotos“ nimmt sie mit in die Sicherungsdatei (deutlich größer); der normale Export enthält nur die Verweise.</p>
     </div>
     <div class="card card-pad stack" style="margin-top:16px">
       <h3>Import</h3>
@@ -4152,6 +4153,7 @@ function bindTabDatensicherung(){
       render();
     }catch(e){ alert('Sicherheitskopie konnte nicht gelesen werden.'); }
   };
+  const bilderBtn = document.getElementById('btn-export-bilder'); if(bilderBtn) bilderBtn.onclick = ()=> sicherungMitBildern();
   document.getElementById('btn-export').onclick = ()=>{
     const exportDaten = Object.assign({ exportInfo:{ format:'barry-bestand', app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||'' } }, state);
     const blob = new Blob([JSON.stringify(exportDaten,null,2)], {type:'application/json'});
@@ -5938,6 +5940,8 @@ function bestandAusDateiImportieren(file){
       const umfang = `\nInhalt: ${parsed.personen.length} Personen, ${(parsed.hunde||[]).length} Hunde, ${(parsed.termine||[]).length} Termine, ${(parsed.einsaetze||[]).length} Einsätze.`;
       if(!confirm('Der bestehende Bestand auf diesem Gerät wird ersetzt (der aktuelle Stand wird vorher automatisch als Sicherheitskopie abgelegt). Fortfahren?'+info+umfang)) return;
       try{ localStorage.setItem(STORAGE_KEY+'-vor-import-backup', JSON.stringify(state)); }catch(e){ /* Backup optional, Import trotzdem versuchen */ }
+      const anlagenDaten = parsed.anlagenDaten; delete parsed.anlagenDaten;
+      if(anlagenDaten && typeof anlagenDaten==='object') anlagenAusSicherungSchreiben(anlagenDaten);
       state = migriereState(Object.assign(leererState(), parsed));
       speichereState();
       session = null; loginEingabe = ''; loginFehler = '';
@@ -5956,7 +5960,7 @@ function bestandAusDateiImportieren(file){
    ========================================================= */
 function schliesseModal(){ modal=null; render(); }
 
-const EINSATZ_MODALTYPEN = ['einsatz','risiko','kraefte','suchtrupps','abschluss','tracks'];
+const EINSATZ_MODALTYPEN = ['einsatz','risiko','kraefte','suchtrupps','abschluss','tracks','anlagen'];
 function einsatzModalErlaubt(){
   if(!EINSATZ_MODALTYPEN.includes(modal.type)) return true;
   const person = aktuellePerson();
@@ -5987,6 +5991,7 @@ function renderModal(){
   if(modal.type==='suchtrupps') return renderModalSuchtrupps();
   if(modal.type==='abschluss') return renderModalAbschluss();
   if(modal.type==='tracks') return renderModalTracks();
+  if(modal.type==='anlagen') return renderModalAnlagen();
   if(modal.type==='jahresplan') return renderModalJahresplan();
   if(modal.type==='austausch') return renderModalAustausch();
   if(modal.type==='meinProfil') return renderModalMeinProfil();
@@ -6016,6 +6021,7 @@ function bindModal(person){
   if(modal.type==='suchtrupps') return bindModalSuchtrupps(person);
   if(modal.type==='abschluss') return bindModalAbschluss(person);
   if(modal.type==='tracks') return bindModalTracks(person);
+  if(modal.type==='anlagen') return bindModalAnlagen(person);
   if(modal.type==='jahresplan') return bindModalJahresplan(person);
   if(modal.type==='austausch') return bindModalAustausch(person);
   if(modal.type==='meinProfil') return bindModalMeinProfil();
@@ -10884,8 +10890,9 @@ function darfEinsatzBearbeiten(person, einsatz){
 }
 function renderEinsatz(person){
   const istLeitung = istLeitungOderAdmin(person);
-  const liste = [...state.einsaetze]
-    .filter(e=>darfEinsatzBearbeiten(person, e))
+  const alleSichtbar = [...state.einsaetze].filter(e=>darfEinsatzBearbeiten(person, e));
+  const liste = alleSichtbar
+    .filter(e=> einsatzAnsicht==='archiv' ? !!e.archiviert : !e.archiviert)
     .sort((a,b)=> new Date(b.alarmierungZeit||0) - new Date(a.alarmierungZeit||0));
   const zeilen = liste.map(e=>{
     const hatBewertung = e.risikoVerlauf && e.risikoVerlauf.length>0;
@@ -10907,6 +10914,12 @@ function renderEinsatz(person){
     <div class="eyebrow" style="--dot:var(--t-einsatz)">Einsatz</div>
     <div class="spread"><h1>Einsatzprotokolle</h1>${istLeitung?`<button class="btn btn-primary" id="btn-neuer-einsatz">+ Einsatz anlegen</button>`:''}</div>
     <p class="lead">Grunddaten zur Personensuche, Bewertung der Vermissten-Suchpriorität, Kräfte- und Suchtruppübersicht sowie Karten/Tracking – jeweils über die Schaltflächen im geöffneten Einsatz erreichbar.${istLeitung?'':' Für Übungseinsätze, deren Leitung dir zugewiesen wurde, stehen dir hier alle Funktionen für genau diesen Einsatz zur Verfügung.'}</p>
+    <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-sm ${einsatzAnsicht!=='archiv'?'btn-primary':'btn-ghost'}" data-einsatzansicht="aktuell">Aktuell (${alleSichtbar.filter(e=>!e.archiviert).length})</button>
+      <button class="btn btn-sm ${einsatzAnsicht==='archiv'?'btn-primary':'btn-ghost'}" data-einsatzansicht="archiv">🗄️ Archiv (${alleSichtbar.filter(e=>e.archiviert).length})</button>
+      ${istLeitung?`<button class="btn btn-sm btn-ghost" id="btn-einsatz-statistik" style="margin-left:auto">📊 Statistik</button><button class="btn btn-sm btn-ghost" id="btn-einsatz-csv">⬇️ CSV-Übersicht</button>`:''}
+    </div>
+    ${einsatzStatistikOffen && istLeitung ? renderEinsatzStatistik(alleSichtbar) : ''}
     <div class="card table-scroll" style="margin-top:10px"><table><thead><tr><th>Alarmierung</th><th>Vermisste Person / Ort</th><th>Art</th><th>Priorität</th><th>Status</th></tr></thead><tbody>${zeilen}</tbody></table></div>
     ${modal ? renderModal() : ''}
   `;
@@ -10914,6 +10927,9 @@ function renderEinsatz(person){
 function bindEinsatz(person){
   const neuBtn = document.getElementById('btn-neuer-einsatz');
   if(neuBtn) neuBtn.onclick = ()=>{ modal={type:'einsatz', id:null}; render(); };
+  document.querySelectorAll('[data-einsatzansicht]').forEach(b=> b.onclick = ()=>{ einsatzAnsicht = b.dataset.einsatzansicht; render(); });
+  const stBtn = document.getElementById('btn-einsatz-statistik'); if(stBtn) stBtn.onclick = ()=>{ einsatzStatistikOffen = !einsatzStatistikOffen; render(); };
+  const csvBtn = document.getElementById('btn-einsatz-csv'); if(csvBtn) csvBtn.onclick = ()=> einsatzCsvExport(state.einsaetze.filter(e=>darfEinsatzBearbeiten(person, e)));
   document.querySelectorAll('[data-einsatz]').forEach(tr=>{
     tr.onclick = ()=>{ modal={type:'einsatz', id:tr.dataset.einsatz}; render(); };
   });
@@ -10943,6 +10959,9 @@ function renderModalEinsatz(){
         <button class="btn" id="m-suchtrupps">🐕 Suchtrupps</button>
         <button class="btn" id="m-tracks">🗺️ Karten & Tracks</button>
         <button class="btn" id="m-abschluss">✅ Abschluss</button>
+        <button class="btn" id="m-anlagen">📎 Fotos & Karten${(bestehend.anlagen||[]).length?' ('+bestehend.anlagen.length+')':''}</button>
+        <button class="btn" id="m-gpx">⬇️ GPX-Export</button>
+        ${istLeitungOderAdmin(person)?`<button class="btn" id="m-archiv">${bestehend.archiviert?'↩️ Aus Archiv holen':'🗄️ Archivieren'}</button>`:''}
       </div>`:''}
       ${istLeitung?`
       <div class="card card-pad" style="margin-bottom:14px;background:var(--soft);border:none">
@@ -11019,6 +11038,14 @@ function bindModalEinsatz(person){
   if(abschlussBtn) abschlussBtn.onclick = ()=>{ modal = {type:'abschluss', einsatzId:modal.id}; render(); };
   const tracksBtn = document.getElementById('m-tracks');
   if(tracksBtn) tracksBtn.onclick = ()=>{ modal = {type:'tracks', einsatzId:modal.id}; render(); };
+  const anlBtn = document.getElementById('m-anlagen');
+  if(anlBtn) anlBtn.onclick = ()=>{ modal = {type:'anlagen', einsatzId:modal.id}; render(); };
+  const gpxBtn = document.getElementById('m-gpx');
+  if(gpxBtn) gpxBtn.onclick = ()=>{ const e = state.einsaetze.find(x=>x.id===modal.id); einsatzGpxExport(e); };
+  const archivBtn = document.getElementById('m-archiv');
+  if(archivBtn) archivBtn.onclick = ()=>{ const e = state.einsaetze.find(x=>x.id===modal.id); if(!e) return;
+    if(!e.archiviert && e.status!=='abgeschlossen' && !confirm('Der Einsatz ist noch nicht abgeschlossen. Trotzdem archivieren?')) return;
+    e.archiviert = !e.archiviert; e.archiviertAm = e.archiviert ? nowIso() : null; speichereState(); zeigeToast(e.archiviert?'Einsatz archiviert – er erscheint unter „Archiv“.':'Einsatz wieder in der aktuellen Liste.'); modal=null; render(); };
   const merkeFelder = ()=>{
     const modusFeld = document.getElementById('ez-modus-uebung');
     modal.draft = {
@@ -12172,6 +12199,151 @@ function tbmStart(person){
     onChange: ()=>speichereState() });
   speichereState();
 }
+
+
+/* =========================================================
+   EINSATZ: Archiv, Statistik/CSV, GPX-Export, Fotos & Karten, Diktat, Sicherung inkl. Bilder
+   (übernommen aus dem Einsatzprotokoll-Tool, BARRY 2.1)
+   ========================================================= */
+let einsatzAnsicht = 'aktuell', einsatzStatistikOffen = false;
+const ANLAGEN_DB = 'barry-anlagen' + (/TEST$/.test(STORAGE_KEY) ? '-test' : '');
+function anlagenDb(){ return new Promise((ok,nein)=>{ const r = indexedDB.open(ANLAGEN_DB, 1); r.onupgradeneeded = ()=> r.result.createObjectStore('bilder'); r.onsuccess = ()=> ok(r.result); r.onerror = ()=> nein(r.error); }); }
+async function anlageSchreiben(id, blob){ const db = await anlagenDb(); return new Promise((ok,nein)=>{ const tx = db.transaction('bilder','readwrite'); tx.objectStore('bilder').put(blob, id); tx.oncomplete = ()=> ok(); tx.onerror = ()=> nein(tx.error); }); }
+async function anlageLesen(id){ const db = await anlagenDb(); return new Promise((ok,nein)=>{ const r = db.transaction('bilder').objectStore('bilder').get(id); r.onsuccess = ()=> ok(r.result||null); r.onerror = ()=> nein(r.error); }); }
+async function anlageLoeschen(id){ const db = await anlagenDb(); return new Promise(ok=>{ const tx = db.transaction('bilder','readwrite'); tx.objectStore('bilder').delete(id); tx.oncomplete = ()=> ok(); }); }
+function bildVerkleinern(datei, maxKante = 1600, qualitaet = 0.75){
+  return new Promise((ok,nein)=>{ const url = URL.createObjectURL(datei); const img = new Image();
+    img.onload = ()=>{ const f = Math.min(1, maxKante/Math.max(img.width,img.height)); const c = document.createElement('canvas'); c.width = Math.round(img.width*f); c.height = Math.round(img.height*f);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height); URL.revokeObjectURL(url); c.toBlob(b=> b ? ok({blob:b, breite:c.width, hoehe:c.height}) : nein(new Error('Bild konnte nicht umgewandelt werden')), 'image/jpeg', qualitaet); };
+    img.onerror = ()=>{ URL.revokeObjectURL(url); nein(new Error('Kein lesbares Bild')); }; img.src = url; });
+}
+function blobZuDataUrl(b){ return new Promise(ok=>{ const r = new FileReader(); r.onload = ()=> ok(r.result); r.readAsDataURL(b); }); }
+async function dataUrlZuBlob(u){ return (await fetch(u)).blob(); }
+
+/* ---- Fotos & Karten ---- */
+function renderModalAnlagen(){
+  const e = state.einsaetze.find(x=>x.id===modal.einsatzId); e.anlagen = e.anlagen || [];
+  return `
+  <div class="modal-back"><div class="modal" style="max-width:680px">
+    <div class="modal-head"><h3>Fotos & Karten</h3><button class="btn btn-ghost btn-sm" id="m-schliessen">✕</button></div>
+    <div class="modal-body" style="max-height:70vh;overflow-y:auto">
+      <p class="hint">Fotos von Lagekarte, Einsatzort, Fundstelle oder Skizzen. Bilder werden auf max. 1600 px verkleinert und nur auf diesem Gerät gespeichert; in die Sicherungsdatei kommen sie über „Bestand inkl. Einsatzfotos exportieren“.</p>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:12px">
+        <label class="btn btn-primary" style="cursor:pointer">📷 Foto aufnehmen<input type="file" id="anl-kamera" accept="image/*" capture="environment" style="display:none"></label>
+        <label class="btn" style="cursor:pointer">🖼️ Bild / Karte wählen<input type="file" id="anl-datei" accept="image/*" multiple style="display:none"></label>
+        <select id="anl-typ" style="width:auto"><option value="foto">als Foto</option><option value="karte">als Karte/Skizze</option></select>
+      </div>
+      <div id="anl-liste" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px">
+        ${e.anlagen.map(a=>`<div class="card" style="padding:6px">
+          <div style="aspect-ratio:4/3;background:var(--soft);border-radius:6px;overflow:hidden;cursor:zoom-in" data-anl-zeigen="${a.id}"><img data-anl-bild="${a.id}" alt="" style="width:100%;height:100%;object-fit:cover"></div>
+          <div class="hint" style="margin:4px 0">${a.typ==='karte'?'🗺️':'📷'} ${fmtDatum(a.zeit)} ${new Date(a.zeit).toTimeString().slice(0,5)}</div>
+          <input data-anl-notiz="${a.id}" value="${esc(a.notiz||'')}" placeholder="Notiz" style="width:100%;padding:6px;border:1px solid var(--line);border-radius:6px;margin-bottom:4px">
+          <button class="btn btn-sm btn-ghost" data-anl-loeschen="${a.id}">✕ entfernen</button>
+        </div>`).join('') || '<p class="hint">Noch keine Fotos oder Karten.</p>'}
+      </div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" id="anl-zurueck">← zum Einsatz</button><button class="btn btn-primary" id="m-abbrechen">Fertig</button></div>
+  </div></div>
+  <div id="anl-vollbild" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;align-items:center;justify-content:center;cursor:zoom-out"><img style="max-width:100%;max-height:100%"></div>`;
+}
+function bindModalAnlagen(){
+  const e = state.einsaetze.find(x=>x.id===modal.einsatzId);
+  document.getElementById('m-schliessen').onclick = schliesseModal;
+  document.getElementById('m-abbrechen').onclick = schliesseModal;
+  document.getElementById('anl-zurueck').onclick = ()=>{ modal = {type:'einsatz', id:e.id}; render(); };
+  document.querySelectorAll('[data-anl-bild]').forEach(img=> anlageLesen(img.dataset.anlBild).then(b=>{ if(b) img.src = URL.createObjectURL(b); else img.alt = 'Bild nicht auf diesem Gerät'; }).catch(()=>{}));
+  const vb = document.getElementById('anl-vollbild');
+  document.querySelectorAll('[data-anl-zeigen]').forEach(d=> d.onclick = ()=> anlageLesen(d.dataset.anlZeigen).then(b=>{ if(!b) return zeigeToast('Bild liegt nicht auf diesem Gerät (Sicherung ohne Fotos eingespielt).'); vb.querySelector('img').src = URL.createObjectURL(b); vb.style.display='flex'; }));
+  vb.onclick = ()=>{ vb.style.display='none'; };
+  document.querySelectorAll('[data-anl-notiz]').forEach(i=> i.onchange = ()=>{ const a = e.anlagen.find(x=>x.id===i.dataset.anlNotiz); if(a){ a.notiz = i.value; speichereState(); } });
+  document.querySelectorAll('[data-anl-loeschen]').forEach(b=> b.onclick = async ()=>{ if(!confirm('Dieses Bild entfernen?')) return; await anlageLoeschen(b.dataset.anlLoeschen); e.anlagen = e.anlagen.filter(x=>x.id!==b.dataset.anlLoeschen); speichereState(); render(); });
+  const hinzu = async files=>{ let n = 0; for(const f of files){ try{ const v = await bildVerkleinern(f); const id = 'anl-'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+      await anlageSchreiben(id, v.blob); e.anlagen.push({ id, typ:document.getElementById('anl-typ').value, name:f.name, zeit:nowIso(), notiz:'', breite:v.breite, hoehe:v.hoehe, groesseKb:Math.round(v.blob.size/1024) }); n++; }
+    catch(err){ alert(f.name+': '+err.message); } }
+    if(n){ (e.ereignisse = e.ereignisse || []).push({ id:'ev-'+Date.now().toString(36), zeit:nowIso(), text:n+' '+(n===1?'Bild':'Bilder')+' angelegt (Fotos & Karten)' }); speichereState(); zeigeToast(n+' '+(n===1?'Bild':'Bilder')+' gespeichert'); render(); } };
+  document.getElementById('anl-kamera').onchange = ev=> hinzu([...ev.target.files]);
+  document.getElementById('anl-datei').onchange = ev=> hinzu([...ev.target.files]);
+}
+
+/* ---- GPX-Export ---- */
+function einsatzGpxExport(e){
+  const tr = (e && e.tracks) || []; if(!tr.length) return zeigeToast('Dieser Einsatz enthält noch keine Tracks, Gebiete oder Marker.');
+  const x = v => String(v==null?'':v).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const pt = (p,tag) => `<${tag} lat="${p.lat}" lon="${p.lon}">${p.ele!=null?`<ele>${p.ele}</ele>`:''}${p.time||p.zeit?`<time>${x(p.time||p.zeit)}</time>`:''}${tag==='wpt'?'':''}`;
+  const wpts = tr.filter(t=>t.typ==='marker' && (t.points||[]).length).map(t=> pt(t.points[0],'wpt')+`<name>${x(t.name||'Marker')}</name>${t.notiz?`<desc>${x(t.notiz)}</desc>`:''}</wpt>`).join('\n');
+  const trks = tr.filter(t=>t.typ!=='marker' && (t.points||[]).length).map(t=>{ const pts = t.typ==='gebiet' && t.points.length>2 ? t.points.concat([t.points[0]]) : t.points;
+    return `<trk><name>${x((t.typ==='gebiet'?'Gebiet: ':'')+(t.name||'Track'))}</name>${t.notiz?`<desc>${x(t.notiz)}</desc>`:''}<trkseg>${pts.map(p=>pt(p,'trkpt')+'</trkpt>').join('')}</trkseg></trk>`; }).join('\n');
+  const gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="BARRY ${BARRY_APP_VERSION}" xmlns="http://www.topografix.com/GPX/1/1">\n<metadata><name>${x('Einsatz '+(e.einsatzort||'')+' '+(e.datum||'').slice(0,10))}</name><time>${nowIso()}</time></metadata>\n${wpts}\n${trks}\n</gpx>\n`;
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([gpx],{type:'application/gpx+xml'})); a.download = `Einsatz_${(e.datum||nowIso()).slice(0,10)}_${(e.einsatzort||'ohne-Ort').replace(/[^\wäöüÄÖÜß-]+/g,'_')}.gpx`;
+  document.body.appendChild(a); a.click(); a.remove();
+  zeigeToast('GPX mit '+tr.length+' Element(en) erstellt – z. B. in CalTopo oder Gaia GPS öffnen.');
+}
+
+/* ---- Statistik & CSV ---- */
+function einsatzDauerStunden(e){ const s = Date.parse(e.alarmierungZeit||''); const ab = (e.abschluss||{}).abschlussDatum; const ev = (e.ereignisse||[]).map(x=>Date.parse(x.zeit)).filter(Boolean);
+  const ende = ev.length ? Math.max(...ev) : (ab ? Date.parse(ab+'T23:59') : NaN); return isFinite(s)&&isFinite(ende)&&ende>s ? (ende-s)/36e5 : null; }
+function renderEinsatzStatistik(liste){
+  const real = liste.filter(e=>e.modus!=='uebung'), ueb = liste.filter(e=>e.modus==='uebung');
+  const jahre = {}; liste.forEach(e=>{ const j = (e.datum||e.alarmierungZeit||'').slice(0,4)||'ohne Datum'; jahre[j] = jahre[j]||{real:0,uebung:0}; jahre[j][e.modus==='uebung'?'uebung':'real']++; });
+  const dauern = real.map(einsatzDauerStunden).filter(x=>x!=null); const dMittel = dauern.length ? dauern.reduce((a,b)=>a+b,0)/dauern.length : null;
+  const trupps = liste.flatMap(e=>e.suchtrupps||[]); const sucharten = {WS:0,FL:0,MT:0,TR:0}; trupps.forEach(t=>Object.keys(sucharten).forEach(k=>{ if((t.suchart||{})[k]) sucharten[k]++; }));
+  const kraefte = liste.reduce((a,e)=>a+(e.kraefte||[]).length,0);
+  const fotos = liste.reduce((a,e)=>a+(e.anlagen||[]).length,0);
+  const prio = {hoch:0,mittel:0,niedrig:0,unbewertet:0}; real.forEach(e=>{ if(e.risikoVerlauf&&e.risikoVerlauf.length){ const r = aktuelleRisikoEinschaetzung(e); prio[r.stufe]=(prio[r.stufe]||0)+1; } else prio.unbewertet++; });
+  return `<div class="card card-pad" style="margin-top:10px">
+    <h3 style="margin-top:0">Einsatzstatistik</h3>
+    <div class="grid-2">
+      <div><strong>${real.length}</strong> Realeinsätze · <strong>${ueb.length}</strong> Übungen<br><span class="hint">${liste.filter(e=>e.status==='abgeschlossen').length} abgeschlossen, ${liste.filter(e=>e.archiviert).length} archiviert</span></div>
+      <div>Ø Dauer Realeinsatz: <strong>${dMittel!=null?dMittel.toFixed(1)+' h':'–'}</strong><br><span class="hint">${dauern.length?'aus '+dauern.length+' Einsätzen (Alarmierung bis letzter Tagebucheintrag)':'noch keine auswertbaren Zeiten'}</span></div>
+      <div>Suchtrupps gesamt: <strong>${trupps.length}</strong><br><span class="hint">Fläche ${sucharten.FL} · Mantrailing ${sucharten.MT} · Trümmer ${sucharten.TR} · Wasser ${sucharten.WS}</span></div>
+      <div>Eingesetzte Kräfte: <strong>${kraefte}</strong> · Fotos/Karten: <strong>${fotos}</strong><br><span class="hint">Priorität Realeinsätze: hoch ${prio.hoch}, mittel ${prio.mittel}, niedrig ${prio.niedrig}, unbewertet ${prio.unbewertet}</span></div>
+    </div>
+    <table style="margin-top:10px"><thead><tr><th>Jahr</th><th>Realeinsätze</th><th>Übungen</th></tr></thead><tbody>${Object.keys(jahre).sort().reverse().map(j=>`<tr><td>${esc(j)}</td><td>${jahre[j].real}</td><td>${jahre[j].uebung}</td></tr>`).join('')||'<tr><td colspan="3" class="hint">keine Einsätze</td></tr>'}</tbody></table>
+  </div>`;
+}
+function einsatzCsvExport(liste){
+  if(!liste.length) return zeigeToast('Keine Einsätze vorhanden.');
+  const kopf = ['Datum','Alarmierung','Art','Status','Archiviert','Einsatzort','Meldende Stelle','Vermisste Person','Alter','Priorität','Dauer (h)','Suchtrupps','Fläche','Mantrailing','Trümmer','Wasser','Kräfte','Tracks','Fotos/Karten','Ereignisse','Ergebnis','Besondere Vorkommnisse'];
+  const zeilen = liste.slice().sort((a,b)=>new Date(a.alarmierungZeit||0)-new Date(b.alarmierungZeit||0)).map(e=>{ const tr = e.suchtrupps||[]; const sa = k=>tr.filter(t=>(t.suchart||{})[k]).length; const r = e.risikoVerlauf&&e.risikoVerlauf.length ? aktuelleRisikoEinschaetzung(e).stufe : 'unbewertet'; const d = einsatzDauerStunden(e);
+    return [e.datum||'', e.alarmierungZeit?new Date(e.alarmierungZeit).toLocaleString('de-DE'):'', e.modus==='uebung'?'Übung':'Realeinsatz', e.status||'', e.archiviert?'ja':'nein', e.einsatzort||'', e.meldender||'', e.vermisstName||'', e.vermisstAlter||'', r, d!=null?d.toFixed(1).replace('.',','):'', tr.length, sa('FL'), sa('MT'), sa('TR'), sa('WS'), (e.kraefte||[]).length, (e.tracks||[]).length, (e.anlagen||[]).length, (e.ereignisse||[]).length, (e.abschluss||{}).ergebnis||'', (e.abschluss||{}).besondereVorkommnisse||'']; });
+  const csv = '\ufeff' + [kopf, ...zeilen].map(r=>r.map(v=>{ const s = String(v==null?'':v); return /[;"\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }).join(';')).join('\r\n');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download = `Einsatzuebersicht_${nowIso().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove();
+  zeigeToast('CSV-Übersicht mit '+liste.length+' Einsätzen erstellt.');
+}
+
+/* ---- Sicherung inkl. Bilder ---- */
+async function sicherungMitBildern(){
+  const ids = state.einsaetze.flatMap(e=>(e.anlagen||[]).map(a=>a.id)); const daten = {}; let fehlt = 0;
+  for(const id of ids){ const b = await anlageLesen(id).catch(()=>null); if(b) daten[id] = await blobZuDataUrl(b); else fehlt++; }
+  const exportDaten = Object.assign({ exportInfo:{ format:'barry-bestand', app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||'', mitBildern:true } }, state, { anlagenDaten: daten });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(exportDaten)],{type:'application/json'})); a.download = `RHS_Sicherung_BARRY_mit_Fotos_${nowIso().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove();
+  state.meta.letzteSicherungAm = nowIso(); speichereState();
+  zeigeToast('Sicherung inkl. '+Object.keys(daten).length+' Bildern erstellt'+(fehlt?' ('+fehlt+' Bild(er) fehlten auf diesem Gerät)':'')+'.');
+}
+async function anlagenAusSicherungSchreiben(obj){ let n = 0; for(const [id,u] of Object.entries(obj)){ try{ await anlageSchreiben(id, await dataUrlZuBlob(u)); n++; }catch(e){} } if(n) zeigeToast(n+' Einsatzbilder aus der Sicherung übernommen.'); }
+
+/* ---- Diktat (Spracheingabe) in den Einsatz-Fenstern ---- */
+const DIKTAT_KLASSE = window.SpeechRecognition || window.webkitSpeechRecognition;
+function diktatAnbringen(){
+  if(!DIKTAT_KLASSE || !modal || !EINSATZ_MODALTYPEN.includes(modal.type)) return;
+  document.querySelectorAll('.modal textarea:not([data-diktat]), .modal #ez-neu-text:not([data-diktat])').forEach(feld=>{
+    feld.setAttribute('data-diktat','1');
+    const b = document.createElement('button'); b.type='button'; b.className='btn btn-sm btn-ghost'; b.textContent='🎤 Diktat'; b.style.cssText='margin:4px 0 8px';
+    b.onclick = ()=>{
+      if(b._rec){ b._rec.stop(); return; }
+      const rec = new DIKTAT_KLASSE(); rec.lang='de-DE'; rec.interimResults=false; rec.continuous=false; rec.maxAlternatives=1; b._rec = rec;
+      b.textContent='⏺ Höre zu … (tippen zum Beenden)';
+      rec.onresult = ev=>{ // nur Endergebnisse, jedes genau einmal (verhindert doppelte Übernahme)
+        let text=''; for(let i=ev.resultIndex;i<ev.results.length;i++){ if(ev.results[i].isFinal) text += ev.results[i][0].transcript; }
+        text = text.trim(); if(!text) return; feld.value = feld.value ? feld.value.replace(/\s*$/,'')+' '+text : text; feld.dispatchEvent(new Event('input',{bubbles:true})); feld.dispatchEvent(new Event('change',{bubbles:true})); };
+      rec.onerror = ev=>{ if(ev.error!=='no-speech' && ev.error!=='aborted') zeigeToast('Diktat nicht möglich: '+ev.error); };
+      rec.onend = ()=>{ b._rec=null; b.textContent='🎤 Diktat'; };
+      try{ rec.start(); }catch(e){ b._rec=null; b.textContent='🎤 Diktat'; }
+    };
+    feld.insertAdjacentElement('afterend', b);
+  });
+}
+new MutationObserver(()=> diktatAnbringen()).observe(document.body, {childList:true, subtree:true});
 
 </script>
 </body>
