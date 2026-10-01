@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "BARRY · TEST – der Rettungshundekompass",
+  "short_name": "BARRY TEST",
+  "description": "Test-Instanz von BARRY – der Rettungshundekompass (DRK Rettungshundestaffel Region Kassel)",
+  "lang": "de",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f6f7",
+  "theme_color": "#b51f2e",
+  "icons": [
+    { "src": "./icons/rhs-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/rhs-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/rhs-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icons/rhs-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
