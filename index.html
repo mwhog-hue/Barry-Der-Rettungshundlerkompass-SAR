@@ -210,7 +210,7 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
 </style>
 </head>
 <body>
-<div style="background:#B4432D;color:#fff;text-align:center;font:600 .85rem system-ui;padding:6px;position:sticky;top:0;z-index:99">TEST-INSTANZ BARRY 2.3 – eigener Speicher, keine Verbindung zum echten BARRY</div>
+<div style="background:#B4432D;color:#fff;text-align:center;font:600 .85rem system-ui;padding:6px;position:sticky;top:0;z-index:99">TEST-INSTANZ BARRY 2.4 – eigener Speicher, keine Verbindung zum echten BARRY</div>
 <div id="app"></div>
 <div id="toast-root"></div>
 <script>
@@ -2542,7 +2542,7 @@ const QUALIFIKATIONEN_KATALOG_VORSCHLAG = [
   { code:'uvv_jaehrlich', label:'UVV-Unterweisung allgemein (jährlich)', kategorie:K_PR, pflichtRHF:true, intervallMonate:12, hinweis:'Jährlich für alle Einsatzkräfte. Wird bei der Modulprüfung 2 nicht abgeprüft, ist aber regelmäßig nachzuweisen.', aliase:['UVV-Unterweisung (jährlich)','UVV-Unterweisung','UVV allgemein'] },
   { code:'ds_jaehrlich', label:'Datenschutzunterweisung (jährlich)', kategorie:K_PR, pflichtRHF:true, intervallMonate:12, hinweis:'Jährliche Belehrung zum Umgang mit personenbezogenen Daten (z. B. Patientendaten) – für alle Einsatzkräfte. Der einmalige Grundkurs ist „DS – Datenschutz (online)“.', aliase:['Datenschutzunterweisung','Datenschutzbelehrung'] },
   { code:'hygiene', label:'Hygieneunterweisung (jährlich)', kategorie:K_PR, pflichtRHF:true, intervallMonate:12, hinweis:'Jährlich. Wird bei der Modulprüfung 2 nicht abgeprüft, ist aber regelmäßig nachzuweisen.', aliase:['Hygieneunterweisung'] },
-  { code:'ehhund_fb', label:'Erste Hilfe am Hund – Auffrischung (alle 2 Jahre)', kategorie:K_PR, pflichtRHF:true, intervallMonate:24, hinweis:'Praxisnahe Auffrischung der Notfallversorgung am Hund (Verbände, Vitalwerte, Reanimation beim Hund). Die Erstausbildung ist „RHd · Erste Hilfe am Hund“.', aliase:['EH Hund Auffrischung','Erste Hilfe am Hund Auffrischung','EHA Hund'] },
+  { code:'ehhund_fb', label:'Erste Hilfe am Hund – Auffrischung (alle 5 Jahre)', kategorie:K_PR, pflichtRHF:true, intervallMonate:60, hinweis:'Praxisnahe Auffrischung der Notfallversorgung am Hund (Verbände, Vitalwerte, Reanimation beim Hund). Die Erstausbildung ist „RHd · Erste Hilfe am Hund“.', aliase:['EH Hund Auffrischung','Erste Hilfe am Hund Auffrischung','EHA Hund'] },
   // 5) Empfohlen & staffelinterne Ergänzungen
   { code:'tie', label:'TiE – Basisausbildung Technik und Logistik', kategorie:K_EMP, ue:10, empfohlen:true, hinweis:'Empfohlen; Voraussetzung: EKGA-T', aliase:['BA Technik + Logistik','TiE – Basisausb. Technik & Logistik','BA Tech+Logi'] },
   { code:'heikat', label:'HEIKAT', kategorie:K_EMP, ue:2, empfohlen:true, aliase:['Heikat'] },
@@ -3044,7 +3044,7 @@ function renderMeineFahrzeugeEinweisungen(person){
 }
 
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.3';
+const BARRY_APP_VERSION = '2.4';
 const BARRY_APP_STAND = '01.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -3083,6 +3083,7 @@ function migriereState(s){
   if(!Array.isArray(s.kurswuensche)) s.kurswuensche = [];
   if(!Array.isArray(s.fahrzeugEinweisungen)) s.fahrzeugEinweisungen = [];
   // ab v2.2: Führerscheine, Kontrollen, drkserver-Stammdaten, Klärungsliste und Zusatzkurse (bleiben bei Import/Export erhalten)
+  (s.qualifikationen||[]).forEach(q=>{ if(q.code==='ehhund_fb'){ q.intervallMonate=60; q.label='Erste Hilfe am Hund – Auffrischung (alle 5 Jahre)'; } });
   ['personFahrerlaubnisse','fahrerlaubnisKontrollen','fahrerlaubnisKlassen','personStammdatenDrk','stammdatenAbweichungen','zusatzKurse','personZusatzKurse'].forEach(k=>{ if(!Array.isArray(s[k])) s[k]=[]; });
   if(!Array.isArray(s.fahrzeuge)){ s.fahrzeuge = []; }
   if(!s.meta.fahrzeugeVorbelegt){ FAHRZEUGE_STANDARD.forEach(f=>{ if(!s.fahrzeuge.some(x=>x.rufname===f.rufname)) s.fahrzeuge.push({id:uid(), ...f, kennzeichen:''}); }); s.meta.fahrzeugeVorbelegt=true; }
@@ -4268,7 +4269,7 @@ function renderTabFristen(){
 
       <div class="card card-pad">
         <h3>🐕 Pflichtausbildungen Rettungshundeführende (${rhfLuecken.length})</h3>
-        <p class="hint">Personen, die einen aktiven Hund führen, und die noch nicht alle ${rhfPflichtAnzahl} Pflicht-Einträge (★) laut Dienstanweisung „Rettungshundearbeit in Hessen“ und Staffel-Merkblatt nachgewiesen haben. Wer die <strong>Modulprüfung 2 (Suchprüfung)</strong> bestanden hat, gilt für alle einmaligen Pflichtausbildungen als erfüllt – dann werden nur noch die wiederkehrenden Nachweise geprüft: <strong>jährlich</strong> HLW/AED, UVV, Hygiene, Datenschutz und Sonderrechte; <strong>alle 2 Jahre</strong> Suchprüfung, Erste Hilfe am Hund und Sanitätsfortbildung. Die Erste-Hilfe-Wiederholung (alle 2 Jahre) gilt nur für Personen ohne Sanitätsausbildung. Zum Aufklappen antippen.</p>
+        <p class="hint">Personen, die einen aktiven Hund führen, und die noch nicht alle ${rhfPflichtAnzahl} Pflicht-Einträge (★) laut Dienstanweisung „Rettungshundearbeit in Hessen“ und Staffel-Merkblatt nachgewiesen haben. Wer die <strong>Modulprüfung 2 (Suchprüfung)</strong> bestanden hat, gilt für alle einmaligen Pflichtausbildungen als erfüllt – dann werden nur noch die wiederkehrenden Nachweise geprüft: <strong>jährlich</strong> HLW/AED, UVV, Hygiene, Datenschutz und Sonderrechte; <strong>alle 2 Jahre</strong> Suchprüfung und Sanitätsfortbildung; <strong>alle 5 Jahre</strong> Erste Hilfe am Hund (nur Warnung). Die Erste-Hilfe-Wiederholung (alle 2 Jahre) gilt nur für Personen ohne Sanitätsausbildung. Zum Aufklappen antippen.</p>
         ${rhfLuecken.map(x=>`<details style="border-top:1px dashed var(--line);padding:6px 0"><summary style="cursor:pointer"><strong>${esc(x.p.name)}</strong> – ${x.durchSuch?`fehlt: ${x.fehlt.length} wiederkehrende(r) Nachweis(e)`:`fehlt: ${x.fehlt.length} von ${rhfPflichtAnzahl}`}</summary><ul class="hint" style="margin:6px 0 0 -18px">${x.fehlt.map(q=>`<li>${esc(q.label)}</li>`).join('')}</ul></details>`).join('') || '<p class="hint">Alle Rettungshundeführenden haben die Pflichtausbildungen vollständig eingetragen.</p>'}
       </div>
 
@@ -5273,8 +5274,8 @@ const RHD_HELFER = ['eh','rke','ds','ekga_e','ekga_s','ekga_b','ekga_t','slg','e
 const AUSBILDUNGSPROFILE = [
   {id:'rhf_einsatz', gruppe:'Rettungshundearbeit', label:'Einsatzfähig als Rettungshundeführer/in (alle ★ gültig)', pflichtRHF:true, nurHundefuehrende:true,
    quelle:'Dienstanweisung 8.2 und Staffel-Festlegungen (wiederkehrende Nachweise)'},
-  {id:'helfer_einsatz', gruppe:'Rettungshundearbeit', label:'Einsatzbereite/r Helfer/in (ohne Hund)', codes:['rke','ekga_e','eh','ds_jaehrlich','uvv_jaehrlich','hlw'], empfohlen:['slg','bos'],
-   quelle:'Festlegung der Staffelleitung (29.09.2026): Mindestvoraussetzung RKE, EKGA-E (EGA Einsatz), gültige Erste Hilfe sowie jährlich Datenschutz, UVV und HLW/AED; Sanitätsausbildung und BOS-Funk empfohlen'},
+  {id:'helfer_einsatz', gruppe:'Rettungshundearbeit', label:'Einsatzbereite/r Helfer/in (ohne gültige Modulprüfung 2)', codes:['rke','ekga_e','eh','hlw'], empfohlen:['slg','bos'], hinweisCodes:['ds_jaehrlich','uvv_jaehrlich'],
+   quelle:'Festlegung der Staffelleitung (01.10.2026): Alle Mitglieder ohne gültige Modulprüfung 2 gelten als Helfer/-innen. Mindestvoraussetzung RKE, EKGA-E (EGA Einsatz), Erste Hilfe (entfällt mit Sanitätsausbildung) und HLW/AED; mit Sanitätsausbildung Sanitäter/-in, sonst Praktikant/-in; BOS-Funk für die Funkerrolle. Datenschutz und UVV werden 2026 nachgeholt.'},
   {id:'rhd_helfer', gruppe:'Rettungshundearbeit', label:'Rettungshundehelfer/in (RHd)', codes:RHD_HELFER,
    quelle:'Dienstanweisung 8.1 / Übersicht Seminare; EKF.Prüf laut Übersicht „Notwendige Qualifikation Rettungshundeführende“'},
   {id:'zul_suchpruefung', gruppe:'Rettungshundearbeit', label:'Zulassung zur Rettungshundeprüfung (Modul 2)', codes:[...RHD_HELFER,'modul_10','modul_11','modul_12','modul_13'], nurHundefuehrende:true,
@@ -5856,8 +5857,10 @@ document.addEventListener('click', e=>{ const el=e.target.closest && e.target.cl
    PAKET 2: Einsatzbereit heute · Sicherungserinnerung · Kontaktdaten · Vorprüfungsbogen · Übergabe Flächensuchassistent
    ========================================================= */
 /* ---------- Einsatzbereit heute (laut BARRY-Daten, keine Einsatzfreigabe) ---------- */
-/* Erste Hilfe am Hund: mindestens einmal nötig; Auffrischung alle 2 Jahre nur als Warnung, ohne Einfluss auf die Einsatzbereitschaft */
+/* Erste Hilfe am Hund: mindestens einmal nötig; Auffrischung alle 5 Jahre nur als Warnung, ohne Einfluss auf die Einsatzbereitschaft */
 const EH_HUND_CODES = ['ehhund_fb','rhd_ehhund'];
+/* Bei Teams nur als Hinweis, ohne Einfluss auf die Einsatzbereitschaft: Unterweisungen (2026 nachzuholen) und Sanitätsfortbildung */
+const TEAM_HINWEIS_CODES = ['ds_jaehrlich','uvv_jaehrlich','hygiene','san_fb'];
 function ehHundStand(pid){
   const ids = state.qualifikationen.filter(q=>EH_HUND_CODES.includes(q.code)).map(q=>q.id);
   const e = state.personQualifikationen.filter(pq=>pq.personId===pid && ids.includes(pq.qualifikationId) && pq.datum).sort((a,b)=>String(b.datum).localeCompare(String(a.datum)))[0];
@@ -5866,7 +5869,7 @@ function ehHundStand(pid){
 function ehHundWarnung(pid){
   const d = ehHundStand(pid);
   if(!d) return 'Erste Hilfe am Hund nicht nachgewiesen (mindestens einmal erforderlich)';
-  const dt = new Date(d+'T12:00:00'); dt.setMonth(dt.getMonth()+24);
+  const dt = new Date(d+'T12:00:00'); dt.setMonth(dt.getMonth()+60);
   if(dt.toISOString().slice(0,10) < new Date().toISOString().slice(0,10)) return 'Erste Hilfe am Hund: Auffrischung fällig (zuletzt '+fmtDatum(d)+')';
   return '';
 }
@@ -5882,21 +5885,41 @@ function einsatzbereitAuswertung(){
       const sparten = [...new Set(pruef.filter(pq=>!pq.gueltigBis || pq.gueltigBis>=heute).map(pq=>pq.sparte))];
       if(!sparten.length) return;
       const r=profilAuswerten(pid, pr);
-      const offen=[...r.abgelaufen, ...r.fehlt].filter(x=>x.q && x.q.code!=='rh_pruef' && !EH_HUND_CODES.includes(x.q.code));
-      teams.push({h, p, sparten, voll: !offen.length, offen, ehHund: ehHundWarnung(pid)});
+      const alle=[...r.abgelaufen, ...r.fehlt].filter(x=>x.q && x.q.code!=='rh_pruef' && !EH_HUND_CODES.includes(x.q.code) && !ersatzErfuellt(pid, x.q.code));
+      const offen=alle.filter(x=>!TEAM_HINWEIS_CODES.includes(x.q.code)), hinweise=alle.filter(x=>TEAM_HINWEIS_CODES.includes(x.q.code));
+      teams.push({h, p, sparten, voll: !offen.length, offen, hinweise, ehHund: ehHundWarnung(pid)});
     });
   });
   return teams;
 }
+/* Helfer/-innen: alle aktiven Mitglieder ohne gültige Modulprüfung 2 (Festlegung 01.10.2026) */
+const HLW_UEBERGANG_AB = '2025-01-01', HLW_UEBERGANG_BIS = '2026-12-31';
+const SAN_AUSB_CODES = ['slg','rettsan','notsan'];
+function hatQualiCode(pid, code){ const q = state.qualifikationen.find(x=>x.code===code); return !!q && state.personQualifikationen.some(pq=>pq.personId===pid && pq.qualifikationId===q.id); }
+function hatSanAusbildung(pid){ return SAN_AUSB_CODES.some(c=>hatQualiCode(pid,c)); }
+function ersatzErfuellt(pid, code){
+  const heute = new Date().toISOString().slice(0,10);
+  if(code==='eh') return hatSanAusbildung(pid);
+  if(code==='hlw' && heute<=HLW_UEBERGANG_BIS){
+    const q = state.qualifikationen.find(x=>x.code==='hlw');
+    return !!q && state.personQualifikationen.some(pq=>pq.personId===pid && pq.qualifikationId===q.id && (pq.datum||'')>=HLW_UEBERGANG_AB);
+  }
+  return false;
+}
 function einsatzbereiteHelfer(){
   const pr=AUSBILDUNGSPROFILE.find(p=>p.id==='helfer_einsatz');
   const heute=new Date().toISOString().slice(0,10);
-  return state.personen.filter(p=>p.status!=='inaktiv' && (p.name||'').toLowerCase()!=='admin' && !(p.name||'').startsWith('#') && !state.hunde.some(h=>h.status!=='inaktiv' && hundGefuehrtVon(h,p.id)))
+  const teamPersonen = new Set(einsatzbereitAuswertung().map(t=>t.p.id));
+  return state.personen.filter(p=>p.status!=='inaktiv' && (p.name||'').toLowerCase()!=='admin' && !(p.name||'').startsWith('#') && !teamPersonen.has(p.id))
     .map(p=>{ const r=profilAuswerten(p.id, pr);
+      const fehlt=[...r.abgelaufen,...r.fehlt].filter(x=>!(x.q && ersatzErfuellt(p.id, x.q.code)));
       const empf=(pr.empfohlen||[]).map(c=>state.qualifikationen.find(q=>q.code===c)).filter(q=>q && !['gueltig','durchSuch'].includes(qualiStatusFuer(p.id,q).s));
+      const hinweis=(pr.hinweisCodes||[]).map(c=>state.qualifikationen.find(q=>q.code===c)).filter(q=>q && !['gueltig','durchSuch'].includes(qualiStatusFuer(p.id,q).s));
+      const ausgenommen=[...pr.codes, ...(pr.hinweisCodes||[]), ...EH_HUND_CODES];
       const abgelaufenSonst=state.personQualifikationen.filter(pq=>pq.personId===p.id && pq.gueltigBis && pq.gueltigBis<heute && !(pq.hundId && (state.hunde.find(h=>h.id===pq.hundId)||{}).status==='inaktiv'))
-        .map(pq=>state.qualifikationen.find(q=>q.id===pq.qualifikationId)).filter(q=>q && !pr.codes.includes(q.code) && qualiStatusFuer(p.id,q).s==='abgelaufen');
-      return {p, bereit: r.erfuellt===r.gesamt, fehlt:[...r.abgelaufen,...r.fehlt], empf, abgelaufenSonst:[...new Set(abgelaufenSonst)]}; })
+        .map(pq=>state.qualifikationen.find(q=>q.id===pq.qualifikationId)).filter(q=>q && !ausgenommen.includes(q.code) && qualiStatusFuer(p.id,q).s==='abgelaufen');
+      const san=hatSanAusbildung(p.id);
+      return {p, bereit:!fehlt.length, fehlt, empf, hinweis, abgelaufenSonst:[...new Set(abgelaufenSonst)], rolle: san?'Sanitäter/-in':'Praktikant/-in (Erste Hilfe)', funk: hatQualiCode(p.id,'bos')}; })
     .sort((a,b)=>(b.bereit-a.bereit)||a.p.name.localeCompare(b.p.name,'de'));
 }
 function renderStartEinsatzbereit(person){
@@ -5908,12 +5931,13 @@ function renderStartEinsatzbereit(person){
     <summary style="cursor:pointer"><span style="font-family:var(--font-head);font-weight:600;font-size:1.05rem">🚨 Einsatzbereit heute</span>
       <div class="row" style="gap:6px;margin-top:6px">${SUCHPRUEFUNG_SPARTEN.map(s=>`<span class="chip ${zaehl(s.id)?'':'muted'}">${s.label}: ${zaehl(s.id)}</span>`).join('')}<span class="chip ${hBereit.length?'':'muted'}">Helfer/-innen: ${hBereit.length}</span>${eing?`<span class="chip muted">⚠ ${eing} Team(s) eingeschränkt</span>`:''}</div></summary>
     <p style="margin:10px 0 2px"><b>Rettungshundeteams</b></p>
-    <ul class="hint" style="margin:10px 0 0 -18px">${teams.sort((a,b)=>(b.voll-a.voll)||a.h.name.localeCompare(b.h.name,'de')).map(t=>`<li>${t.voll?'✅':'⚠️'} <b>${esc(t.h.name)}</b> (${esc(t.p.name)}) · ${t.sparten.map(spartenLabel).join(', ')}${t.voll?'':` <span style="color:var(--accent-ink)">– offen: ${t.offen.slice(0,4).map(x=>esc(x.q.label.split(' – ')[0])).join(', ')}${t.offen.length>4?' …':''}</span>`}${t.ehHund?` <span style="color:#9a5b00">– ⚠ ${esc(t.ehHund)}</span>`:''}</li>`).join('') || '<li>Keine Teams mit gültiger Suchprüfung eingetragen.</li>'}</ul>
-    <p style="margin:12px 0 2px"><b>Helfer/-innen ohne Hund</b> <span class="hint">(${hBereit.length} von ${helfer.length} einsatzbereit)</span></p>
-    <ul class="hint" style="margin:4px 0 0 -18px">${hBereit.map(h=>`<li>✅ <b>${esc(h.p.name)}</b>${h.empf.length?` <span>– empfohlen fehlt: ${h.empf.map(q=>esc(q.label.split(' – ')[0])).join(', ')}</span>`:''}${h.abgelaufenSonst.length?` <span style="color:var(--accent-ink)">· abgelaufen: ${h.abgelaufenSonst.map(q=>esc(q.label.split(' – ')[0])).join(', ')}</span>`:''}</li>`).join('') || '<li>Derzeit niemand mit vollständiger Mindestvoraussetzung.</li>'}</ul>
+    <ul class="hint" style="margin:10px 0 0 -18px">${teams.sort((a,b)=>(b.voll-a.voll)||a.h.name.localeCompare(b.h.name,'de')).map(t=>`<li>${t.voll?'✅':'⚠️'} <b>${esc(t.h.name)}</b> (${esc(t.p.name)}) · ${t.sparten.map(spartenLabel).join(', ')}${t.voll?'':` <span style="color:var(--accent-ink)">– offen: ${t.offen.slice(0,4).map(x=>esc(x.q.label.split(' – ')[0])).join(', ')}${t.offen.length>4?' …':''}</span>`}${t.hinweise&&t.hinweise.length?` <span>– ℹ️ nachholen: ${t.hinweise.map(x=>esc(x.q.label.split(' – ')[0].split(' (')[0])).join(', ')}</span>`:''}${t.ehHund?` <span style="color:#9a5b00">– ⚠ ${esc(t.ehHund)}</span>`:''}</li>`).join('') || '<li>Keine Teams mit gültiger Suchprüfung eingetragen.</li>'}</ul>
+    <p style="margin:12px 0 2px"><b>Helfer/-innen</b> <span class="hint">(alle ohne gültige Modulprüfung 2)</span> <span class="hint">(${hBereit.length} von ${helfer.length} einsatzbereit)</span></p>
+    <ul class="hint" style="margin:4px 0 0 -18px">${hBereit.map(h=>`<li>✅ <b>${esc(h.p.name)}</b> <span class=\"chip\" style=\"font-size:.75em\">${esc(h.rolle)}${h.funk?' · Funk':''}</span>${h.empf.length?` <span>– empfohlen fehlt: ${h.empf.map(q=>esc(q.label.split(' – ')[0])).join(', ')}</span>`:''}${h.abgelaufenSonst.length?` <span style="color:var(--accent-ink)">· abgelaufen: ${h.abgelaufenSonst.map(q=>esc(q.label.split(' – ')[0])).join(', ')}</span>`:''}</li>`).join('') || '<li>Derzeit niemand mit vollständiger Mindestvoraussetzung.</li>'}</ul>
+    ${(()=>{ const n=helfer.filter(h=>h.hinweis.length).length; return n?`<p class="hint" style="margin:4px 0 0">ℹ️ Datenschutz- und UVV-Unterweisung 2026 noch nachzuholen: ${n} Person(en) – ohne Einfluss auf die Einsatzbereitschaft.</p>`:''; })()}
     ${helfer.length>hBereit.length?`<details style="margin-top:4px"><summary class="hint" style="cursor:pointer">Noch nicht einsatzbereit (${helfer.length-hBereit.length})</summary><ul class="hint" style="margin:4px 0 0 -18px">${helfer.filter(h=>!h.bereit).map(h=>`<li>⬜ ${esc(h.p.name)} – fehlt: ${h.fehlt.map(x=>esc((x.q?x.q.label:x.code).split(' – ')[0])+(x.st&&x.st.s==='abgelaufen'?' (abgelaufen)':'')).join(', ')}</li>`).join('')}</ul></details>`:''}
     ${renderFahrerEinsatzbereit()}
-    <p class="hint" style="margin:8px 0 0">Teams: gültige Modulprüfung 2 je Hund und Sparte sowie alle ★-Nachweise der Hundeführerin bzw. des Hundeführers (Erste Hilfe am Hund: einmal Pflicht, die Auffrischung alle 2 Jahre erscheint nur als Warnung). Helfer/-innen: RKE, EKGA-E (EGA Einsatz), gültige Erste Hilfe (bei Sanitätsausbildung gilt die Sanitätsfortbildung) sowie jährlich Datenschutz, UVV und HLW/AED; Sanitätsausbildung und BOS-Funk empfohlen. Fahrzeuge: nur mit gültiger Einweisung, Sonderrechte zusätzlich mit SuWR. Keine Einsatzfreigabe – Tagesform, Gesundheit und Verfügbarkeit bitte zusätzlich prüfen.</p>
+    <p class="hint" style="margin:8px 0 0">Teams: gültige Modulprüfung 2 je Hund und Sparte sowie alle ★-Nachweise der Hundeführerin bzw. des Hundeführers ; Datenschutz, UVV, Hygiene und Sanitätsfortbildung erscheinen nur als Hinweis (Erste Hilfe am Hund: einmal Pflicht, die Auffrischung alle 5 Jahre erscheint nur als Warnung). Helfer/-innen: alle Mitglieder ohne gültige Modulprüfung 2 – Mindestvoraussetzung RKE, EKGA-E (EGA Einsatz), Erste Hilfe (entfällt mit Sanitätsausbildung) und HLW/AED (Übergang: Nachweise ab 2025 gelten bis 31.12.2026). Mit Sanitätsausbildung als Sanitäter/-in, sonst als Praktikant/-in; BOS-Funk für die Funkerrolle. Datenschutz und UVV werden 2026 nachgeholt und nur als Hinweis gezählt. Fahrzeuge: nur mit gültiger Einweisung, Sonderrechte zusätzlich mit SuWR. Keine Einsatzfreigabe – Tagesform, Gesundheit und Verfügbarkeit bitte zusätzlich prüfen.</p>
   </details>`;
 }
 /* ---------- Sicherungserinnerung ---------- */
@@ -6504,7 +6528,7 @@ function renderPersonQualifikationenBereich(p){
       <div id="pf-kurs-ergebnis"></div>
     </details>
     <label>Qualifikationen dieser Person</label>
-    ${hatSuchpruefung(p.id)?'<p class="hint" style="margin:0 0 4px;color:var(--ink)">✓ Modulprüfung 2 (Suchprüfung) vorhanden – alle einmaligen Pflichtausbildungen bis dahin gelten als erfüllt. Einzutragen sind nur noch aufbauende Qualifikationen und die wiederkehrenden Nachweise (jährlich: HLW/AED, UVV, Hygiene, Datenschutz, Sonderrechte; alle 2 Jahre: Suchprüfung, Erste Hilfe am Hund, Sanitätsfortbildung).</p>':''}
+    ${hatSuchpruefung(p.id)?'<p class="hint" style="margin:0 0 4px;color:var(--ink)">✓ Modulprüfung 2 (Suchprüfung) vorhanden – alle einmaligen Pflichtausbildungen bis dahin gelten als erfüllt. Einzutragen sind nur noch aufbauende Qualifikationen und die wiederkehrenden Nachweise (jährlich: HLW/AED, UVV, Hygiene, Datenschutz, Sonderrechte; alle 2 Jahre: Suchprüfung, Sanitätsfortbildung; alle 5 Jahre: Erste Hilfe am Hund).</p>':''}
     <div id="pf-qual-liste">${zeilen}</div>
     <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">
       <select id="pf-qual-neu" style="flex:1;min-width:160px">
