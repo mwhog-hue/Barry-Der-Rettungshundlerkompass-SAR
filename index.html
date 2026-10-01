@@ -210,7 +210,7 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
 </style>
 </head>
 <body>
-<div style="background:#B4432D;color:#fff;text-align:center;font:600 .85rem system-ui;padding:6px;position:sticky;top:0;z-index:99">TEST-INSTANZ BARRY 2.2 – eigener Speicher, keine Verbindung zum echten BARRY</div>
+<div style="background:#B4432D;color:#fff;text-align:center;font:600 .85rem system-ui;padding:6px;position:sticky;top:0;z-index:99">TEST-INSTANZ BARRY 2.3 – eigener Speicher, keine Verbindung zum echten BARRY</div>
 <div id="app"></div>
 <div id="toast-root"></div>
 <script>
@@ -3044,7 +3044,7 @@ function renderMeineFahrzeugeEinweisungen(person){
 }
 
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.2';
+const BARRY_APP_VERSION = '2.3';
 const BARRY_APP_STAND = '01.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -3144,8 +3144,14 @@ function seedState(){
   return s;
 }
 
-/* Sitzung (nur im Arbeitsspeicher, nicht dauerhaft gespeichert) */
-let session = null; // { personId }
+/* Sitzung (im sessionStorage dieses Tabs; übersteht das Neuladen, nicht das Schließen) */
+// Sitzung bleibt beim Neuladen der Seite (z. B. Herunterziehen zum Aktualisieren) erhalten.
+// Gespeichert im sessionStorage: gilt nur in diesem Tab/Fenster und endet beim Schließen bzw. mit „Abmelden“.
+const SITZUNG_KEY = STORAGE_KEY + '-sitzung';
+function sitzungLaden(){ try{ const x = JSON.parse(sessionStorage.getItem(SITZUNG_KEY)||'null'); return (x && x.personId) ? x : null; }catch(e){ return null; } }
+function sitzungMerken(){ try{ if(session) sessionStorage.setItem(SITZUNG_KEY, JSON.stringify({personId:session.personId, route})); else sessionStorage.removeItem(SITZUNG_KEY); }catch(e){} }
+const gemerkteSitzung = sitzungLaden();
+let session = gemerkteSitzung ? { personId: gemerkteSitzung.personId } : null; // { personId }
 function aktuellePerson(){
   return session ? state.personen.find(p=>p.id===session.personId) : null;
 }
@@ -3163,7 +3169,7 @@ const BEREICHE = [
   { id:'verwaltung',  label:'Verwaltung',            icon:'⚙️', dot:'--t-verwaltung',  nur:'ausbilderPlus' },
   { id:'hilfe',       label:'Hilfe & Anleitung',     icon:'❓', dot:'--t-verwaltung',  nur:null },
 ];
-let route = { bereich:'start', unter:null, id:null };
+let route = (gemerkteSitzung && gemerkteSitzung.route && typeof gemerkteSitzung.route.bereich==='string') ? Object.assign({ bereich:'start', unter:null, id:null }, gemerkteSitzung.route) : { bereich:'start', unter:null, id:null };
 let sidebarOffen = false;
 
 function darfBereichSehen(bereich, person){
@@ -3329,6 +3335,7 @@ function bindLogin(){
    ========================================================= */
 function render(){
   const app = document.getElementById('app');
+  sitzungMerken();
   if(!session){ app.innerHTML = renderLogin(); bindLogin(); return; }
   const person = aktuellePerson();
   if(!person){ session=null; render(); return; }
