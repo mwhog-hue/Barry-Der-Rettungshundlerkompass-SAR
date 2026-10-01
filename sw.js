@@ -4,7 +4,7 @@
    Alle Apps unter mwhog-hue.github.io teilen sich den Cache-Speicher: deshalb
    werden ausschließlich Caches mit dem eigenen Präfix aufgeräumt. */
 const CACHE_PREFIX = 'barry-test-';
-const CACHE_VERSION = CACHE_PREFIX + '2.2-fuehrerschein-2';   // bei jeder Veröffentlichung hochzählen
+const CACHE_VERSION = CACHE_PREFIX + '2.2-fuehrerschein-3';   // bei jeder Veröffentlichung hochzählen
 const APP_DATEIEN = [
   './',
   './index.html',

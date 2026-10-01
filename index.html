@@ -5887,7 +5887,7 @@ function einsatzbereiteHelfer(){
   return state.personen.filter(p=>p.status!=='inaktiv' && (p.name||'').toLowerCase()!=='admin' && !(p.name||'').startsWith('#') && !state.hunde.some(h=>h.status!=='inaktiv' && hundGefuehrtVon(h,p.id)))
     .map(p=>{ const r=profilAuswerten(p.id, pr);
       const empf=(pr.empfohlen||[]).map(c=>state.qualifikationen.find(q=>q.code===c)).filter(q=>q && !['gueltig','durchSuch'].includes(qualiStatusFuer(p.id,q).s));
-      const abgelaufenSonst=state.personQualifikationen.filter(pq=>pq.personId===p.id && pq.gueltigBis && pq.gueltigBis<heute)
+      const abgelaufenSonst=state.personQualifikationen.filter(pq=>pq.personId===p.id && pq.gueltigBis && pq.gueltigBis<heute && !(pq.hundId && (state.hunde.find(h=>h.id===pq.hundId)||{}).status==='inaktiv'))
         .map(pq=>state.qualifikationen.find(q=>q.id===pq.qualifikationId)).filter(q=>q && !pr.codes.includes(q.code) && qualiStatusFuer(p.id,q).s==='abgelaufen');
       return {p, bereit: r.erfuellt===r.gesamt, fehlt:[...r.abgelaufen,...r.fehlt], empf, abgelaufenSonst:[...new Set(abgelaufenSonst)]}; })
     .sort((a,b)=>(b.bereit-a.bereit)||a.p.name.localeCompare(b.p.name,'de'));
