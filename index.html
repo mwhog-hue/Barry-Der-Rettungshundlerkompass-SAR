@@ -657,9 +657,11 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
         wetter: { tempC: num(F['Temperatur (°C)']), gefuehltC: num(F['Gefühlte Temperatur (°C)']), luftfeuchteProzent: num(F['Relative Luftfeuchte (%)']), windKmh: num(F['Windgeschwindigkeit (km/h)']), boeenKmh: num(F['Windböen (km/h)']), windText: str(F['Wind']), windRichtung: str(F['Windrichtung']), niederschlag: str(F['Niederschlag']), bewoelkungProzent: num(F['Bewölkung (%)']), beschreibung: str(F['Wetterbeschreibung']), lichtSicht: str(F['Licht-/Sichtverhältnisse']), abgerufenAm: str(F['Wetterdaten abgerufen am']) || null, erfassungsart: str(F['Erfassungsart Wetter/Ort']), bodenwindBeobachtet: str(F['Bodenwind beobachtet']), bodenwind: str(F['Bodenwind / Witterungsverhalten']), drinnen: /^ja/i.test(str(F['Training drinnen / witterungsunabhängig'])) },
         nutzlast: Object.assign({ gebietGroesse: str(F['Größe Suchgebiet']), bewuchsdichte: str(F['Bewuchsdichte']), gelaendeart: str(F['Geländeart']), lichtSicht: str(F['Licht-/Sichtverhältnisse']), verlaufFormBegrenzung: str(F['Verlauf / Form / Begrenzung des Suchgebiets']), suchdauerMin: dauer, pauseVorBlock: str(F['Pause vor diesem Block']),
           untergruende: C['Untergründe'] || [], bewuchs: C['Bewuchs / Vegetation'] || [], gelaendemerkmale: C['Geländemerkmale'] || [], belastungen: C['Besondere Belastungen'] || [], chips: C, weitereFelder: rest, gruppen: (en.groups || []).filter(x => x.label !== 'Helfer / Versteckperson'),
-          versteckpersonen: vps, anzeige: { art: normAnzeige(pr.indicationType), qualitaet: skalaAusText(F['Anzeigequalität']), qualitaetText: str(F['Anzeigequalität']) }, bruecke: en.rhBridge || null, taktikImport: en.taktikImport || null }),
+          versteckpersonen: vps,
+          gehorsamListe: g('Gehorsamsübung').concat(g('Gehorsam')).map(x => ({ uebung: str(x['Übung']), signalart: str(x['Signalart']), distanz: str(x['Distanz']), ablenkungsart: str(x['Ablenkungsart']), ablenkungsintensitaet: str(x['Ablenkungsintensität']), ergebnis: str(x['Ergebnis']) })),
+          geraeteListe: g('Gerät').concat(g('Geräte')).map(x => ({ geraet: str(x['Gerät']), sicherung: str(x['Sicherung durch HF'] || x['Sicherung']), selbststaendigkeit: str(x['Selbstständigkeit'] || x['Selbständigkeit']), ergebnis: str(x['Ergebnis']) })), anzeige: { art: normAnzeige(pr.indicationType), qualitaet: skalaAusText(F['Anzeigequalität']), qualitaetText: str(F['Anzeigequalität']) }, bruecke: en.rhBridge || null, taktikImport: en.taktikImport || null }),
         bewertung: { ergebnis: vps.length ? (vps.every(v => v.gefunden) ? 'erfolgreich' : vps.some(v => v.gefunden) ? 'teilweise' : 'nicht_erfolgreich') : ergebnisAusText(F['Ergebnis']), hundeleistung: skalaAusText(F['Gesamtbewertung']), zusammenarbeit: skalaAusText(F['Zusammenarbeit / Führungsverhalten']), selbststaendigkeit: skalaAusText(F['Selbstständigkeit']),
-          zusatzskalen: [], gesamtbewertungText: str(F['Gesamtbewertung']), lernschritt: str(F['Lernschritt seit dem vorherigen Training']), naechsterSchritt: str(F['Nächster kleinster Trainingsschritt']), freitext: [str(F['Auffälligkeiten']) && 'Auffälligkeiten: ' + F['Auffälligkeiten'], str(F['Weitere relevante Beobachtungen']), str(F['Freitext / Notizen'])].filter(Boolean).join('\n') },
+          zusatzskalen: [], gesamtbewertungText: /nicht bewertet/.test(str(F['Gesamtbewertung'])) ? '' : str(F['Gesamtbewertung']), zusammenarbeitText: /nicht bewertet/.test(str(F['Zusammenarbeit / Führungsverhalten'])) ? '' : str(F['Zusammenarbeit / Führungsverhalten']), lernschritt: str(F['Lernschritt seit dem vorherigen Training']), naechsterSchritt: str(F['Nächster kleinster Trainingsschritt']), fortschritt: str(F['Fortschritt']), auffaelligkeiten: str(F['Auffälligkeiten']), fehlverhalten: str(F['Fehlverhalten']), freitext: [str(F['Weitere relevante Beobachtungen']), str(F['Freitext / Notizen'])].filter(Boolean).join('\n') },
         hundZustand: { vorher: str(F['Gesundheitszustand vor dem Training']), nachher: str(F['Zustand nach dem Training']), auffaelligkeiten: str(F['Ermüdungs-/Schmerzanzeichen']) },
         kmHinRueck: num(F['Entfernung zur Heimatadresse (km)']) != null ? num(F['Entfernung zur Heimatadresse (km)']) * 2 : null,
         quelle: { app: 'rh-trainingstagebuch-alt', appVersion: 'backup-v' + (b.backupVersion || ''), schemaVersion: SCHEMA, importiertAm: nowIso(), brueckenFormat: 'rhs-trainingstagebuch backup v' + (b.backupVersion || '') },
@@ -794,6 +796,169 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
 
 </script>
 <script>
+/* ===== Prüfungsordnung (Konfiguration Prüfungsreife) ===== */
+/* pruefungsordnung-drk.js — Konfiguration „Prüfungsreife“ für das RH-Tagebuch-Modul
+ * Grundlage: DRK-Prüfungsordnung für Rettungshundeteams, Sparten Fläche/Trümmer/Mantrail (gültig ab 01.01.2024),
+ * Bewertungsbögen Anlagen 5, 7, 9, 11, 12, 13 (Stand 2023) sowie Hessische Ausführungsbestimmungen
+ * (Modul 1.1; Modul 1.2/1.3/2, Stand Januar 2025); BH/VT nach FCI-Prüfungsordnung 2025 (Stand 04.09.2024).
+ * Inhalt: nur Elementbezeichnungen, Zahlen und kurze sinngemäße Hinweise in eigenen Worten – kein Ordnungswortlaut.
+ * Die PO ist „nur für den Dienstgebrauch“ gekennzeichnet; Veröffentlichung dieser Datei vorher mit dem LV klären.
+ *
+ * Aufbau je Modul:
+ *   sparten   – Tagebuch-Sparten, deren Einträge als Nachweis zählen
+ *   regel     – { art:'alle' } oder { art:'mind', n } (Anzahl erfüllter Elemente)
+ *   bausteine – { id, l, gruppe?, hinweis?, auto?(eintrag) → true wenn der Eintrag das Element erfolgreich belegt }
+ * Ein Baustein gilt als „erfüllt“, wenn er von Hand auf „sicher“/„geprüft“ steht ODER mindestens AUTO_MIN
+ * passende erfolgreiche Einheiten im Betrachtungszeitraum vorliegen (automatische Erkennung = Hinweis, keine Bewertung).
+ */
+(function (win) {
+  'use strict';
+  const s = v => String(v == null ? '' : v);
+  const NL = e => (e.data || e).nutzlast || {};
+  const B = e => (e.data || e).bewertung || {};
+  const ok = e => B(e).ergebnis === 'erfolgreich' || B(e).ergebnis === 'teilweise';
+  const skala = (e, k) => { const b = B(e); if (b[k] != null) return b[k]; const z = (b.zusatzskalen || []).find(x => x.schluessel === k); return z ? z.wert : null; };
+  const liste = (e, k) => Array.isArray(NL(e)[k]) ? NL(e)[k] : [];
+  // Prüfungsnah im Gehorsam = sicher ausgeführt, ohne Futter, mit höchstens HILFEN_MAX Hilfen (leeres Feld zählt mit, ältere Einträge kennen es nicht)
+  const HILFEN_MAX = 1;
+  const wenigHilfen = z => (!s(z.hilfen) || (parseInt(z.hilfen, 10) || 0) <= HILFEN_MAX) && s(z.futter) !== 'ja';
+  const uebung = (re, erg) => e => liste(e, 'gehorsamListe').some(z => re.test(s(z.uebung)) && (erg || /^sicher/).test(s(z.ergebnis)) && wenigHilfen(z)) || (Array.isArray(NL(e).uebungen) && NL(e).uebungen.some(u => re.test(s(u))) && ok(e));
+  const alltag = re => e => liste(e, 'alltagListe').some(z => re.test(s(z.uebung)) && /^sicher/.test(s(z.ausfuehrung))) || liste(e, 'gehorsamListe').some(z => re.test(s(z.ablenkungsart)) && /^sicher/.test(s(z.ergebnis)) && wenigHilfen(z));
+  const BH_ALLTAG = ['Personengruppe (Verkehr)', 'Radfahrer mit Klingel', 'Autos / Straßenverkehr', 'Jogger / Inline-Skater', 'Begegnung mit Hunden', 'Kurz angeleint allein lassen', 'Leinenführigkeit mit Personengruppe'];
+  const geraet = re => e => liste(e, 'geraeteListe').some(z => re.test(s(z.geraet)) && /^sicher/.test(s(z.ergebnis)));
+  const vps = e => (NL(e).versteckpersonen || []);
+  const gutVerwiesen = e => vps(e).some(v => /^ja, selbst/.test(s(v.gefundenText)) || (v.gefunden && ((v.anzeige || {}).qualitaet || 0) >= 4));
+  const mind4 = k => e => ok(e) && (skala(e, k) || 0) >= 4;
+  const evalK = (...ks) => e => ks.some(k => (skala(e, k) || 0) >= 4);   // Bewertungsbogen Flächensuchassistent
+
+  const HINWEIS_ALLG = 'Mindestalter des Hundes für alle Module (außer Fachfragen): 16 Monate. Läufige Hündinnen am Ende der Veranstaltung (nicht bei Mantrail-Suchprüfung).';
+
+  const MODULE = [
+    { id: 'm11', l: 'Modul 1.1 Verhalten und Grundfertigkeiten', kurz: '1.1', sparten: ['modul11', 'gewandtheit', 'anzeigeverhalten', 'alltag', 'bindung', 'mantrailing'], regel: { art: 'alle' }, einmalig: true,
+      voraussetzung: [], wiederholung: 'Bei Nichtbestehen frühestens nach 2 Monaten einmal wiederholbar; zweimal nicht bestanden bzw. Abbruch wegen gesteigerter Angst/Aggression schließt weitere Prüfungen aus.',
+      hinweise: ['Vier-Augen-Prinzip (Prüfer + Bewerter); ohne Einigung gilt „nicht angetreten“ (HE).', 'Maulkorb wird bei der Identitätskontrolle geprüft – PO-gerecht, kein Metall/keine Maulschlinge (HE).', 'Keine Leckerchen bei den Begegnungen; Abstand zur Reizquelle ca. 2 m (HE).'],
+      bausteine: [
+        { id: 'identitaet', gruppe: 'Identität', l: 'Identitätskontrolle (Chip auslesen in Ruhe)', hinweis: 'Dauerhaftes Meiden = Abbruch; nicht lesbarer Chip = nicht angetreten (HE).' },
+        { id: 'rufen', gruppe: 'Fremdpersonen', l: 'Personenhalbkreis: Rufen', hinweis: 'Reihenfolge Rufen → Futter → Spielzeug; die nächste Person ruft sofort (HE).' },
+        { id: 'futter', gruppe: 'Fremdpersonen', l: 'Personenhalbkreis: Lockmittel Futter' },
+        { id: 'spielzeug', gruppe: 'Fremdpersonen', l: 'Personenhalbkreis: Lockmittel Spielzeug', hinweis: 'Kein Spielen ist kein Abbruchgrund (HE).' },
+        { id: 'tragen', gruppe: 'Fremdpersonen', l: 'Tragen des Hundes (2 × 10 m, mit Maulkorb)', auto: e => /trag/i.test(JSON.stringify(NL(e))) && ok(e) },
+        { id: 'sturz', gruppe: 'Fremdpersonen', l: 'Stürzende, schreiend weglaufende Person', hinweis: 'Abstand 3 m, lockere Leine; Bellen ohne Aggression ist kein Abbruch (HE).' },
+        { id: 'spiel', gruppe: 'Fremdpersonen', l: 'Spielen mit einem Gegenstand', hinweis: 'Ohne Spielinteresse, aber neutral = bestanden mit Vermerk (HE).' },
+        { id: 'tonne', gruppe: 'Optisch', l: 'Tonne rollt auf den Hund zu' },
+        { id: 'schirm', gruppe: 'Optisch', l: 'Schirm aufspannen' },
+        { id: 'humpeln', gruppe: 'Optisch', l: 'Humpelnde Person mit flatternder Kleidung' },
+        { id: 'hammer', gruppe: 'Akustisch', l: 'Hammerschlag gegen Metall', hinweis: 'Abstand ca. 5 m (HE).', auto: e => /alltagsger|ger[äa]usch/i.test(JSON.stringify(NL(e))) && ok(e) },
+        { id: 'maschine', gruppe: 'Akustisch', l: 'Laufende Maschine (Motorsäge, Kompressor …)' },
+        { id: 'begegnungPers', gruppe: 'Begegnung', l: 'Begegnung mit Personen und Joggern', auto: e => /menschenmenge|jogger|passant/i.test(JSON.stringify(NL(e))) && ok(e) },
+        { id: 'begegnungHund', gruppe: 'Begegnung', l: 'Begegnung mit anderen Hunden', auto: e => /fremdhund|hunde \/ tiere|begegnung.*hund/i.test(JSON.stringify(NL(e))) && ok(e) },
+        { id: 'bohle', gruppe: 'Geschicklichkeit', l: 'Begehen einer Bohle', hinweis: 'Nicht wiederholbar (HE).', auto: geraet(/steg|bohle/i) },
+        { id: 'roehre', gruppe: 'Geschicklichkeit', l: 'Kriechen durch eine Röhre', auto: geraet(/tunnel|röhre/i) },
+        { id: 'materialien', gruppe: 'Geschicklichkeit', l: 'Begehen von mind. drei Materialien', hinweis: 'Bis zu 3 Durchgänge (HE).', auto: geraet(/untergrund|gitter|blech|folie/i) },
+        { id: 'anzeige', gruppe: 'Anzeige / Suche', l: 'Anzeige (30 m) oder Mini-Trail (30–50 m)', hinweis: 'Mantrailer in Ausbildung: Mini-Trail Pflicht, zu Beginn des Tages (HE). Anzeige: 2. Schicken möglich, Wiederholung am Tagesende (HE).',
+          auto: e => ((e.data || e).sparte === 'anzeigeverhalten' && ok(e)) || ((e.data || e).sparte === 'mantrailing' && ok(e) && (NL(e).trailLaengeM == null || NL(e).trailLaengeM <= 200)) }
+      ] },
+    { id: 'm12', l: 'Modul 1.2 Grundgehorsam', kurz: '1.2', sparten: ['gehorsam'], regel: { art: 'mind', n: 4, von: 6 }, einmalig: true, ersatz: 'VDH-/FCI-Begleithundeprüfung mit Verkehrsteil (BH/VT); Name HF und Chipnummer müssen aus dem Nachweis hervorgehen. In Hessen vorab beim LV prüfen und im DRK-Server eintragen lassen – am Prüfungstag wird sie nicht anerkannt.',
+      voraussetzung: ['m11'], wiederholung: 'Beliebig oft wiederholbar.',
+      hinweise: ['Das Modul ist kurz – entsprechend streng wird auf Genauigkeit geachtet; jede Hilfestellung wird schnell als Minus gewertet.', 'Leckerchen/Futter sind in der Prüfung vollständig verboten – auch nicht als Belohnung zwischen den Übungen; Loben ist nur nach Abschluss eines Elements zulässig.', 'Jede Hilfe zählt einzeln: Kommando, Handzeichen und Körpersprache je eine Hilfe. Spätestens nach drei nicht befolgten Hilfen je Übungsteil ist dieser nicht bestanden; Name + Hörzeichen gilt als Doppelzeichen.', 'Alle Elemente müssen durchgeführt werden; Grundstellung zu Beginn und Ende, Seite (links/rechts) vorher melden, kein Seitenwechsel.', 'Dauerhaftes Abweichen von mehr als einer Hundelänge = nicht bestanden (HE).', 'Bei Bleib-Übungen darf der Hund dem HF nicht entgegenkommen (HE).'],
+      bausteine: [
+        { id: 'freifolge', l: 'Freifolge (ca. 40 Schritte; Gehen, Laufen, langsam; Wendungen)', hinweis: 'HE-Ablauf: nach Kehrtwende je 10–12 Schritte in den Gangarten, dann 2 Winkel, Kehrtwende, Gegenwinkel. Max. 3 Kommandos plus je eines bei Tempo-/Richtungswechsel; Dauerkommandos = nicht bestanden.', auto: uebung(/freifolge|fu(ß|ss)/i) },
+        { id: 'gruppe', l: 'Personengruppe (4–6 Personen, in Freifolge)', hinweis: 'Nur Fremdpersonen, ohne Futter/Spielzeug, Hände neben dem Körper (HE).', auto: e => liste(e, 'gehorsamListe').some(z => /person|gruppe|menschen/i.test(s(z.ablenkungsart)) && /^sicher/.test(s(z.ergebnis))) },
+        { id: 'sitz', l: 'Sitz aus der Bewegung (HF entfernt sich ca. 20 m)', hinweis: 'Abholen: HF stellt sich neben den Hund, 1–2 Schritte weiter, dann Grundstellung (HE).', auto: uebung(/^sitz/i) },
+        { id: 'platz', l: 'Platz aus der Bewegung, Abruf in die Grundstellung', hinweis: 'Platz = Brust und Hinterlauf am Boden (HE). Vorsitzen ist nicht negativ.', auto: uebung(/^platz/i) },
+        { id: 'voraus', l: 'Voraussenden (≥ 20 m) oder Detachieren (3 Punkte)', hinweis: 'Art des Verharrens bei allgemeinem Hörzeichen vorher melden; Detachieren: Radius max. 1 m um den Anlaufpunkt (HE).', auto: e => uebung(/voraus|detach/i)(e) || liste(e, 'gehorsamListe').some(z => /voraus|detach/i.test(s(z.ablenkungsart)) && /^sicher/.test(s(z.ergebnis))) },
+        { id: 'ablegen', l: 'Ablegen unter Ablenkung (HF außer Sicht)', hinweis: 'Leine eingesteckt, nichts beim Hund; beim Abholen Grundstellung, anleinen, am Ort bleiben (HE).', auto: uebung(/bleiben unter ablenkung|ablegen/i) }
+      ] },
+    { id: 'bhvt', l: 'Begleithundeprüfung mit Verkehrsteil BH/VT (Ersatz für Modul 1.2)', kurz: 'BH/VT', sparten: ['gehorsam', 'alltag'], regel: { art: 'alle' }, einmalig: true, ersatzFuer: 'm12',
+      voraussetzung: [], quelle: 'FCI-Prüfungsordnung 2025 (Stand 04.09.2024), Abschnitt FCI-BH/VT; nationale Organisationen (VDH) dürfen die Mindestanforderungen erweitern – solche Ergänzungen sind in dieser Unterlage nicht enthalten.',
+      rahmen: 'Teil A Gehorsam auf dem Übungsplatz: 60 Punkte; mind. 70 % (42 Punkte) sind Voraussetzung für Teil B. Teil B Prüfung im Verkehr: keine Punkte, maßgeblich ist der Gesamteindruck. Ergebnis nur „bestanden/nicht bestanden“ mit Prädikat. Mindestalter legt die nationale Organisation fest (nicht unter 12 Monaten). Zulassung nur mit Sachkundenachweis des Hundeführers. Identitätskontrolle (Chip) und Unbefangenheitsüberprüfung sind Pflicht.',
+      hinweise: ['Grundstellung: Hund sitzt links neben dem HF (anders als im DRK-Modul 1.2, wo links oder rechts zulässig ist).', 'Zusätzliche Hörzeichen kosten Punkte (1 zusätzliches: −1,5; 2 zusätzliche: −2,5); wird die Übung nach dem 3. Hörzeichen nicht ausgeführt, gibt es 0 Punkte. Fehlerhafte Ausführung (z. B. Liegen statt Sitzen) halbiert die Übung. Name + Hörzeichen = Doppelhörzeichen.', 'Mitführen von Futter oder Motivationsgegenständen gilt als Unsportlichkeit und führt zur Disqualifikation.', 'Entwicklung bei Sitz und Ablegen: 10–15 Schritte; Loben nach jeder Übung kurz (ca. 5 Sek.) erlaubt.', 'Anerkennung als Ersatz für DRK-Modul 1.2: Name des HF und Chipnummer müssen aus dem Nachweis (Leistungsheft) hervorgehen; in Hessen vorab beim LV prüfen und im DRK-Server eintragen lassen – am Tag der DRK-Prüfung wird sie nicht anerkannt (HE).'],
+      wiederholung: 'An keine Fristen gebunden, innerhalb einer Prüfungsveranstaltung aber nur einmal. Jedes Ergebnis wird ins Leistungsheft eingetragen.',
+      nachweisFelder: [['verein', 'Veranstaltender Verein'], ['lr', 'Leistungsrichter/-in'], ['lbnr', 'Leistungsheft-Nr. (LB-Nr.)'], ['lvAnerkannt', 'Vom LV anerkannt am']],
+      bausteine: [
+        { id: 'sachkunde', gruppe: 'Voraussetzung', l: 'Sachkundenachweis des Hundeführers', hinweis: 'Nach Regelung der Landesorganisation oder geeigneter behördlicher Nachweis.' },
+        { id: 'unbefangen', gruppe: 'Voraussetzung', l: 'Identitätskontrolle und Unbefangenheitsüberprüfung' },
+        { id: 'leine', gruppe: 'Teil A Gehorsam (60 P.)', l: 'Leinenführigkeit mit Personengruppe – 30 P.', hinweis: 'Mind. 50 Schritte geradeaus, Kehrtwendung links, Laufschritt und langsamer Schritt (je 10–15 Schritte), Anhalten mit selbstständigem Setzen; danach durch eine Gruppe von mind. 4 Personen, je eine Person links und rechts umrunden, einmal in der Gruppe anhalten.', auto: e => uebung(/leinenf/i)(e) },
+        { id: 'sitz', gruppe: 'Teil A Gehorsam (60 P.)', l: 'Sitz aus der Bewegung – 10 P.', hinweis: 'HF entfernt sich mind. 15 Schritte; Stehen oder Liegen = höchstens 50 %.', auto: uebung(/^sitz/i) },
+        { id: 'platzHer', gruppe: 'Teil A Gehorsam (60 P.)', l: 'Ablegen in Verbindung mit Herankommen – 10 P.', hinweis: 'HF entfernt sich mind. 30 Schritte; Abruf, Vorsitz, auf „Fuß“ in die Grundstellung. Kommt der Hund nach dem 2. Zusatzhörzeichen nicht: 0 Punkte.', auto: e => uebung(/ablegen in verbindung|herankommen/i)(e) || (uebung(/^platz/i)(e) && uebung(/abruf/i)(e)) },
+        { id: 'ablage', gruppe: 'Teil A Gehorsam (60 P.)', l: 'Ablegen unter Ablenkung – 10 P.', hinweis: 'Abgeleint, HF ca. 10 m entfernt und seitlich zum Hund, während der andere Hund arbeitet. Verlässt der Hund den Platz um mehr als 3 m vor Ende der Leinenführigkeit des anderen: 0 Punkte; geht er dem abholenden HF entgegen: bis −3.', auto: uebung(/bleiben unter ablenkung|ablegen \(hf|ablegen unter/i) },
+        { id: 'vtGruppe', gruppe: 'Teil B Prüfung im Verkehr', l: 'Begegnung mit Personengruppe', hinweis: 'Gehweg an lockerer Leine, Passant schneidet den Weg; Gruppe von mind. 6 Personen, Handschlag-Begrüßung, Hund sitzt oder liegt ruhig.', auto: alltag(/personengruppe|menschenmenge|passant/i) },
+        { id: 'vtRad', gruppe: 'Teil B Prüfung im Verkehr', l: 'Begegnung mit Radfahrern', hinweis: 'Überholen von hinten und Entgegenkommen, jeweils mit Klingeln; der Hund geht zwischen HF und Rad.', auto: alltag(/rad/i) },
+        { id: 'vtAuto', gruppe: 'Teil B Prüfung im Verkehr', l: 'Begegnung mit Autos', hinweis: 'Motor wird gestartet, Tür zugeschlagen, ein Auto hält und fragt durchs Fenster nach dem Weg – Hund sitzt oder liegt.', auto: alltag(/auto|stra(ß|ss)enverkehr|fahrzeug/i) },
+        { id: 'vtJogger', gruppe: 'Teil B Prüfung im Verkehr', l: 'Begegnung mit Joggern oder Inline-Skatern', hinweis: 'Mind. 2 Jogger überholen und kommen entgegen; Hund muss nicht exakt bei Fuß gehen, darf aber nicht belästigen; Sitz/Platz erlaubt.', auto: alltag(/jogger|inline|skater/i) },
+        { id: 'vtHund', gruppe: 'Teil B Prüfung im Verkehr', l: 'Begegnung mit anderen Hunden', hinweis: 'Überholen und Entgegenkommen; „Fuß“ wiederholen oder Sitz/Platz ist erlaubt.', auto: alltag(/hund/i) },
+        { id: 'vtAllein', gruppe: 'Teil B Prüfung im Verkehr', l: 'Kurz angeleint allein gelassen, Verhalten gegenüber Tieren', hinweis: 'Leine an Zaun o. Ä., HF außer Sicht; ein angeleinter Hund wird in ca. 5 Schritten vorbeigeführt – ohne starkes Zerren oder Dauerbellen.', auto: alltag(/allein|angebunden|angeleint warten/i) }
+      ] },
+    { id: 'm13', l: 'Modul 1.3 Gewandtheit (nur Trümmer)', kurz: '1.3', sparten: ['gewandtheit', 'truemmer'], regel: { art: 'mind', n: 3, von: 4 }, einmalig: true,
+      voraussetzung: ['m11'], wiederholung: 'Beliebig oft wiederholbar.',
+      hinweise: ['Ohne Leine und Halsband, HF bleibt in der Ausgangsposition, ohne Hilfe; durchgehend ohne Stürmen oder zwischenzeitliches Verlassen.', 'Baugleiche Sportgeräte sind zulässig (HE).'],
+      bausteine: [
+        { id: 'bruecke', l: 'Bewegliche Brücke (ca. 4 m auf zwei Fässern)', hinweis: 'Fässer dürfen nicht festgestellt werden (HE).', auto: geraet(/bewegliche br|br(ü|ue)cke/i) },
+        { id: 'wippe', l: 'Wippe (≥ 3,8 m, Kippeffekt selbst auslösen)', auto: geraet(/wippe/i) },
+        { id: 'roehre', l: 'Röhre / Tunnel (ca. 4 m, Ø 0,5 m)', auto: geraet(/tunnel|röhre/i) },
+        { id: 'leiter', l: 'Waagerechte Leiter (≥ 3 m, nur über die Sprossen)', hinweis: 'Sprossenbreite 2–5 cm; 2/3 der Länge inkl. Auf-/Abgang (je max. 3 m) (HE).', auto: geraet(/leiter/i) }
+      ] },
+    { id: 'm2fl', l: 'Modul 2 Rettungshundeteam-Prüfung Flächensuche', kurz: '2 FL', sparten: ['flaeche'], regel: { art: 'alle' }, gueltigMonate: 24,
+      voraussetzung: ['m10fl', 'm11', 'm12'], wiederholung: 'Nach 4 nicht bestandenen Prüfungen in Folge keine weitere Zulassung in dieser Sparte. Wiederholung zur Erhaltung innerhalb von 24 Monaten.',
+      rahmen: 'Suchfläche ca. 45.000 m² (in HE grundsätzlich ein Suchgebiet), max. 2 Versteckpersonen, reine Suchzeit 30 Minuten, Hochverstecke bis 2,50 m, VP mind. 10 Min. im Versteck.',
+      hinweise: ['Chip vor der Befragung in Anwesenheit eines Prüfers auslesen (HE).', 'GPS-Halsungen erlaubt; normales Halsband ab (außer Bringseln) (HE).', 'Fundmeldung mit Himmelsrichtung und Meterangabe – reine GPS-Koordinaten reichen nicht (HE).', 'Bestätigung nur mit festem Futter (keine Suppe/Crunch) (HE).'],
+      bausteine: [
+        { id: 'info', gruppe: 'Hundeführer', l: 'Informationsgewinnung / Befragung (max. 5 Min.)', auto: evalK('evalHandlerInquiry', 'evalHandlerBriefing') },
+        { id: 'lage', gruppe: 'Hundeführer', l: 'Beurteilung der Lage, Einsatztaktik', hinweis: 'Abweichungen von der Taktik vorher ansagen, sonst wird nachgefragt – Suchzeit läuft weiter (HE).', auto: evalK('evalHandlerTactics') },
+        { id: 'ansatz', gruppe: 'Hundeführer', l: 'Suchansatz (Kenndecke, ohne Halsband)', auto: e => ok(e) && (skala(e, 'fuehrerleistung') || 0) >= 4 },
+        { id: 'distanz', gruppe: 'Hundeführer', l: 'Führung auf Distanz', auto: evalK('evalHandlerCoverage') },
+        { id: 'meldung', gruppe: 'Hundeführer', l: 'Meldung von Fundstellen / Betreuung', hinweis: 'Lagemeldung per Funk; Betreuung der VP, keine Sanitätsmaßnahmen nötig (HE).', auto: evalK('evalHandlerReport') },
+        { id: 'intensitaet', gruppe: 'Hund', l: 'Suchintensität', auto: e => evalK('evalDogMotivation', 'evalDogIndependence')(e) || mind4('hundeleistung')(e) },
+        { id: 'fuehrigkeit', gruppe: 'Hund', l: 'Führigkeit / Gehorsam', auto: e => evalK('evalDogManageability')(e) || mind4('zusammenarbeit')(e) },
+        { id: 'beweglichkeit', gruppe: 'Hund', l: 'Beweglichkeit im Suchgelände', auto: e => ok(e) && /dicht|unterwuchs|totholz|uneben|steil|gräben/i.test(JSON.stringify(NL(e))) },
+        { id: 'verweisen', gruppe: 'Hund', l: 'Verweisen (angekündigte Anzeigeart, innerhalb 30 Min.)', hinweis: 'Verbellen: im Umkreis von 5 m bleiben. Andere Anzeige als angekündigt, Fehl- oder Nichtanzeige, Abbruch der Anzeige = nicht bestanden.', auto: e => gutVerwiesen(e) || evalK('evalDogIndication')(e) }
+      ] },
+    { id: 'm2tr', l: 'Modul 2 Rettungshundeteam-Prüfung Trümmersuche', kurz: '2 TR', sparten: ['truemmer'], regel: { art: 'alle' }, gueltigMonate: 24,
+      voraussetzung: ['m10tr', 'm11', 'm12', 'm13'], wiederholung: 'Nach 4 nicht bestandenen Prüfungen in Folge keine weitere Zulassung in dieser Sparte. Wiederholung zur Erhaltung innerhalb von 24 Monaten.',
+      rahmen: 'Trümmerfläche 800–2.000 m², 1–3 Verstecke mit max. 2 VP (insgesamt max. 4), reine Suchzeit max. 20 Minuten; Verstecke in HE mind. 1 m tief und geschlossen.',
+      hinweise: ['Ohne Halsband und Kenndecke ansetzen; Anzeige nur durch Verbellen.', 'Prüfer bestätigt die Anzeige, erst dann geht der HF zum Versteck; Verstecke werden nicht geöffnet (HE).', 'Kurzes Verlassen des Suchgebiets zur Orientierung/zum Lösen ist kein Fehler (HE).', 'Speisereste dürfen gefressen werden; HF darf angemessen korrigieren. Störgeräusche nach Suchbeginn aus (HE).'],
+      bausteine: [
+        { id: 'info', gruppe: 'Hundeführer', l: 'Informationsgewinnung / Befragung' },
+        { id: 'lage', gruppe: 'Hundeführer', l: 'Beurteilung der Schadenslage', hinweis: 'Lageskizze in Papierform, darf beschriftet werden (HE).' },
+        { id: 'ansatz', gruppe: 'Hundeführer', l: 'Suchansatz unter Beachtung der Verletzungsrisiken', auto: e => ok(e) && (Array.isArray(NL(e).sicherheit) && NL(e).sicherheit.length >= 3 || !!NL(e).freigabe) },
+        { id: 'distanz', gruppe: 'Hundeführer', l: 'Führung auf Distanz (primäre Suchgebiete)', auto: mind4('fuehrerleistung') },
+        { id: 'meldung', gruppe: 'Hundeführer', l: 'Meldung von Fundstellen / Betreuung', hinweis: 'Kurzes Gespräch mit der VP, keine Erste Hilfe nötig; Bestätigung nur mit festem Futter (HE).' },
+        { id: 'intensitaet', gruppe: 'Hund', l: 'Suchintensität', auto: mind4('hundeleistung') },
+        { id: 'fuehrigkeit', gruppe: 'Hund', l: 'Führigkeit / Gehorsam', auto: mind4('zusammenarbeit') },
+        { id: 'beweglichkeit', gruppe: 'Hund', l: 'Beweglichkeit im Trümmergelände', auto: e => /^sicher/.test(s(NL(e).bewegungssicherheit)) || (NL(e).bewegungssicherheit >= 4) },
+        { id: 'verweisen', gruppe: 'Hund', l: 'Verweisen durch Verbellen (innerhalb 20 Min.)', hinweis: '„Sitzen an der Fundstelle“ zählt nicht (nur Training).', auto: e => vps(e).some(v => (v.anzeige || {}).art === 'verbeller' && (v.gefunden || /^ja/.test(s(v.gefundenText)))) && ok(e) },
+        { id: 'ablenkung', gruppe: 'Ablenkung', l: 'Ablenkung: Störgeräusche, Schwelfeuer, Speisereste, getragene Kleidung', auto: e => ok(e) && /lärm|feuer|rauch|speise|kleidung|maschine/i.test(JSON.stringify(NL(e))) }
+      ] },
+    { id: 'm2mt', l: 'Modul 2 Rettungshundeteam-Prüfung Mantrail-Suche', kurz: '2 MT', sparten: ['mantrailing'], regel: { art: 'alle' }, gueltigMonate: 24,
+      voraussetzung: ['m10mt', 'm11'], wiederholung: 'Nach 4 nicht bestandenen Prüfungen in Folge keine weitere Zulassung in dieser Sparte. Wiederholung zur Erhaltung innerhalb von 24 Monaten.',
+      rahmen: 'Trail 12–30 Stunden alt, 1,5–1,8 km, mind. 50 % in Ortschaft; mind. 2 Querungen, 3 Winkel, 2 Kreuzungen. Ansatzsuche (ca. 200 m², ≥ 3 Abgänge) max. 20 Min.; danach max. 1 Stunde bis zum Spurenleger. Geruchsträger: Gaze.',
+      hinweise: ['Hund an geeigneter Leine verkehrssicher führen, Organisationskennzeichen am Geschirr.', 'Spurverlust erkennen und an geeigneter Stelle neu ansetzen.', 'Versteckperson vor der Anzeige nicht ansprechen.'],
+      bausteine: [
+        { id: 'info', gruppe: 'Hundeführer', l: 'Informationsgewinnung / Befragung' },
+        { id: 'lage', gruppe: 'Hundeführer', l: 'Beurteilung der Lage' },
+        { id: 'geruch', gruppe: 'Hundeführer', l: 'Handhabung des Geruchsträgers', auto: e => ok(e) && /gaze|glas|beutel/i.test(JSON.stringify(NL(e).geruchsartikel || NL(e).geruchstraeger || '')) },
+        { id: 'ansatz', gruppe: 'Hundeführer', l: 'Ansatz zum Auffinden der Geruchsspur (≤ 20 Min.)', auto: e => ok(e) && (/selbst|gefunden|aufgenommen/i.test(s(NL(e).plsErgebnis)) || (skala(e, 'progStart') || skala(e, 'plsConf') || 0) >= 4) },
+        { id: 'handling', gruppe: 'Hundeführer', l: 'Handling (Leine, Rescenting, Verkehr)', auto: e => mind4('handlingHF')(e) || mind4('fuehrerleistung')(e) },
+        { id: 'meldung', gruppe: 'Hundeführer', l: 'Meldung von Fundstelle und Betreuung' },
+        { id: 'intensitaet', gruppe: 'Hund', l: 'Suchintensität, Finderwille', auto: e => mind4('finderwille')(e) || mind4('drive')(e) || mind4('hundeleistung')(e) },
+        { id: 'teamarbeit', gruppe: 'Hund', l: 'Teamarbeit', auto: mind4('zusammenarbeit') },
+        { id: 'konzentration', gruppe: 'Hund', l: 'Konzentrationsfähigkeit (Verleitungen, Verkehr)', auto: e => mind4('konzentration')(e) || mind4('focus')(e) },
+        { id: 'verweisen', gruppe: 'Hund', l: 'Verweisen der Zielperson', auto: e => ok(e) && (NL(e).gefunden === true || /^ja/.test(s((vps(e)[0] || {}).gefundenText))) },
+        { id: 'pruefungsnah', gruppe: 'Trail', l: 'Prüfungsnahe Trails (≥ 12 h alt, ≥ 1,5 km, Ortschaft)', auto: e => ok(e) && (NL(e).trailAlterMin || 0) >= 720 && (NL(e).trailLaengeM || NL(e).distanzGeplantM || 0) >= 1500 }
+      ] }
+  ];
+  const FACHFRAGEN = [
+    { id: 'm10fl', l: 'Modul 1.0 Fachfragen Fläche', kurz: '1.0 FL' },
+    { id: 'm10tr', l: 'Modul 1.0 Fachfragen Trümmer', kurz: '1.0 TR' },
+    { id: 'm10mt', l: 'Modul 1.0 Fachfragen Mantrail', kurz: '1.0 MT' }
+  ];
+  const STANDARD_ZIEL = { flaeche: 'm2fl', truemmer: 'm2tr', mantrailing: 'm2mt', gehorsam: 'm12', gewandtheit: 'm13', modul11: 'm11', anzeigeverhalten: 'm11' };
+
+  win.RH_PRUEFUNGSORDNUNG = { id: 'drk-2024-he', titel: 'DRK-PO Rettungshundeteams 2024 mit hessischen Ausführungsbestimmungen (Stand 01/2025)', AUTO_MIN: 2, MONATE: 3, MINDESTALTER_MONATE: 16, HINWEIS_ALLG, MODULE, FACHFRAGEN, STANDARD_ZIEL, HILFEN_MAX, BH_ALLTAG };
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
 /* ===== Tagebuch-Modul (identisch mit der Standalone-App RH Trainingstagebuch) ===== */
 /* tagebuch-modul.js — gemeinsamer Kern des Trainingstagebuchs (Standalone-PWA und BARRY)
  * Benötigt rhs-exchange.js (window.RHS).
@@ -888,31 +1053,28 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
       { k: 'endpool', l: 'Endpool / Auffindesituation', t: 'textarea' },
       { k: 'abweichungMaxM', l: 'Größte Abweichung vom Trail (m)', t: 'number' }
     ] }], skalen: [['finderwille', 'Finderwille'], ['konzentration', 'Konzentration'], ['belastung', 'Belastbarkeit'], ['handlingHF', 'Handling Hundeführer/-in']] },
-    gehorsam: { label: 'Gehorsam', felder: [
-      { k: 'uebungen', l: 'Übungen', t: 'chips', o: ['Fuß', 'Sitz', 'Platz', 'Bleib', 'Abruf', 'Ablegen unter Ablenkung', 'Voraus', 'Apport', 'Steg', 'Leiter', 'Wippe', 'Tunnel', 'Tragen', 'Abbruch'] },
-      { k: 'ablenkung', l: 'Ablenkung', t: 'select', o: ['', 'keine', 'gering', 'mittel', 'hoch'] },
-      { k: 'pruefungsbezug', l: 'Prüfungsbezug', t: 'text', ph: 'z. B. Modul 2 Teil B' }
+    gehorsam: { label: 'Gehorsam', gruppen: [
+      { titel: 'Übungen', felder: [{ k: 'gehorsamListe', l: 'Übungen', t: 'liste', zeile: 'Übung', neu: '+ Übung', felder: [{ k: 'uebung', l: 'Übung', t: 'select', o: ["Sitz", "Platz", "Steh", "Fuß/Bei Fuß", "Abrufen", "Bleiben unter Ablenkung", "Leinenführigkeit", "Freifolge", "Apportieren", "Voraussenden", "Detachieren", "Ablegen (HF außer Sicht)", "Ablegen in Verbindung mit Herankommen", "Personengruppe", "Sonstiges"] }, { k: 'signalart', l: 'Signalart', t: 'select', o: ["Hörzeichen", "Sichtzeichen", "Kombination"] }, { k: 'distanz', l: 'Distanz', t: 'text', ph: 'z. B. 10 m' }, { k: 'hilfen', l: 'Hilfen (Kommando, Handzeichen, Körpersprache je 1)', t: 'select', o: ['', '1', '2', '3 und mehr'] }, { k: 'futter', l: 'Futter/Leckerchen eingesetzt', t: 'select', o: ['', 'nein', 'ja'] }, { k: 'ablenkungsart', l: 'Ablenkungsart', t: 'text' }, { k: 'ablenkungsintensitaet', l: 'Ablenkungsintensität', t: 'select', o: ["keine", "gering", "mittel", "stark"] }, { k: 'ergebnis', l: 'Ergebnis', t: 'select', o: ["sicher ausgeführt", "mit Einschränkungen", "nicht ausgeführt"] }] }] },
+      { titel: 'Weitere Angaben', felder: [{ k: 'pruefungsbezug', l: 'Prüfungsbezug', t: 'text', ph: 'z. B. Modul 2 Teil B' }, { k: 'uebungen', l: 'Weitere Übungen (Schnellauswahl)', t: 'chips', o: ['Voraus', 'Abbruch', 'Ablegen unter Ablenkung', 'Tragen'] }] }
     ] },
     anzeigeverhalten: { label: 'Anzeigetraining', felder: [
       { k: 'aufbau', l: 'Aufbauschritt', t: 'select', o: ['', 'Motivation', 'Anzeige an sichtbarer Person', 'Anzeige verdeckt', 'Haltevermögen', 'Distanz', 'Ablenkung', 'Fremdperson'] },
       { k: 'ablenkungen', l: 'Ablenkungen während der Anzeige', t: 'chips', o: ['Helfer', 'Geräusche', 'Futter', 'Fremdhund', 'Bewegung'] },
       { k: 'wiederholungen', l: 'Wiederholungen', t: 'number' }
     ] },
-    gewandtheit: { label: 'Gerätearbeit', felder: [
-      { k: 'geraete', l: 'Geräte', t: 'chips', o: ['Leiter', 'Wippe', 'Tunnel', 'Steg', 'Bewegungsloser Untergrund', 'Instabiler Untergrund', 'Tragen', 'Kriechtunnel'] },
-      { k: 'sicherung', l: 'Sicherung durch Hundeführer/-in', t: 'text' },
-      { k: 'bewegungssicherheit', l: 'Bewegungssicherheit', t: 'skala' }
+    gewandtheit: { label: 'Gerätearbeit', gruppen: [
+      { titel: 'Geräte', felder: [{ k: 'geraeteListe', l: 'Geräte', t: 'liste', zeile: 'Gerät', neu: '+ Gerät', felder: [{ k: 'geraet', l: 'Gerät', t: 'select', o: ["Wippe", "Bewegliche Brücke", "Laufsteg/Steg", "Leiter", "Tunnel", "Slalom", "Podest", "A-Wand/Rampe", "Balancierscheibe", "Untergrundwechsel", "Engstelle/Absperrung", "Sonstiges"] }, { k: 'sicherung', l: 'Sicherung durch HF', t: 'select', o: ["ja", "nein"] }, { k: 'selbststaendigkeit', l: 'Selbstständigkeit', t: 'select', o: ["selbständig", "mit Führung", "verweigert"] }, { k: 'ergebnis', l: 'Ergebnis', t: 'select', o: ["sicher/souverän", "unsicher/zögerlich", "verweigert/abgebrochen", "nicht geübt heute"] }] }] },
+      { titel: 'Weitere Angaben', felder: [{ k: 'bewegungssicherheit', l: 'Bewegungssicherheit', t: 'select', o: [''].concat(["sicher und flüssig", "vorsichtig aber sicher", "einzelne Unsicherheiten", "deutlich unsicher", "Abbruch aus Sicherheitsgründen", "nicht bewertet"]) }] }
     ] },
-    physio: { label: 'Physio & Fitness', felder: [
-      { k: 'warmup', l: 'Warm-up', t: 'chips', o: ['Gehen', 'Traben', 'Slalom', 'Sitz-Steh', 'Pfoten heben'] },
-      { k: 'haupt', l: 'Hauptteil', t: 'chips', o: ['Balance', 'Cavaletti', 'Rückwärts', 'Kreise', 'Steigung', 'Schwimmen', 'Massage', 'TTouch'] },
-      { k: 'cooldown', l: 'Cool-down', t: 'chips', o: ['Gehen', 'Dehnung', 'Ruhe'] },
-      { k: 'wiederholungenHaltezeit', l: 'Wiederholungen / Haltezeit', t: 'text' },
-      { k: 'pauseSeitLetzterTage', l: 'Pause seit letzter Physio-Einheit (Tage)', t: 'number' }
+    physio: { label: 'Physio & Fitness', gruppen: [
+      { titel: 'Warm-up', felder: [{ k: 'warmupListe', l: 'Warm-up', t: 'liste', zeile: 'Übung', neu: '+ Warm-up-Übung', felder: [{ k: 'uebung', l: 'Übung', t: 'select', o: ["Schritt-Trab-Wechsel", "Achter-Laufen um die Beine", "Große Slalomkurven", "Tempowechsel aus dem Sitz", "Tempowechsel aus dem Platz", "Kinn zur Brust (Halswirbelsäule)", "Kinn zur Decke (Halsstreckung)", "Nase zur linken Hüfte", "Nase zur rechten Hüfte", "Nase zum Sprunggelenk", "Sitz-Steh-Wechsel", "Platz-Steh-Wechsel", "Vorsichtiges Rückwärtsrichten", "Seitliches Treten (Cavaletti-Vorbereitung)", "Pfoten-Schütteln", "Sonstiges"] }, { k: 'wiederholungen', l: 'Wiederholungen / Dauer', t: 'text' }, { k: 'ausfuehrung', l: 'Ausführung', t: 'select', o: ["sauber", "unsicher", "vermieden/verweigert", "schmerzhaft – abgebrochen"] }, { k: 'anmerkung', l: 'Anmerkung', t: 'text' }] }] },
+      { titel: 'Hauptteil', felder: [{ k: 'hauptListe', l: 'Hauptteil', t: 'liste', zeile: 'Übung', neu: '+ Übung', felder: [{ k: 'uebung', l: 'Übung', t: 'select', o: ["Der Diener (Verbeugung)", "Männchen machen (Sitz-Aufrichten)", "Elefanten-Trick (Vorderpfoten erhöht)", "Bergauf-Stehen", "Kniebeugen (Sitz-Steh in Zeitlupe)", "Hinterpfoten erhöht", "Bergab-Stehen", "Schubkarre (unterstützt)", "Langes Rückwärtsrichten", "Cavaletti-Training (Schritt)", "Mikro-Cavaletti (unregelmäßig)", "Slalom im Zeitlupen-Schritt", "Der Kreisel auf der Kiste", "Isometrisches Drücken", "Pfote anheben (Diagonale)", "Stehen auf Balance-Kissen/Luftmatratze", "Zwei-Kissen-Training", "Untergrund-Wechsel (Kies/Sand/Moos/Pflaster/Gitterrost)", "Die Schaukel (Wackelbrett)", "Vorderpfoten-Wackeln", "Sonstiges"] }, { k: 'wiederholungen', l: 'Wiederholungen / Dauer', t: 'text' }, { k: 'ausfuehrung', l: 'Ausführung', t: 'select', o: ["sauber", "unsicher", "vermieden/verweigert", "schmerzhaft – abgebrochen"] }, { k: 'anmerkung', l: 'Anmerkung', t: 'text' }] }] },
+      { titel: 'Cool-down', felder: [{ k: 'cooldownListe', l: 'Cool-down', t: 'liste', zeile: 'Übung', neu: '+ Cool-down-Übung', felder: [{ k: 'uebung', l: 'Übung', t: 'select', o: ["Auslaufen im Passgang/Schritt", "Große auslaufende Achterschleifen", "Schlangenlinien auf gerader Strecke", "Freies Schnüffeln", "Ausstreichen der Rückenlinie", "Ausstreichen der Oberschenkel", "Schulter-Massage", "Sanftes Ruten-Ausziehen", "Pfoten-Massage", "Ohr-Massage", "Leckerli-Suchspiel im Gras", "Schleckmatte / Kong", "Isometrisches Handauflegen (Wärme)", "Sanftes Ausschütteln der Beine", "Ruhe-Kommando im Körbchen", "Sonstiges"] }, { k: 'wiederholungen', l: 'Wiederholungen / Dauer', t: 'text' }, { k: 'ausfuehrung', l: 'Ausführung', t: 'select', o: ["sauber", "unsicher", "vermieden/verweigert", "schmerzhaft – abgebrochen"] }, { k: 'anmerkung', l: 'Anmerkung', t: 'text' }] }] },
+      { titel: 'Weitere Angaben', felder: [{ k: 'pauseSeitLetzterTage', l: 'Pause seit letzter Physio-Einheit (Tage)', t: 'number' }, { k: 'dauerEingehalten', l: 'Geplante Dauer eingehalten', t: 'select', o: [''].concat(["ja", "teilweise", "nein"]) }] }
     ] },
-    alltag: { label: 'Alltag', felder: [
-      { k: 'uebungen', l: 'Übungen', t: 'chips', o: ['Leinenführigkeit', 'Warten', 'Ruhe im Café', 'Fahrzeug', 'Treppen', 'Aufzug', 'Menschenmenge', 'Alltagsgeräusche', 'Impulskontrolle'] },
-      { k: 'ablenkung', l: 'Ablenkung', t: 'select', o: ['', 'keine', 'gering', 'mittel', 'hoch'] }
+    alltag: { label: 'Alltag', gruppen: [
+      { titel: 'Übungen', felder: [{ k: 'alltagListe', l: 'Übungen', t: 'liste', zeile: 'Übung', neu: '+ Übung', felder: [{ k: 'uebung', l: 'Übung', t: 'text', liste: 'alltagkatalog' }, { k: 'ausfuehrung', l: 'Ausführung', t: 'select', o: ["sicher ausgeführt", "mit Einschränkungen", "nicht ausgeführt"] }, { k: 'anmerkung', l: 'Anmerkung', t: 'text' }] }] },
+      { titel: 'Weitere Angaben', felder: [{ k: 'ablenkung', l: 'Ablenkung', t: 'select', o: ['', 'keine', 'gering', 'mittel', 'hoch'] }] }
     ] },
     alltagstricks: { label: 'Tricks mit Einsatznutzen', felder: [{ k: 'uebungen', l: 'Tricks', t: 'chips', o: ['Foto-Pose auf Podest', 'Kinn ablegen', 'Pfote geben', 'Rolle', 'Rückwärts', 'Zielstab', 'Touch'] }] },
     bindung: { label: 'Bindung & Gelassenheit', felder: [{ k: 'uebungen', l: 'Bausteine', t: 'chips', o: ['Blickkontakt', 'Orientierung', 'Entspannungssignal', 'Ruhe auf Decke', 'Fremde Umgebung', 'Frustrationstoleranz'] }] },
@@ -954,6 +1116,7 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
   font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.4;
   box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);
 }@media(prefers-color-scheme:dark){html:not([data-theme=light]) .tbm{--bg:#141816;--paper:#1C221E;--ink:#E8ECE7;--muted:#9AA79E;--line:#2C352F;--green:#7FB08A;--green-soft:#22301F;--amber-soft:#3A2F14;--red-soft:#3D1E18}}.tbm[data-theme=dark],html[data-theme=dark] .tbm{--bg:#141816;--paper:#1C221E;--ink:#E8ECE7;--muted:#9AA79E;--line:#2C352F;--green:#7FB08A;--green-soft:#22301F;--amber-soft:#3A2F14;--red-soft:#3D1E18}.tbm *{box-sizing:inherit}.tbm, .tbm{height:100%;margin:0;background:var(--bg);color:var(--ink)}.tbm{display:flex;flex-direction:column}.tbm header{padding:14px 16px 8px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}.tbm header h1{font-size:1.15rem;margin:0;font-weight:650;letter-spacing:-.01em}.tbm header h1 small{font-weight:400;color:var(--muted);font-size:.8rem;margin-left:6px}.tbm #teamchip{font-size:.85rem;color:var(--green);background:var(--green-soft);padding:6px 10px;border-radius:999px;border:0;font:inherit;max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.tbm main{flex:1;overflow:auto;padding:0 16px calc(84px + env(safe-area-inset-bottom,0px))}.tbm nav.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--paper);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}.tbm nav.tabs button{flex:1;min-height:58px;border:0;background:none;font:inherit;font-size:.72rem;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px;padding-top:8px}.tbm nav.tabs button span.i{font-size:1.25rem;line-height:1}.tbm nav.tabs button[aria-current=page]{color:var(--green);font-weight:650}.tbm section.view{display:none}.tbm section.view.active{display:block}.tbm h2{font-size:1.05rem;margin:18px 0 8px;font-weight:650}.tbm h3{font-size:.95rem;margin:14px 0 6px;font-weight:650;color:var(--muted)}.tbm p.lead{color:var(--muted);margin:0 0 12px}.tbm .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin:10px 0}.tbm details.card{padding:0}.tbm details.card>summary{padding:12px 14px;cursor:pointer;font-weight:600;list-style:none;display:flex;justify-content:space-between;align-items:center}.tbm details.card>summary::after{content:"+";color:var(--muted);font-weight:400}.tbm details[open].card>summary::after{content:"–"}.tbm details.card>div{padding:0 14px 12px}.tbm label.f{display:block;margin:10px 0}.tbm label.f>span{display:block;font-size:.82rem;color:var(--muted);margin-bottom:4px}.tbm input, .tbm select, .tbm textarea{width:100%;min-height:var(--tap);font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}.tbm textarea{min-height:72px;resize:vertical}.tbm input[type=checkbox]{width:auto;min-height:auto;transform:scale(1.3);margin-right:8px}.tbm .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}.tbm .chips{display:flex;flex-wrap:wrap;gap:6px}.tbm .chip{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:7px 12px;font:inherit;font-size:.88rem;min-height:36px}.tbm .chip.on{background:var(--green);border-color:var(--green);color:#fff}.tbm .skala{display:flex;gap:6px}.tbm .skala button{flex:1;min-height:var(--tap);border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:8px;font:inherit;font-weight:600}.tbm .skala button.on{background:var(--green);color:#fff;border-color:var(--green)}.tbm button.primary{width:100%;min-height:52px;border:0;border-radius:var(--r);background:var(--green);color:#fff;font:inherit;font-weight:650;font-size:1rem;margin:14px 0 6px}.tbm button.ghost{min-height:var(--tap);border:1px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);font:inherit;padding:0 14px}.tbm button.ghost.danger{color:var(--red);border-color:var(--red)}.tbm .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.tbm .big{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tbm .big button{min-height:64px;border:1px solid var(--line);border-radius:var(--r);background:var(--paper);color:var(--ink);font:inherit;font-weight:600;font-size:.95rem}.tbm .big button.on{background:var(--green);color:#fff;border-color:var(--green)}.tbm .entry{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}.tbm .entry:last-child{border-bottom:0}.tbm .entry b{display:block}.tbm .entry small{color:var(--muted)}.tbm .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}.tbm .dot.g{background:var(--green)}.tbm .dot.a{background:var(--amber)}.tbm .dot.r{background:var(--red)}.tbm .dot.n{background:var(--line)}.tbm .ampel{padding:10px 12px;border-radius:8px;margin:6px 0;display:flex;justify-content:space-between;align-items:center;gap:10px}.tbm .ampel small{text-align:right;flex-shrink:0;max-width:48%}.tbm .ampel.g{background:var(--green-soft)}.tbm .ampel.a{background:var(--amber-soft)}.tbm .ampel.r{background:var(--red-soft)}.tbm .bars{display:flex;align-items:flex-end;gap:4px;height:90px;border-bottom:1px solid var(--line);padding-bottom:2px}.tbm .bars div{flex:1;background:var(--moss);border-radius:3px 3px 0 0;position:relative;min-height:2px}.tbm .bars div span{position:absolute;top:100%;left:0;right:0;text-align:center;font-size:.65rem;color:var(--muted);margin-top:3px}.tbm .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(76px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}.tbm .toast.show{opacity:1}.tbm input,.tbm select,.tbm textarea,.tbm button{box-sizing:border-box;max-width:100%;margin:0}.tbm .vpdet .row{margin-top:4px}
+.tbm [data-liste] .row,.tbm .vpdet .row{grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px}.tbm [data-liste] .rep{padding-left:8px}
 .tbm .vpdet{margin:6px 0}.tbm .vpdet>summary{list-style:none;padding:6px 0}.tbm .vpdet>summary::before{content:"▸ "}.tbm .vpdet[open]>summary::before{content:"▾ "}
 .tbm .rep{border-left:3px solid var(--moss);padding-left:10px;margin:8px 0}.tbm .hint{font-size:.82rem;color:var(--muted)}.tbm .erg{margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--green-soft);font-size:.9rem}.tbm .erg.bad{background:var(--red-soft)}.tbm .erg b{display:block}.tbm .empty{text-align:center;color:var(--muted);padding:26px 10px}.tbm table{width:100%;border-collapse:collapse;font-size:.9rem}.tbm td, .tbm th{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:top}.tbm kbd{font-family:inherit;background:var(--green-soft);padding:1px 6px;border-radius:4px}.tbm :focus-visible{outline:2px solid var(--amber);outline-offset:2px}@media(prefers-reduced-motion:reduce){.tbm *{transition:none!important}}
 .tbm{display:flex;flex-direction:column;min-height:100%;font-size:16px;line-height:1.4;color:var(--ink);background:var(--bg)}
@@ -1019,10 +1182,21 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
     <label class="f"><span>Ausbilder/-in (Kürzel)</span><input id="e-ausbilder" maxlength="4"></label>
   </div></details>
   <details class="card" open data-immer><summary>Ergebnis und Bewertung</summary><div>
+    <datalist id="dl-alltagkatalog"></datalist>
     <label class="f"><span>Ergebnis</span><select id="e-ergebnis"><option value="offen">offen</option><option value="erfolgreich">erfolgreich</option><option value="teilweise">teilweise</option><option value="nicht_erfolgreich">nicht erfolgreich</option><option value="abgebrochen">abgebrochen</option></select></label>
-    <div id="e-skalen"></div>
+    <div class="row">
+      <label class="f"><span>Gesamtbewertung</span><select id="e-gesamt"><option>– nicht bewertet –</option><option>sehr gut</option><option>gut</option><option>befriedigend</option><option>ausreichend</option><option>mangelhaft</option></select></label>
+      <label class="f"><span>Zusammenarbeit / Führungsverhalten</span><select id="e-zusammen"><option>– nicht bewertet –</option><option>sehr gut</option><option>gut</option><option>befriedigend</option><option>ausreichend</option><option>mangelhaft</option></select></label>
+    </div>
+    <label class="f"><span>Lernschritt seit dem vorherigen Training</span><input id="e-lernschritt"></label>
     <label class="f"><span>Nächster kleinster Trainingsschritt</span><input id="e-naechster"></label>
-    <label class="f"><span>Beobachtung / Freitext</span><textarea id="e-freitext"></textarea></label>
+    <label class="f"><span>Fortschritt / Entwicklung</span><input id="e-fortschritt"></label>
+    <div class="row">
+      <label class="f"><span>Auffälligkeiten</span><input id="e-auff"></label>
+      <label class="f"><span>Fehlverhalten</span><input id="e-fehl"></label>
+    </div>
+    <label class="f"><span>Weitere Beobachtungen / Freitext</span><textarea id="e-freitext"></textarea></label>
+    <details class="vpdet" id="e-detailbew"><summary class="hint" style="cursor:pointer">Detailbewertung 1–5 (optional – für Fortschritt und Auswertung)</summary><p class="hint">Gesamtbewertung und Zusammenarbeit werden automatisch in Hundeleistung bzw. Zusammenarbeit übertragen, solange du hier nichts anderes wählst.</p><div id="e-skalen"></div></details>
   </div></details>
   <details class="card"><summary>Hund vor und nach dem Training</summary><div>
     <label class="f"><span>Gesundheitszustand vor dem Training</span><input id="e-hv" list="dl-hv"></label>
@@ -1052,7 +1226,7 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
   <details class="card" open><summary>Trainingsempfehlung</summary><div id="a-empfehlung"></div></details>
   <details class="card"><summary>Excel-Auswertung</summary><div><p class="hint">Erzeugt eine Excel-Datei (.xlsx) direkt im Gerät, ohne Netz: ein Blatt „Alle Einträge“ und je Sparte ein Blatt mit allen Detailfeldern.</p><div class="btnrow"><button class="ghost" id="a-xlsx" type="button">Excel-Datei erzeugen</button></div></div></details>
   <details class="card" open><summary>Je Sparte</summary><div><table id="a-sparten"></table></div></details>
-  <details class="card"><summary>Prüfungsreife</summary><div id="a-reife"></div></details>
+  <details class="card" open><summary>Prüfungsreife</summary><div id="a-reife"></div></details>
 </section>
 
 <!-- ===== Team ===== -->
@@ -1126,7 +1300,8 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
   function speichern() { if (!opts.state) { try { localStorage.setItem(KEY, JSON.stringify(state)); idbMirror(); } catch (e) { toast('Speichern fehlgeschlagen: ' + e.message); } } if (opts.onChange) opts.onChange(state); document.dispatchEvent(new CustomEvent('tagebuch:changed')); }
   function idbMirror() { try { const r = indexedDB.open('rhs-tagebuch', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => { const tx = r.result.transaction('kv', 'readwrite'); tx.objectStore('kv').put({ t: Date.now(), state }, 'state'); }; } catch (e) { } }
   const sichtbarerHund = h => !opts.hundFilter || opts.hundFilter(h);
-  const eintraege = () => state.records.filter(r => r.type === 'entry' && (!opts.hundFilter || sichtbarerHund(hund((team(r.data.teamId) || {}).hundId) || {})));
+  const sichtbaresTeam = t => !!t && sichtbarerHund(hund(t.hundId) || {}) && (!opts.teamFilter || opts.teamFilter(t));
+  const eintraege = () => state.records.filter(r => r.type === 'entry' && ((!opts.hundFilter && !opts.teamFilter) || sichtbaresTeam(team(r.data.teamId))));
   const team = id => state.teams.find(t => t.id === id);
   const hund = id => state.hunde.find(h => h.id === id);
   const teamLabel = t => { if (!t) return '–'; const mehrere = state.personen.length > 1; return (hund(t.hundId) || {}).rufname + (mehrere ? ' (' + ((person(t.personId) || {}).name || '?') + ')' : '') + ' · ' + (SPARTEN[t.sparte] || {}).label; };
@@ -1143,13 +1318,34 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
     const wochen = {}; es.forEach(e => { const d = new Date(e.data.beginn); const ws = new Date(d); ws.setDate(d.getDate() - ((d.getDay() + 6) % 7)); const k = ws.toISOString().slice(0, 10); wochen[k] = (wochen[k] || 0) + 1; });
     return { anzahl: es.length, erfolgreich: gut.length, anteilGut: es.length ? gut.length / es.length : null, schnitt: { schwierigkeit: sk('schwierigkeit'), hundeleistung: sk('hundeleistung'), fuehrerleistung: sk('fuehrerleistung') }, wochen };
   }
+  /* ---------- Prüfungsreife nach Prüfungsordnung (Konfiguration in pruefungsordnung-drk.js) ---------- */
+  const PO = () => win.RH_PRUEFUNGSORDNUNG || null;
+  const paarKey = t => t.personId + '|' + t.hundId;
+  function pruefstand(t) { state.pruefstand = state.pruefstand || {}; const k = paarKey(t); state.pruefstand[k] = state.pruefstand[k] || { bausteine: {}, bestanden: {}, ziel: {} }; return state.pruefstand[k]; }
+  const modul = id => (PO().MODULE.concat(PO().FACHFRAGEN)).find(m => m.id === id);
+  function alterMonate(h) { const g = Date.parse((h || {}).geburtsdatum || ''); return isFinite(g) ? (Date.now() - g) / (30.44 * 864e5) : null; }
+  function poBewertung(t, modId) {
+    const po = PO(); const m = modul(modId); const ps = pruefstand(t);
+    const seit = Date.now() - po.MONATE * 30.44 * 864e5;
+    const pool = eintraege().filter(e => { const tt = team(e.data.teamId); return tt && tt.personId === t.personId && tt.hundId === t.hundId && m.sparten.includes(e.data.sparte) && Date.parse(e.data.beginn) >= seit; });
+    const bausteine = m.bausteine.map(b => { let n = 0, letzt = null; if (b.auto) pool.forEach(e => { let tr = false; try { tr = !!b.auto(e); } catch (x) { } if (tr) { n++; const d = Date.parse(e.data.beginn); if (!letzt || d > letzt) letzt = d; } });
+      const stufe = ((ps.bausteine[modId] || {})[b.id]) || ''; const erfuellt = stufe === 'sicher' || stufe === 'geprueft' || n >= po.AUTO_MIN; return { b, n, letzt, stufe, erfuellt }; });
+    const anz = bausteine.filter(x => x.erfuellt).length;
+    const regelOk = m.regel.art === 'alle' ? anz === bausteine.length : anz >= m.regel.n;
+    const vor = (m.voraussetzung || []).map(id => { const ers = PO().MODULE.find(x => x.ersatzFuer === id && ps.bestanden[x.id]); return { id, m: modul(id), am: ps.bestanden[id] || (ers ? ps.bestanden[ers.id] : null), ersatz: ers ? ers.kurz : null }; });
+    const alter = alterMonate(hund(t.hundId)); const alterOk = alter == null ? null : alter >= po.MINDESTALTER_MONATE;
+    const bestandenAm = ps.bestanden[modId] || null; let gueltigBis = null;
+    if (bestandenAm && m.gueltigMonate) { const d = new Date(bestandenAm); d.setMonth(d.getMonth() + m.gueltigMonate); gueltigBis = d; }
+    return { m, bausteine, anz, regelOk, vor, alter, alterOk, bestandenAm, gueltigBis, pool: pool.length };
+  }
   function reife(teamId, konfig) {
     konfig = Object.assign({ monate: 3, anteilGut: 0.8, mindestNote: 4, proWoche: 1, bausteine: [] }, konfig || {});
     const seit = Date.now() - konfig.monate * 30.44 * 864e5;
     const es = eintraege().filter(e => e.data.teamId === teamId && Date.parse(e.data.beginn) >= seit);
     const gut = es.filter(e => e.data.bewertung.ergebnis === 'erfolgreich' && (e.data.bewertung.hundeleistung == null || e.data.bewertung.hundeleistung >= konfig.mindestNote));
     const wochen = konfig.monate * 4.35;
-    const bausteineOffen = konfig.bausteine.filter(b => !es.some(e => e.data.bewertung.ergebnis === 'erfolgreich' && JSON.stringify(e.data.nutzlast).toLowerCase().includes(b.toLowerCase())));
+    let bausteineOffen = konfig.bausteine.filter(b => !es.some(e => e.data.bewertung.ergebnis === 'erfolgreich' && JSON.stringify(e.data.nutzlast).toLowerCase().includes(b.toLowerCase())));
+    const tt = team(teamId); if (PO() && tt) { const ziel = pruefstand(tt).ziel[tt.sparte] || PO().STANDARD_ZIEL[tt.sparte]; if (ziel) { const pb = poBewertung(tt, ziel); if (!pb.regelOk) bausteineOffen = bausteineOffen.concat(pb.bausteine.filter(x => !x.erfuellt).map(x => x.b.l)); } }
     const r = { eintraege: es.length, anteilGut: es.length ? gut.length / es.length : 0, proWoche: es.length / wochen, bausteineOffen };
     r.ok = r.eintraege > 0 && r.anteilGut >= konfig.anteilGut && r.proWoche >= konfig.proWoche && bausteineOffen.length === 0;
     return r;
@@ -1277,21 +1473,31 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
 
   function feld(f, wert, prefix) {
     const id = prefix + f.k; let v = wert == null ? '' : wert; if (f.t === 'select' && Array.isArray(v)) v = v[0] || '';
+    if (f.t === 'liste') { LISTEN[id] = f; return `<div class="f"><span class="hint">${esc(f.l)}</span><div data-liste="${id}">${listeZeilen(f, id, Array.isArray(v) ? v : [])}</div><button type="button" class="ghost" data-liste-neu="${id}">${esc(f.neu || '+ Zeile')}</button></div>`; }
     if (f.t === 'chips') return `<div class="f"><span class="hint">${esc(f.l)}</span><div class="chips" data-chips="${id}">${f.o.map(o => `<button type="button" class="chip${(Array.isArray(v) && v.includes(o)) ? ' on' : ''}" data-v="${esc(o)}">${esc(o)}</button>`).join('')}</div></div>`;
     if (f.t === 'skala') return `<div class="f"><span class="hint">${esc(f.l)}</span><div class="skala" data-skala="${id}">${[1, 2, 3, 4, 5].map(n => `<button type="button" class="${v === n ? 'on' : ''}" data-v="${n}">${n}</button>`).join('')}</div></div>`;
     if (f.t === 'select') return `<label class="f"><span>${esc(f.l)}</span><select id="${id}">${f.o.map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
     if (f.t === 'bool') return `<label class="f" style="display:flex;align-items:center"><input type="checkbox" id="${id}"${v ? ' checked' : ''}> ${esc(f.l)}</label>`;
     if (f.t === 'textarea') return `<label class="f"><span>${esc(f.l)}</span><textarea id="${id}">${esc(v)}</textarea></label>${f.wetterKnopf ? `<button type="button" class="ghost" data-wetterziel="${id}" style="margin:-4px 0 8px">🌐 Wetter jetzt → ${esc(f.l.replace('Wetter beim ', ''))}</button>` : ''}`;
-    return `<label class="f"><span>${esc(f.l)}</span><input id="${id}" type="${f.t === 'number' ? 'number' : 'text'}"${f.t === 'number' ? ' inputmode="decimal"' : ''} value="${esc(v)}" placeholder="${esc(f.ph || '')}"></label>`;
+    return `<label class="f"><span>${esc(f.l)}</span><input id="${id}" type="${f.t === 'number' ? 'number' : 'text'}"${f.t === 'number' ? ' inputmode="decimal"' : ''}${f.liste ? ' list="dl-' + f.liste + '"' : ''} value="${esc(v)}" placeholder="${esc(f.ph || '')}"></label>`;
+  }
+  const LISTEN = {};
+  function listeZeilen(f, id, zeilen) { return zeilen.map((z, i) => `<div class="rep" data-zeile="${i}"><div style="display:flex;justify-content:space-between;align-items:center"><b>${esc(f.zeile || 'Zeile')} ${i + 1}</b><button type="button" class="ghost" data-liste-weg="${i}" aria-label="entfernen">✕</button></div><div class="row">${f.felder.map(sf => feld(sf, (z || {})[sf.k], id + '-' + i + '-')).join('')}</div></div>`).join(''); }
+  function lesListe(f, id) { return $$(`[data-liste="${id}"] > .rep`, root).map((r, i) => { const o = {}; f.felder.forEach(sf => { o[sf.k] = lesFeld(sf, id + '-' + i + '-'); }); return o; }); }
+  function bindListen(c) {
+    $$('[data-liste-neu]', c).forEach(b => b.onclick = () => { const id = b.dataset.listeNeu, f = LISTEN[id]; const z = lesListe(f, id); const neu = {}; f.felder.forEach(sf => { neu[sf.k] = sf.t === 'select' ? (sf.o.find(x => x !== '') || '') : ''; }); z.push(neu); const box = root.querySelector(`[data-liste="${id}"]`); box.innerHTML = listeZeilen(f, id, z); bindListen(box.parentNode); });
+    $$('[data-liste] > .rep [data-liste-weg]', c).forEach(b => b.onclick = () => { const box = b.closest('[data-liste]'); const id = box.dataset.liste, f = LISTEN[id]; const z = lesListe(f, id); z.splice(Number(b.dataset.listeWeg), 1); box.innerHTML = listeZeilen(f, id, z); bindListen(box.parentNode); });
   }
   function lesFeld(f, prefix) {
     const id = prefix + f.k;
+    if (f.t === 'liste') return lesListe(f, id);
     if (f.t === 'chips') return $$(`[data-chips="${id}"] .chip.on`, root).map(b => b.dataset.v);
     if (f.t === 'skala') { const b = $(`[data-skala="${id}"] button.on`, root); return b ? Number(b.dataset.v) : null; }
     const el = root.querySelector('#' + id); if (!el) return null;
     if (f.t === 'bool') return el.checked; if (f.t === 'number') return el.value === '' ? null : Number(el.value); return el.value;
   }
   function bindChips(c) {
+    bindListen(c);
     $$('[data-chips] .chip', c).forEach(b => b.onclick = () => b.classList.toggle('on'));
     $$('[data-skala] button', c).forEach(b => b.onclick = () => { $$('button', b.parentNode).forEach(x => x.classList.remove('on')); b.classList.add('on'); });
   }
@@ -1336,10 +1542,10 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
     bearbeiteId = null; vps = [];
     $('#erfassen-titel', root).textContent = 'Training erfassen'; $('#e-delete', root).hidden = true;
     $('#e-hund', root).innerHTML = state.hunde.filter(sichtbarerHund).map(h => `<option value="${h.id}">${esc(h.rufname)}</option>`).join('') || '<option value="">Erst einen Hund anlegen (Reiter Team)</option>';
-    $('#e-person', root).innerHTML = state.personen.map(p => `<option value="${p.id}">${esc(p.name || 'Ich')}</option>`).join(''); $('#e-person', root).value = state.person.id; $('#e-person-wrap', root).style.display = state.personen.length > 1 ? '' : 'none';
+    $('#e-person', root).innerHTML = state.personen.filter(p => !opts.nurEigene || p.id === state.person.id).map(p => `<option value="${p.id}">${esc(p.name || 'Ich')}</option>`).join(''); $('#e-person', root).value = state.person.id; $('#e-person-wrap', root).style.display = (!opts.nurEigene && state.personen.length > 1) ? '' : 'none';
     $('#e-typ', root).value = 'training'; $('#e-beginn', root).value = toLocalInput(new Date()); $('#e-dauer', root).value = '';
-    ['e-ort', 'e-temp', 'e-wind', 'e-km', 'e-ausbilder', 'e-naechster', 'e-freitext', 'e-hv', 'e-hn', 'e-ha'].forEach(id => $('#' + id, root).value = ''); wetterAbruf = null; $('#e-wetter-info', root).textContent = '';
-    $('#e-windr', root).value = ''; $('#e-nied', root).value = ''; $('#e-ergebnis', root).value = 'offen';
+    ['e-ort', 'e-temp', 'e-wind', 'e-km', 'e-ausbilder', 'e-naechster', 'e-freitext', 'e-hv', 'e-hn', 'e-ha', 'e-lernschritt', 'e-fortschritt', 'e-auff', 'e-fehl'].forEach(id => $('#' + id, root).value = ''); wetterAbruf = null; $('#e-wetter-info', root).textContent = '';
+    $('#e-windr', root).value = ''; $('#e-nied', root).value = ''; $('#e-ergebnis', root).value = 'offen'; $('#e-gesamt', root).selectedIndex = 0; $('#e-zusammen', root).selectedIndex = 0; $('#dl-alltagkatalog', root).innerHTML = [...new Set(((PO() || {}).BH_ALLTAG || []).concat(opts.alltagKatalog || []))].map(n => `<option value="${esc(n)}">`).join('');
     const h = hund($('#e-hund', root).value); spart = h && h.sparten[0] && SPARTEN[h.sparten[0]] ? h.sparten[0] : 'flaeche'; renderSpartenWahl(); renderSpartenFelder({}); renderVps();
     $('#ortliste', root).innerHTML = state.orte.map(o => `<option value="${esc(o.name)}">`).join('');
     ausfuehrlichAnwenden();
@@ -1352,9 +1558,11 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
     $('#e-ort', root).value = (d.ort || {}).name || ''; const w = d.wetter || {}; $('#e-temp', root).value = w.tempC ?? ''; $('#e-wind', root).value = w.windKmh ?? ''; $('#e-windr', root).value = w.windRichtung || ''; $('#e-nied', root).value = w.niederschlag || '';
     $('#e-km', root).value = d.kmHinRueck ?? ''; $('#e-ausbilder', root).value = d.ausbilderKuerzel || '';
     const b = d.bewertung || {}; $('#e-ergebnis', root).value = b.ergebnis || 'offen'; $('#e-naechster', root).value = b.naechsterSchritt || ''; $('#e-freitext', root).value = b.freitext || '';
+    const setzeSel = (id, v) => { const el = $(id, root); if (v && [...el.options].some(o => o.value === v)) el.value = v; else el.selectedIndex = 0; };
+    setzeSel('#e-gesamt', b.gesamtbewertungText); setzeSel('#e-zusammen', b.zusammenarbeitText); $('#e-lernschritt', root).value = b.lernschritt || ''; $('#e-fortschritt', root).value = b.fortschritt || ''; $('#e-auff', root).value = b.auffaelligkeiten || ''; $('#e-fehl', root).value = b.fehlverhalten || '';
     const hz = d.hundZustand || {}; $('#e-hv', root).value = hz.vorher || ''; $('#e-hn', root).value = hz.nachher || ''; $('#e-ha', root).value = hz.auffaelligkeiten || '';
     spart = SPARTEN[d.sparte] ? d.sparte : 'sonstiges'; renderSpartenWahl(); renderSpartenFelder(d.nutzlast || {});
-    SKALEN_STD.concat(SPARTEN[spart].skalen || []).forEach(([k]) => { const v = b[k] ?? ((b.zusatzskalen || []).find(z => z.schluessel === k) || {}).wert; if (v) { const btn = $(`[data-skala="sk-${k}"] button[data-v="${v}"]`, root); btn && btn.classList.add('on'); } });
+    let skalaGesetzt = false; SKALEN_STD.concat(SPARTEN[spart].skalen || []).forEach(([k]) => { const v = b[k] ?? ((b.zusatzskalen || []).find(z => z.schluessel === k) || {}).wert; if (v) { skalaGesetzt = true; const btn = $(`[data-skala="sk-${k}"] button[data-v="${v}"]`, root); btn && btn.classList.add('on'); } }); $('#e-detailbew', root).open = skalaGesetzt || state.einstellungen.erfassung === 'ausfuehrlich';
     const hd = (d.nutzlast || {}).helferDetails; vps = clone((d.nutzlast || {}).versteckpersonen || []).concat(hd && hd.length ? clone(hd) : clone(d.helfer || []).filter(h => !/spurleger/i.test(h.rolle || '') || !((d.nutzlast || {}).versteckpersonen || []).some(v => v.kuerzel === h.kuerzel)).map(h => Object.assign({ rolle: h.rolle || 'Helfer' }, h))); renderVps();
   }
   function renderSpartenWahl() {
@@ -1374,8 +1582,13 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
     const helfer = vps.filter(v => istHelfer(v) || /spurleger/i.test(v.rolle || '')).map(v => ({ kuerzel: v.kuerzel, rolle: v.rolle }));
     nutzlast.versteckpersonen = vps.filter(v => !istHelfer(v));
     nutzlast.helferDetails = vps.filter(istHelfer);
-    const bew = { ergebnis: $('#e-ergebnis', root).value, naechsterSchritt: $('#e-naechster', root).value, freitext: $('#e-freitext', root).value, zusatzskalen: [] };
+    const bew = { ergebnis: $('#e-ergebnis', root).value, naechsterSchritt: $('#e-naechster', root).value, freitext: $('#e-freitext', root).value, zusatzskalen: [],
+      gesamtbewertungText: /nicht bewertet/.test($('#e-gesamt', root).value) ? '' : $('#e-gesamt', root).value, zusammenarbeitText: /nicht bewertet/.test($('#e-zusammen', root).value) ? '' : $('#e-zusammen', root).value,
+      lernschritt: $('#e-lernschritt', root).value, fortschritt: $('#e-fortschritt', root).value, auffaelligkeiten: $('#e-auff', root).value, fehlverhalten: $('#e-fehl', root).value };
     SKALEN_STD.forEach(([k]) => { bew[k] = lesFeld({ k, t: 'skala' }, 'sk-'); });
+    const NOTE = { 'sehr gut': 5, 'gut': 4, 'befriedigend': 3, 'ausreichend': 2, 'mangelhaft': 1 };
+    if (bew.hundeleistung == null && NOTE[bew.gesamtbewertungText]) bew.hundeleistung = NOTE[bew.gesamtbewertungText];
+    if (bew.zusammenarbeit == null && NOTE[bew.zusammenarbeitText]) bew.zusammenarbeit = NOTE[bew.zusammenarbeitText];
     (cfg.skalen || []).forEach(([k, l]) => { const v = lesFeld({ k, t: 'skala' }, 'sk-'); if (v) bew.zusatzskalen.push({ schluessel: k, wert: v, beschriftung: l }); });
     const alt = bearbeiteId ? eintraege().find(x => x.id === bearbeiteId) : null;
     const ortName = $('#e-ort', root).value.trim(); const vorlage = state.orte.find(o => o.name === ortName);
@@ -1395,7 +1608,7 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
 
   function renderStart() {
     $('#startlead', root).textContent = state.teams.length ? (state.person.name ? state.person.name + ', ' : '') + eintraege().length + ' Einträge, ' + state.teams.length + ' Team(s).' : 'Willkommen. Lege zuerst Hund und Team an, dann kannst du Trainings erfassen.';
-    $('#startampel', root).innerHTML = state.teams.filter(t => sichtbarerHund(hund(t.hundId) || {})).map(t => { const a = ampel(t.id); const w = wochenSeit(t.id); return `<div class="ampel ${a === 'n' ? '' : a}"><span><span class="dot ${a}"></span>${esc(teamLabel(t))}</span><small>${w == null ? 'noch kein Training' : 'letztes Training vor ' + (w < 1 ? (Math.round(w * 7) === 1 ? '1 Tag' : Math.round(w * 7) + ' Tagen') : (Math.round(w) === 1 ? '1 Woche' : Math.round(w) + ' Wochen'))}</small></div>`; }).join('');
+    $('#startampel', root).innerHTML = state.teams.filter(sichtbaresTeam).map(t => { const a = ampel(t.id); const w = wochenSeit(t.id); return `<div class="ampel ${a === 'n' ? '' : a}"><span><span class="dot ${a}"></span>${esc(teamLabel(t))}</span><small>${w == null ? 'noch kein Training' : 'letztes Training vor ' + (w < 1 ? (Math.round(w * 7) === 1 ? '1 Tag' : Math.round(w * 7) + ' Tagen') : (Math.round(w) === 1 ? '1 Woche' : Math.round(w) + ' Wochen'))}</small></div>`; }).join('');
     const es = eintraege().sort((a, b) => Date.parse(b.data.beginn) - Date.parse(a.data.beginn)).slice(0, 5);
     $('#startletzte', root).innerHTML = es.length ? es.map(zeile).join('') : '<div class="empty">Noch keine Einträge.</div>';
     bindZeilen($('#startletzte', root));
@@ -1413,7 +1626,7 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
   }
   function renderAuswertung() {
     const proHund = state.personen.length > 1 ? state.hunde.map(h => { const tids = state.teams.filter(t => t.hundId === h.id).map(t => t.id); const es = eintraege().filter(e => tids.includes(e.data.teamId)); const f = [...new Set(state.teams.filter(t => t.hundId === h.id).map(t => (person(t.personId) || {}).name || '?'))]; return `<p class="hint">${esc(h.rufname)}: ${es.length} Einträge gesamt, geführt von ${esc(f.join(', '))}</p>`; }).join('') : '';
-    $('#a-ampel', root).innerHTML = proHund + state.teams.filter(t => sichtbarerHund(hund(t.hundId) || {})).map(t => { const a = ampel(t.id); const r = reife(t.id); return `<div class="ampel ${a === 'n' ? '' : a}"><span><span class="dot ${a}"></span>${esc(teamLabel(t))}</span><small>${r.eintraege} Einträge in 3 Monaten, ${Math.round(r.anteilGut * 100)} % erfolgreich</small></div>`; }).join('') || '<div class="empty">Noch keine Teams.</div>';
+    $('#a-ampel', root).innerHTML = proHund + state.teams.filter(sichtbaresTeam).map(t => { const a = ampel(t.id); const r = reife(t.id); return `<div class="ampel ${a === 'n' ? '' : a}"><span><span class="dot ${a}"></span>${esc(teamLabel(t))}</span><small>${r.eintraege} Einträge in 3 Monaten, ${Math.round(r.anteilGut * 100)} % erfolgreich</small></div>`; }).join('') || '<div class="empty">Noch keine Teams.</div>';
     const sparten = [...new Set(eintraege().map(e => e.data.sparte))];
     $('#a-wfilter', root).innerHTML = [['', 'Alle'], ...sparten.map(x => [x, (SPARTEN[x] || {}).label || x])].map(([k, l]) => `<button type="button" class="chip${wFilter === k ? ' on' : ''}" data-v="${k}">${esc(l)}</button>`).join('');
     $$('#a-wfilter .chip', root).forEach(b => b.onclick = () => { wFilter = b.dataset.v; renderAuswertung(); });
@@ -1423,11 +1636,46 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
     $('#a-wochen-txt', root).textContent = st.anzahl + ' Einträge in 12 Wochen, davon ' + st.erfolgreich + ' erfolgreich.';
     const rows = Object.keys(SPARTEN).map(s => { const es = eintraege().filter(e => e.data.sparte === s); if (!es.length) return ''; const g = es.filter(e => e.data.bewertung.ergebnis === 'erfolgreich').length; const q = es.flatMap(e => ((e.data.nutzlast || {}).versteckpersonen || []).map(v => (v.anzeige || {}).qualitaet)).filter(x => x); return `<tr><td>${esc(SPARTEN[s].label)}</td><td>${es.length}</td><td>${Math.round(g / es.length * 100)} %</td><td>${q.length ? (q.reduce((a, b) => a + b, 0) / q.length).toFixed(1) : '–'}</td></tr>`; }).join('');
     $('#a-sparten', root).innerHTML = '<tr><th>Sparte</th><th>Einträge</th><th>erfolgreich</th><th>Ø Anzeige</th></tr>' + (rows || '<tr><td colspan="4" class="hint">noch keine Daten</td></tr>');
-    const sichtTeams = state.teams.filter(t => sichtbarerHund(hund(t.hundId) || {}) && eintraege().some(e => e.data.teamId === t.id));
+    const sichtTeams = state.teams.filter(t => sichtbaresTeam(t) && eintraege().some(e => e.data.teamId === t.id));
     const pfeil = d => d == null ? '' : d > 0.25 ? ' <span style="color:var(--green)">▲ +' + d.toFixed(1) + '</span>' : d < -0.25 ? ' <span style="color:var(--red)">▼ ' + d.toFixed(1) + '</span>' : ' <span class="hint">► gleich</span>';
     $('#a-fortschritt', root).innerHTML = sichtTeams.map(t => { const f = fortschritt(t.id); const z = (l, v) => v ? `<div>${l}: ${v.jetzt.toFixed(1)}${pfeil(v.d)} <span class="hint">(vorher ${v.vorher.toFixed(1)})</span></div>` : ''; const inhalt = z('Hund', f.hund) + z('Hundeführer/-in', f.fuehrer) + z('Schwierigkeit', f.schwierigkeit); return `<p><b>${esc(teamLabel(t))}</b> <span class="hint">· ${f.anzahl} ${f.anzahl === 1 ? 'Eintrag' : 'Einträge'}${f.letzteDelta != null ? ' · letzte Einheit ' + (f.letzteDelta > 0 ? '+' : '') + f.letzteDelta + ' zur Voreinheit' : ''}</span>${inhalt || '<div class="hint">Für einen Vergleich werden mindestens zwei bewertete Einträge benötigt.</div>'}</p>`; }).join('') || '<div class="empty">Noch keine Einträge.</div>';
     $('#a-empfehlung', root).innerHTML = sichtTeams.map(t => `<p><b>${esc(teamLabel(t))}</b></p><ul style="margin:0 0 10px;padding-left:20px">${empfehlungen(t.id).map(x => '<li>' + esc(x) + '</li>').join('')}</ul>`).join('') + (sichtTeams.length ? '<p class="hint">Automatisch aus den Einträgen abgeleitet (Ampel, letzte fünf Einheiten, vorgemerkter Schritt). Ersetzt nicht die Einschätzung der Ausbilder/-innen.</p>' : '<div class="empty">Noch keine Einträge.</div>');
-    $('#a-reife', root).innerHTML = state.teams.map(t => { const r = reife(t.id); return `<p><b>${esc(teamLabel(t))}</b><br>${r.ok ? '<span class="dot g"></span>Bedingungen erfüllt' : '<span class="dot a"></span>noch nicht erfüllt'}: ${r.eintraege} Einträge (${r.proWoche.toFixed(1)} pro Woche, Ziel ≥ 1), ${Math.round(r.anteilGut * 100)} % erfolgreich (Ziel ≥ 80 %).<br><span class="hint">Prüfungsbausteine je Modul werden über die Prüfungsordnung konfiguriert – in dieser Version noch nicht hinterlegt.</span></p>`; }).join('') || '<div class="empty">Noch keine Teams.</div>';
+    renderReife();
+  }
+  const STUFEN = [['', '–'], ['geuebt', 'im Aufbau'], ['sicher', 'sicher'], ['geprueft', 'geprüft']];
+  const fmtK = d => d ? new Date(d).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '';
+  function renderReife() {
+    const box = $('#a-reife', root); const po = PO();
+    const teams = state.teams.filter(sichtbaresTeam);
+    if (!teams.length) { box.innerHTML = '<div class="empty">Noch keine Teams.</div>'; return; }
+    box.innerHTML = teams.map(t => {
+      const r = reife(t.id); const grund = `<p class="hint">${r.ok ? '<span class="dot g"></span>' : '<span class="dot a"></span>'}Letzte 3 Monate: ${r.eintraege} Einträge (${r.proWoche.toFixed(1)}/Woche, Ziel ≥ 1), ${Math.round(r.anteilGut * 100)} % erfolgreich (Ziel ≥ 80 %).</p>`;
+      if (!po) return `<div class="card"><b>${esc(teamLabel(t))}</b>${grund}<p class="hint">Keine Prüfungsordnung geladen.</p></div>`;
+      const ps = pruefstand(t); const ziel = ps.ziel[t.sparte] || po.STANDARD_ZIEL[t.sparte] || 'm11'; const pb = poBewertung(t, ziel); const m = pb.m;
+      const ampel = pb.regelOk && r.ok && (pb.alterOk !== false) && pb.vor.every(v => v.am) ? 'g' : pb.anz ? 'a' : 'r';
+      let gruppe = '';
+      const zeilen = pb.bausteine.map(x => { const kopf = x.b.gruppe && x.b.gruppe !== gruppe ? (gruppe = x.b.gruppe, `<tr><th colspan="3" style="padding-top:10px">${esc(gruppe)}</th></tr>`) : '';
+        return kopf + `<tr><td><span class="dot ${x.erfuellt ? 'g' : x.n || x.stufe ? 'a' : 'n'}"></span>${esc(x.b.l)}${x.b.hinweis ? `<br><span class="hint">${esc(x.b.hinweis)}</span>` : ''}</td><td class="hint" style="white-space:nowrap">${x.b.auto ? (x.n ? x.n + '× ' + fmtK(x.letzt) : '–') : '<span title="nur von Hand">✎</span>'}</td><td><select data-po-stufe="${t.id}|${ziel}|${x.b.id}" style="min-height:34px;padding:4px">${STUFEN.map(([v, l]) => `<option value="${v}"${x.stufe === v ? ' selected' : ''}>${l}</option>`).join('')}</select></td></tr>`; }).join('');
+      const regelText = m.regel.art === 'alle' ? `alle ${pb.bausteine.length} Elemente` : `mind. ${m.regel.n} von ${m.regel.von} Elementen`;
+      const vor = pb.vor.length ? pb.vor.map(v => `<span class="chip${v.am ? ' on' : ''}" style="cursor:default;min-height:28px;padding:3px 10px;font-size:.8rem">${v.am ? '✓' : '○'} ${esc(v.m ? v.m.kurz : v.id)}${v.ersatz && v.am ? ' (' + esc(v.ersatz) + ')' : ''}${v.am ? ' ' + fmtK(v.am) : ''}</span>`).join(' ') : '<span class="hint">keine</span>';
+      const gueltig = pb.gueltigBis ? `<p class="hint">Bestanden am ${fmtK(pb.bestandenAm)} – gültig bis ${fmtK(pb.gueltigBis)}${(pb.gueltigBis - Date.now()) < 90 * 864e5 ? ' <b style="color:var(--red)">(Wiederholung fällig)</b>' : ''}</p>` : pb.bestandenAm ? `<p class="hint">Bestanden am ${fmtK(pb.bestandenAm)}${m.einmalig ? ' (einmalig abzulegen)' : ''}</p>` : '';
+      return `<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><b><span class="dot ${ampel}"></span>${esc(teamLabel(t))}</b>
+        <select data-po-ziel="${t.id}" style="width:auto;min-height:34px;padding:4px">${po.MODULE.map(x => `<option value="${x.id}"${x.id === ziel ? ' selected' : ''}>${esc(x.kurz)} ${esc(x.l.replace(/^Modul [\d.]+ (Rettungshundeteam-Prüfung )?/, ''))}</option>`).join('')}</select></div>
+        <p style="margin:6px 0"><b>${pb.anz} von ${pb.bausteine.length}</b> Elementen erfüllt – Bestehensregel: ${regelText} ${pb.regelOk ? '<span style="color:var(--green)">✓</span>' : ''}</p>
+        ${grund}
+        <p class="hint" style="margin-bottom:4px">Mindestalter 16 Monate: ${pb.alter == null ? 'Geburtsdatum fehlt' : pb.alterOk ? '✓ (' + Math.floor(pb.alter) + ' Monate)' : '✗ erst ' + Math.floor(pb.alter) + ' Monate'}</p><div class="chips" style="margin-bottom:6px;align-items:center"><span class="hint">Voraussetzungen:</span> ${vor}</div>
+        ${gueltig}
+        <details class="vpdet"><summary class="hint" style="cursor:pointer">Elemente (${pb.bausteine.length}) – Spalte 2: automatisch erkannte erfolgreiche Einheiten der letzten 3 Monate</summary><div class="table-scroll" style="overflow-x:auto"><table>${zeilen}</table></div>
+          <p class="hint">Ein Element gilt als erfüllt, wenn es von Hand auf „sicher“ oder „geprüft“ steht oder mindestens ${po.AUTO_MIN} passende erfolgreiche Einheiten erkannt wurden. Die automatische Erkennung ist ein Hinweis aus den Einträgen, keine Bewertung im Sinne der PO. ✎ = nur von Hand bewertbar.${ziel === 'm12' ? ' Gehorsam zählt nur als prüfungsnah, wenn die Übung „sicher ausgeführt“, ohne Futter und mit höchstens ' + (po.HILFEN_MAX || 1) + ' Hilfe eingetragen ist (Felder „Hilfen“ und „Futter/Leckerchen“ in der Übungszeile).' : ''}</p></details>
+        <details class="vpdet"><summary class="hint" style="cursor:pointer">Rahmen und Hinweise</summary>${m.rahmen ? `<p class="hint"><b>Rahmen:</b> ${esc(m.rahmen)}</p>` : ''}<ul class="hint" style="padding-left:18px;margin:4px 0">${(m.hinweise || []).concat([po.HINWEIS_ALLG]).map(h => '<li>' + esc(h) + '</li>').join('')}</ul>${m.quelleHinweis ? `<p class="hint" style="color:var(--red)"><b>Hinweis:</b> ${esc(m.quelleHinweis)}</p>` : ''}${m.quelle ? `<p class="hint"><b>Quelle:</b> ${esc(m.quelle)}</p>` : ''}${m.wiederholung ? `<p class="hint"><b>Wiederholung:</b> ${esc(m.wiederholung)}</p>` : ''}${m.ersatz ? `<p class="hint"><b>Ersatz:</b> ${esc(m.ersatz)}</p>` : ''}<p class="hint">(HE) = hessische Ausführungsbestimmung. Quelle: ${esc(po.titel)}; sinngemäß zusammengefasst, maßgeblich ist die PO.</p></details>
+        <details class="vpdet"><summary class="hint" style="cursor:pointer">Bestandene Module eintragen</summary><div class="row">${po.FACHFRAGEN.concat(po.MODULE).filter(x => x.id === ziel || (m.voraussetzung || []).includes(x.id) || (x.ersatzFuer && (m.voraussetzung || []).concat([ziel]).includes(x.ersatzFuer))).map(x => `<label class="f"><span>${esc(x.kurz)} bestanden am</span><input type="date" data-po-bestanden="${t.id}|${x.id}" value="${esc(ps.bestanden[x.id] || '')}"></label>${(x.nachweisFelder || []).map(([k, l]) => `<label class="f"><span>${esc(x.kurz)}: ${esc(l)}</span><input${k === 'lvAnerkannt' ? ' type="date"' : ''} data-po-nachweis="${t.id}|${x.id}|${k}" value="${esc(((ps.nachweis || {})[x.id] || {})[k] || '')}"></label>`).join('')}`).join('')}</div></details>
+      </div>`; }).join('') + (po ? `<p class="hint">Grundlage: ${esc(po.titel)}.</p>` : '');
+    box.onchange = ev => { const el = ev.target;
+      if (el.dataset.poStufe) { const [tid, mid, bid] = el.dataset.poStufe.split('|'); const ps = pruefstand(team(tid)); ps.bausteine[mid] = ps.bausteine[mid] || {}; ps.bausteine[mid][bid] = el.value; speichern(); const offen = $$('details[open]', box).map(d => $$('details', box).indexOf(d)); renderReife(); $$('details', box).forEach((d, i) => { if (offen.includes(i)) d.open = true; }); }
+      if (el.dataset.poZiel) { const t = team(el.dataset.poZiel); pruefstand(t).ziel[t.sparte] = el.value; speichern(); renderReife(); }
+      if (el.dataset.poNachweis) { const [tid, mid, k] = el.dataset.poNachweis.split('|'); const ps = pruefstand(team(tid)); ps.nachweis = ps.nachweis || {}; ps.nachweis[mid] = ps.nachweis[mid] || {}; ps.nachweis[mid][k] = el.value; speichern(); return; }
+      if (el.dataset.poBestanden) { const [tid, mid] = el.dataset.poBestanden.split('|'); const ps = pruefstand(team(tid)); if (el.value) ps.bestanden[mid] = el.value; else delete ps.bestanden[mid]; speichern(); renderReife(); } };
   }
   function renderTeam() {
     if (opts.rahmen === 'barry') { const v = $('#v-team', root); v.innerHTML = '<h2>Personen, Hunde und Teams</h2><p class="lead">In BARRY kommen Personen und Hunde aus der Staffelverwaltung (Verwaltung → Personen / Hunde). Teams je Sparte entstehen automatisch aus Hundeführer/-in und den Sparten des Hundes.</p>' + state.hunde.filter(sichtbarerHund).map(h => `<div class="card"><b>${esc(h.rufname)}</b> <small class="hint">${esc(h.rasse || '')}</small><div class="chips" style="margin-top:6px">${state.teams.filter(t => t.hundId === h.id).map(t => `<span class="chip on">${esc((person(t.personId) || {}).name || '?')} · ${esc(SPARTEN[t.sparte].label)}</span>`).join('')}</div></div>`).join(''); renderTeamchip(); return; }
@@ -1459,6 +1707,8 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
     $('#e-vp-add', root).onclick = () => { lesVps(); vps.push({ kuerzel: '', rolle: spart === 'mantrailing' ? 'Spurleger' : 'Versteckperson' }); renderVps(); };
     $('#e-gps', root).onclick = () => { if (!navigator.geolocation) return toast('Kein GPS verfügbar'); navigator.geolocation.getCurrentPosition(p => { const o = state.orte.find(x => x.name === $('#e-ort', root).value.trim()); if (o) { o.lat = p.coords.latitude; o.lon = p.coords.longitude; speichern(); } $('#e-ort', root).dataset.lat = p.coords.latitude; $('#e-ort', root).dataset.lon = p.coords.longitude; toast('Position übernommen'); }, () => toast('Position nicht verfügbar')); };
     $('#e-ort', root).oninput = () => { const o = state.orte.find(x => x.name === $('#e-ort', root).value.trim()); if (o && o.entfernungKm != null && !$('#e-km', root).value) $('#e-km', root).value = o.entfernungKm * 2; };
+    const NOTE_W = { 'sehr gut': 5, 'gut': 4, 'befriedigend': 3, 'ausreichend': 2, 'mangelhaft': 1 };
+    [['#e-gesamt', 'hundeleistung'], ['#e-zusammen', 'zusammenarbeit']].forEach(([sel, k]) => { $(sel, root).addEventListener('change', ev => { const n = NOTE_W[ev.target.value]; $$(`[data-skala="sk-${k}"] button`, root).forEach(x => x.classList.toggle('on', n != null && Number(x.dataset.v) === n)); }); });
     $$('#e-umfang button', root).forEach(b => b.onclick = () => { state.einstellungen.erfassung = b.dataset.v; speichern(); if (b.dataset.v === 'kompakt') $$('#v-erfassen details', root).forEach(d => { const gefuellt = /ausgefüllt/.test(d.querySelector('summary').textContent); if (!gefuellt && !d.hasAttribute('data-immer')) d.open = false; }); ausfuehrlichAnwenden(); });
     $('#e-sparte-felder', root).addEventListener('click', ev => { const b = ev.target.closest('[data-wetterziel]'); if (!b) return; const ziel = root.querySelector('#' + b.dataset.wetterziel); b.disabled = true; b.textContent = 'Wetter wird abgerufen …';
       holeWetter().then(w => { const zeile = w.uhrzeit + ' Uhr: ' + w.text; ziel.value = ziel.value ? ziel.value + '\n' + zeile : zeile; if ($('#e-temp', root).value === '') $('#e-temp', root).value = w.c.temperature_2m; const tb = root.querySelector('#sf-temperaturBoden'); if (tb && !tb.value) tb.value = w.c.temperature_2m + ' °C'; }).catch(e => toast('Wetterabruf nicht möglich: ' + e.message)).finally(() => { b.disabled = false; b.textContent = '🌐 Wetter jetzt → ' + (/Legen/.test(b.dataset.wetterziel) ? 'Legen' : 'Arbeiten'); }); });
@@ -1502,7 +1752,8 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
     if (opts.rahmen !== 'barry' && 'serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => { });
   }
 
-  win.TagebuchModul = { excelAuswertung, empfehlungen, fortschritt, start, import: importPaket, exportPaket, reife, statistik, ampel, go, get state() { return state; }, SPARTEN, VP_FELDER, leer, migriere };
+  function neuerEintragFuer(v) { v = v || {}; go('erfassen'); setTimeout(() => { const h = root.querySelector('#e-hund'); if (h && v.hundId && [...h.options].some(o => o.value === v.hundId)) { h.value = v.hundId; h.dispatchEvent(new Event('change', { bubbles: true })); } const sp = v.sparte && RHS.hilfen.normSparte(v.sparte); const b = sp && root.querySelector(`#e-sparten button[data-s="${sp}"]`); if (b) b.click(); }, 0); }
+  win.TagebuchModul = { neuerEintragFuer, poBewertung, pruefstand, excelAuswertung, empfehlungen, fortschritt, start, import: importPaket, exportPaket, reife, statistik, ampel, go, get state() { return state; }, SPARTEN, VP_FELDER, leer, migriere };
 })(window);
 
 </script>
@@ -3197,13 +3448,8 @@ function bindStart(person){
   });
   document.querySelectorAll('[data-start-art]').forEach(b=>{
     b.onclick = ()=>{
-      if(b.dataset.startArt==='rh'){
-        rhHundId = b.dataset.startHund; rhDraft = rhLeer(b.dataset.startSparte); rhBearbeitenId = null;
-        rhAnsicht = 'formular'; ausbildungTab = 'tagebuecher'; ausbildungTagebuchTyp = 'flaeche';
-      } else {
-        mantrailingHundId = b.dataset.startHund; mantrailingDraft = mtLeer(); mantrailingBearbeitenId = null;
-        mantrailingAnsicht = 'formular'; ausbildungTab = 'tagebuecher'; ausbildungTagebuchTyp = 'mantrailing';
-      }
+      tbmVorbelegung = { hundId: b.dataset.startHund, sparte: b.dataset.startArt==='rh' ? b.dataset.startSparte : 'mantrailing' };
+      ausbildungTab = 'tagebuecher'; ausbildungTagebuchTyp = 'modul';
       route = {bereich:'ausbildung', unter:null, id:null}; render();
     };
   });
@@ -5872,7 +6118,7 @@ async function dateiEinlesenUniversal(files){
       if(dFl && dFl.mode && dFl.mode!=='einsatz'){
         try{ const r=flUebergabeInsTagebuch(dFl, person);
           if(r.doppelt){ zeigeToast('Dieses Training wurde bereits ins Tagebuch übernommen.'); return; }
-          speichereState(); rhHundId=r.hund.id; route={bereich:'ausbildung',unter:null,id:null}; ausbildungTab='tagebuecher'; ausbildungTagebuchTyp='flaeche'; render();
+          speichereState(); route={bereich:'ausbildung',unter:null,id:null}; ausbildungTab='tagebuecher'; ausbildungTagebuchTyp='modul'; render(); try{ TagebuchModul.go('tagebuch'); }catch(e){}
           zeigeToast(`Training mit ${r.hund.name} ins Flächen-Tagebuch übernommen${r.funde?` (${r.funde} Fund/e)`:''}.`);
         }catch(err){ alert('Übergabe konnte nicht übernommen werden: '+err.message); }
         return;
@@ -7906,7 +8152,7 @@ function bindTabAnwesenheit(){
    ========================================================= */
 let ausbildungTeamFilter = 'alle'; // 'alle' | hundId
 let ausbildungTab = null; // Startreiter je Rolle: Mitglieder „Mein Stand“, Ausbilder/-innen „Stand & Planung“
-let ausbildungTagebuchTyp = 'allgemein'; // 'allgemein' | 'flaeche' | 'mantrailing' — Unterauswahl innerhalb "Trainingstagebücher"
+let ausbildungTagebuchTyp = 'modul'; // 'allgemein' | 'flaeche' | 'mantrailing' — Unterauswahl innerhalb "Trainingstagebücher"
 let wissenTab = 'pruefung';
 function darfTrainingBearbeiten(person){ return hatAusbilderRecht(person) || istLeitungOderAdmin(person) || hatZusatzrecht(person, ZUSATZRECHT_AUSBILDUNG); }
 // Neben Ausbildern darf auch der/die eigene Hundeführer/in eines Teams dessen Trainingsdaten dokumentieren
@@ -7925,20 +8171,23 @@ const AUSBILDUNG_TABS = [
   {id:'tagebuecher', label:'Trainingstagebücher'},
   {id:'auswertung', label:'📊 Auswertung', nurAusbilderStreng:true},
 ];
+// BARRY 2.1: Die bisherigen Tagebücher (Allgemein, Fläche & Trümmer, Mantrailing) sind ausgeblendet.
+// Ihre Daten (trainingseintraege, rhEintraege, mantrailingEintraege) bleiben unverändert im Bestand und in jeder
+// Datensicherung und werden beim Öffnen fortlaufend ins Trainingstagebuch übernommen (tbmMigriereAlt).
 const AUSBILDUNG_TAGEBUCH_TYPEN = [
-  {id:'allgemein', label:'Allgemein'},
-  {id:'flaeche', label:'Fläche & Trümmer'},
-  {id:'mantrailing', label:'Mantrailing'},
-  {id:'modul', label:'Tagebuch (neu)'},
+  {id:'modul', label:'Trainingstagebuch'},
 ];
+let tbmPruefansicht = false; // Ausbilder/Leitung: alle Teams zur Durchsicht anzeigen (Standard: nur eigene Teams)
+let tbmVorbelegung = null; // {hundId, sparte} – vom Startbildschirm übergeben
 function renderAusbildungTagebuecher(person){
+  ausbildungTagebuchTyp = 'modul';
   const inhalt = ausbildungTagebuchTyp==='flaeche' ? renderAusbildungRH(person)
     : ausbildungTagebuchTyp==='mantrailing' ? renderAusbildungMantrailing(person)
-    : ausbildungTagebuchTyp==='modul' ? tbmRender(person)
+    : ausbildungTagebuchTyp==='modul' ? tbmKopf(person) + tbmRender(person)
     : renderAusbildungTagebuch(person);
   return `
     <div class="row" style="gap:6px;margin-bottom:14px">
-      ${AUSBILDUNG_TAGEBUCH_TYPEN.map(t=>`<button class="btn btn-sm ${ausbildungTagebuchTyp===t.id?'btn-primary':'btn-ghost'}" data-atagtyp="${t.id}">${esc(t.label)}</button>`).join('')}
+      ${AUSBILDUNG_TAGEBUCH_TYPEN.length>1 ? AUSBILDUNG_TAGEBUCH_TYPEN.map(t=>`<button class="btn btn-sm ${ausbildungTagebuchTyp===t.id?'btn-primary':'btn-ghost'}" data-atagtyp="${t.id}">${esc(t.label)}</button>`).join('') : ''}
     </div>
     ${inhalt}
   `;
@@ -12139,7 +12388,9 @@ function tbmSync(){
     const alt = m.personen.find(x=>x.id===p.id)||{}; return Object.assign({}, alt, {id:p.id, name:p.name, organisation: state.organisation.name||''});
   });
   if(!m.personen.length) m.personen = [{id:(aktuellePerson()||{}).id||'p-barry', name:(aktuellePerson()||{}).name||'', organisation:state.organisation.name||''}];
-  m.person = m.personen.find(p=>p.id===(aktuellePerson()||{}).id) || m.personen[0];
+  const ich = aktuellePerson();
+  if(ich && !m.personen.some(p=>p.id===ich.id)) m.personen.push({id:ich.id, name:ich.name, organisation:state.organisation.name||''});
+  m.person = m.personen.find(p=>p.id===(ich||{}).id) || m.personen[0];
   m.hunde = state.hunde.filter(h=>h.status!=='inaktiv').map(h=>{
     const alt = m.hunde.find(x=>x.id===h.id)||{}; const sp=[...new Set([...(alt.sparten||[]), ...(h.sparten||[]).map(normSp).filter(Boolean)])];
     return Object.assign({}, alt, {id:h.id, rufname:h.name, geburtsdatum:h.geburtsdatum||'', rasse:h.rasse||'', sparten:sp});
@@ -12160,6 +12411,8 @@ function tbmSync(){
 // Einmalige Grundübernahme der bisherigen BARRY-Tagebücher (allgemein, Fläche/Trümmer, Mantrailing) in das Modul.
 // Nicht-destruktiv: die alten Listen bleiben unverändert; jeder Alt-Eintrag bekommt eine feste Id (barry-…), daher kein Doppler.
 function tbmMigriereAlt(m){
+  // Grundübernahme v2 (Übungszeilen, Bewertungsfelder): unveränderte Alt-Übernahmen v1 neu aufbauen
+  m.records = m.records.filter(r=>!(String(r.id).startsWith('barry-') && (r.data.quelle||{}).app==='barry' && !(r.data.quelle||{}).migration2 && Number((r.fieldMeta||{}).revision||1)===1));
   const ids = new Set(m.records.map(r=>r.id));
   const teamFuer = (personId, hundId, sparte)=>{ let t=m.teams.find(x=>x.personId===personId && x.hundId===hundId && x.sparte===sparte)||m.teams.find(x=>x.hundId===hundId && x.sparte===sparte); if(!t){ t={id:'team-'+(personId||'x')+'-'+hundId+'-'+sparte, personId:personId||m.person.id, hundId, sparte, status:'in_ausbildung', anzeigeart:''}; m.teams.push(t); const h=m.hunde.find(x=>x.id===hundId); if(h && !h.sparten.includes(sparte)) h.sparten.push(sparte); } return t.id; };
   const skala = v => { const t=String(v==null?'':v); const mm=t.match(/^\s*([1-5])\b/); if(mm) return Number(mm[1]); const w={'sehr gut':5,'gut':4,'befriedigend':3,'ausreichend':2,'mangelhaft':1}; for(const k in w) if(t.toLowerCase().startsWith(k)) return w[k]; return null; };
@@ -12167,7 +12420,7 @@ function tbmMigriereAlt(m){
   let neu=0;
   (state.trainingseintraege||[]).forEach(e=>{ const id='barry-'+e.id; if(ids.has(id) || !e.hundId || !m.hunde.some(h=>h.id===e.hundId)) return;
     const sp = RHS.hilfen.normSparte(e.kategorie)||'sonstiges';
-    m.records.push(RHS.newEntry({id, teamId:teamFuer(e.personId,e.hundId,sp), typ:'training', sparte:sp, beginn:new Date(e.datum||nowIso()).toISOString(), ziel:e.thema||'', notizen:e.notizen||'', bewertung:{ergebnis:'offen'}, quelle:{app:'barry',appVersion:BARRY_APP_VERSION,schemaVersion:RHS.SCHEMA,brueckenFormat:'barry.trainingseintraege'}, roh:e, fieldMeta:{revision:1, updatedAt:e.datum||nowIso()}})); neu++; });
+    m.records.push(RHS.newEntry({id, teamId:teamFuer(e.personId,e.hundId,sp), typ:'training', sparte:sp, beginn:new Date(e.datum||nowIso()).toISOString(), ziel:e.thema||'', notizen:e.notizen||'', bewertung:{ergebnis:'offen'}, quelle:{app:'barry',appVersion:BARRY_APP_VERSION,schemaVersion:RHS.SCHEMA,brueckenFormat:'barry.trainingseintraege',migration2:true}, roh:e, fieldMeta:{revision:1, updatedAt:e.datum||nowIso()}})); neu++; });
   (state.rhEintraege||[]).forEach(e=>{ const id='barry-'+e.id; if(ids.has(id) || !e.hundId || !m.hunde.some(h=>h.id===e.hundId)) return;
     const sp = RHS.hilfen.normSparte(e.sparte)||'flaeche'; const w=e.wetter||{}, g=e.gelaende||{}, er=e.ergebnis||{}, tr=e.truemmer||{}, an=e.anzeige||{};
     const beginn = new Date((e.datum||nowIso().slice(0,10))+'T'+(e.uhrzeit||'12:00')).toISOString(); const dauer=Number(g.dauer)||null;
@@ -12176,10 +12429,10 @@ function tbmMigriereAlt(m){
       ort:{name:e.ort||'', lat:null, lon:null, gelaendeart:g.art||''}, wetter:{tempC:w.temp===''?null:Number(w.temp), windText:w.wind||'', windRichtung:w.windrichtung||'', niederschlag:w.niederschlag||'', lichtSicht:w.sicht||'', bodenwindBeobachtet:w.bodenwind||'', bodenwind:w.bodenwindText||'', drinnen:!!w.drinnen},
       nutzlast:{gebietGroesse:g.groesse||'', bewuchsdichte:g.bewuchsdichte||'', gelaendeart:g.art||'', verlaufFormBegrenzung:g.verlauf||'', suchdauerMin:dauer, pauseVorBlock:e.pauseVorBlock||'', untergruende:(g.chips||{}).untergruende||[], bewuchs:(g.chips||{}).bewuchs||[], gelaendemerkmale:(g.chips||{}).gelaendemerkmale||[], belastungen:(g.chips||{}).belastungen||[], lichtSicht:w.sicht||'', bodenwindBeobachtet:w.bodenwind||'', bodenwind:w.bodenwindText||'',
         truemmerart:tr.chipsObjekt||[], gefahren:tr.chipsGefahren||[], truemmerUntergruende:tr.chipsUntergruende||[], geruchslage:tr.chipsVersteckGeruchslage||[], suchphase:tr.chipsSuchaufbau||[], freigabe:tr.freigabe||'', psa:tr.psa||'', hohlraum:tr.hohlraum||'', sichtkontakt:tr.sichtkontakt||'', arbeitsdistanz:tr.distanz||'', selbststaendigkeit:tr.selbststaendigkeit||'', mikrolokalisierung:tr.mikrolokalisierung||'', anzeigeTruemmer:tr.anzeige||'', bewegungssicherheit:tr.bewegungssicherheit||'', zugaenge:tr.zugaenge||'', geruchsaustritte:tr.geruchsaustritte||'', geruchspool:tr.geruchspool||'',
-        versteckpersonen:vps.filter(v=>!/helfer/i.test(v.rolle)), helferDetails:vps.filter(v=>/helfer/i.test(v.rolle)), gehorsam:e.gehorsam||[], geraete:e.geraete||[], truemmer:tr, physio:{warmup:e.physioWarmup||[], haupt:e.physioMain||[], cooldown:e.physioCooldown||[]}, alltag:e.alltag||[], anzeige:{art:RHS.hilfen.normAnzeige(an.anzeigeart), qualitaet:skala(er.anzeigequalitaet), qualitaetText:er.anzeigequalitaet||'', distanzM:an.distanz||'', latenzSek:an.latenzzeit||'', haltevermoegenSek:an.haltevermoegen||'', rueckkehr:an.rueckkehr||'', ablenkungen:an.ablenkungen||''}, zusatzfelder:e.zusatzfelder||[]},
-      bewertung:{ergebnis: vps.length ? (vps.every(v=>v.gefunden)?'erfolgreich':vps.some(v=>v.gefunden)?'teilweise':'nicht_erfolgreich') : (/^ja/i.test(String(er.anzeigeErfolgt||''))?'erfolgreich':'offen'), hundeleistung:skala(er.gesamtbewertung), zusammenarbeit:skala(er.zusammenarbeit), gesamtbewertungText:er.gesamtbewertung||'', lernschritt:er.lernschritt||'', naechsterSchritt:er.naechsterSchritt||'', fortschritt:er.fortschritt||'', freitext:[er.auffaelligkeiten?'Auffälligkeiten: '+er.auffaelligkeiten:'', er.fehlverhalten?'Fehlverhalten: '+er.fehlverhalten:'', (e.notizen||{}).beobachtungen||'', (e.notizen||{}).freitext||''].filter(Boolean).join('\n')},
+        versteckpersonen:vps.filter(v=>!/helfer/i.test(v.rolle)), helferDetails:vps.filter(v=>/helfer/i.test(v.rolle)), gehorsamListe:(e.gehorsam||[]).map(x=>Object.assign({},x)), geraeteListe:(e.geraete||[]).map(x=>Object.assign({},x)), truemmer:tr, warmupListe:e.physioWarmup||[], hauptListe:e.physioMain||[], cooldownListe:e.physioCooldown||[], alltagListe:e.alltag||[], pauseSeitLetzterTage:Number(er.pauseSeitLetzter)||null, dauerEingehalten:er.dauerEingehalten||'', anzeige:{art:RHS.hilfen.normAnzeige(an.anzeigeart), qualitaet:skala(er.anzeigequalitaet), qualitaetText:er.anzeigequalitaet||'', distanzM:an.distanz||'', latenzSek:an.latenzzeit||'', haltevermoegenSek:an.haltevermoegen||'', rueckkehr:an.rueckkehr||'', ablenkungen:an.ablenkungen||''}, zusatzfelder:e.zusatzfelder||[]},
+      bewertung:{ergebnis: vps.length ? (vps.every(v=>v.gefunden)?'erfolgreich':vps.some(v=>v.gefunden)?'teilweise':'nicht_erfolgreich') : (/^ja/i.test(String(er.anzeigeErfolgt||''))?'erfolgreich':((e.gehorsam||[]).length||(e.geraete||[]).length)?((e.gehorsam||[]).concat(e.geraete||[]).every(x=>/sicher/i.test(x.ergebnis||''))?'erfolgreich':'teilweise'):'offen'), hundeleistung:skala(er.gesamtbewertung), zusammenarbeit:skala(er.zusammenarbeit), gesamtbewertungText:/nicht bewertet/.test(er.gesamtbewertung||'')?'':(er.gesamtbewertung||''), zusammenarbeitText:/nicht bewertet/.test(er.zusammenarbeit||'')?'':(er.zusammenarbeit||''), lernschritt:er.lernschritt||'', naechsterSchritt:er.naechsterSchritt||'', fortschritt:er.fortschritt||'', auffaelligkeiten:er.auffaelligkeiten||'', fehlverhalten:er.fehlverhalten||'', freitext:[(e.notizen||{}).beobachtungen||'', (e.notizen||{}).freitext||''].filter(Boolean).join('\n')},
       hundZustand:{vorher:er.gesundheitVorher||'', nachher:er.zustandNachher||'', auffaelligkeiten:er.ermuedung||''}, kmHinRueck: e.entfernungHeim!==''&&e.entfernungHeim!=null ? Number(e.entfernungHeim)*2 : null,
-      quelle:{app:'barry',appVersion:BARRY_APP_VERSION,schemaVersion:RHS.SCHEMA,brueckenFormat:'barry.rhEintraege'}, roh:e, fieldMeta:{revision:1, updatedAt:e.datum||nowIso()}})); neu++; });
+      quelle:{app:'barry',appVersion:BARRY_APP_VERSION,schemaVersion:RHS.SCHEMA,brueckenFormat:'barry.rhEintraege',migration2:true}, roh:e, fieldMeta:{revision:1, updatedAt:e.datum||nowIso()}})); neu++; });
   (state.mantrailingEintraege||[]).forEach(e=>{ const id='barry-'+e.id; if(ids.has(id) || !e.hundId || !m.hunde.some(h=>h.id===e.hundId)) return;
     const beginn = e.worked ? new Date(e.worked).toISOString() : new Date(e.datum||nowIso()).toISOString(); const gelegt = e.laid?Date.parse(e.laid):null; const alter = gelegt&&e.worked?Math.round((Date.parse(beginn)-gelegt)/6e4):null;
     const zs=[]; [['progStart','Start'],['progSearch','Sucharbeit'],['progFind','Fund'],['crossConfidence','Kreuzungssicherheit'],['focus','Konzentration'],['drive','Finderwille']].forEach(([k,l])=>{ const v=skala(e[k]); if(v!=null) zs.push({schluessel:k, wert:v, beschriftung:l}); });
@@ -12187,17 +12440,28 @@ function tbmMigriereAlt(m){
       wetter:{tempC:e.temp===''?null:Number(e.temp), windText:e.wind||'', legen:e.weatherLay||'', arbeiten:e.weatherWork||''}, helfer: e.layer?[{kuerzel:kz(e.layer), rolle:'spurleger'}]:[],
       nutzlast:{trailart:{text:(e.trailType||[]).join(', ')}, trailAlterMin:alter, gelegtAm:e.laid||null, distanzGeplantM:Number(e.plannedDistance)||null, umfeld:e.env||[], verleitungen:e.disturb||[], sucharbeit:e.work||[], ansatzart:e.saType||'', ansatzqualitaet:e.saQuality||'', ansatzHandling:e.saHandling||'', ansatzbereich:{artGroesse:e.plsArea||'', moeglicheAbgaenge:e.plsExits||''}, plsTyp:e.plsType||'', plsErgebnis:e.plsResult||'', plsUebergang:e.plsToTrail||'', startverhalten:e.startQuality||'', handling:e.handling||'', entscheidungspunkte:e.decisions||'', hilfen:e.helps||'', negativAusschluss:{arbeit:e.negativeWork||''}, endpool:{erkennbar:e.endPool||'', ausarbeitung:e.endPoolWork||'', auffindesituation:e.findSituation||''}, personendifferenzierung:e.personDiff||'', belastungText:e.load||'', anzeige:{art:RHS.hilfen.normAnzeige(e.indication), qualitaet:null}, trackHund:RHS.hilfen.trackPoints(e.gpsPunkte), gpsEreignisse:(e.gpsEreignisse||[]).map(ev=>({zeit:ev.zeit||ev.at||ev.t||null, lat:ev.lat??null, lon:ev.lon??null, typ:ev.typ||ev.type||'', text:ev.text||ev.note||''}))},
       bewertung:{ergebnis: /gefunden|erfolg|Trail bis/i.test(String(e.result||''))?'erfolgreich':/abgebrochen/i.test(String(e.result||''))?'abgebrochen':/nicht/i.test(String(e.result||''))?'nicht_erfolgreich':'offen', hundeleistung:skala(e.rating), zusatzskalen:zs, naechsterSchritt:e.next||'', trainerbeobachtung:e.trainer||'', freitext:[e.strength?'Stärken: '+e.strength:'', e.findNotes||'', e.saNotes||'', e.plsNotes||''].filter(Boolean).join('\n')},
-      quelle:{app:'barry',appVersion:BARRY_APP_VERSION,schemaVersion:RHS.SCHEMA,brueckenFormat:'barry.mantrailingEintraege'}, roh:e, fieldMeta:{revision:1, updatedAt:e.datum||nowIso()}})); neu++; });
+      quelle:{app:'barry',appVersion:BARRY_APP_VERSION,schemaVersion:RHS.SCHEMA,brueckenFormat:'barry.mantrailingEintraege',migration2:true}, roh:e, fieldMeta:{revision:1, updatedAt:e.datum||nowIso()}})); neu++; });
   if(neu) console.info('Tagebuch-Modul: '+neu+' Alt-Einträge übernommen');
 }
+function tbmKopf(person){
+  if(!darfTrainingBearbeiten(person)) return '';
+  const eigene = state.hunde.some(h=>hundGefuehrtVon(h, person.id));
+  return `<div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+    <button class="btn btn-sm ${!tbmPruefansicht?'btn-primary':'btn-ghost'}" data-tbm-sicht="eigen">Meine Teams</button>
+    <button class="btn btn-sm ${tbmPruefansicht?'btn-primary':'btn-ghost'}" data-tbm-sicht="alle">Alle Teams prüfen</button>
+    <span class="hint" style="flex-basis:100%">${tbmPruefansicht ? 'Prüfansicht: Einträge, Auswertung und Prüfungsreife aller Teams, die dir als Ausbilder/-in oder Leitung zugänglich sind.' : (eigene ? 'Dein eigenes Tagebuch – nur deine Teams.' : 'Du führst derzeit keinen eigenen Hund. Über „Alle Teams prüfen“ siehst du die Tagebücher der Teams.')}</span>
+  </div>`;
+}
 function tbmStart(person){
+  document.querySelectorAll('[data-tbm-sicht]').forEach(b=> b.onclick = ()=>{ tbmPruefansicht = b.dataset.tbmSicht==='alle'; render(); });
   const root = document.getElementById('tbm-root'); if(!root) return;
   tbmSync();
-  const alle = darfTrainingBearbeiten(person);
-  TagebuchModul.start({ rahmen:'barry', root, state: state.tagebuchModul, aktuellePersonId: person.id,
-    hundFilter: h => alle || state.hunde.some(x=>x.id===h.id && hundGefuehrtVon(x, person.id)),
+  const alle = darfTrainingBearbeiten(person) && tbmPruefansicht;
+  TagebuchModul.start({ nurEigene: !alle, teamFilter: t => alle || t.personId === person.id, rahmen:'barry', root, state: state.tagebuchModul, aktuellePersonId: person.id, alltagKatalog: (typeof ALLE_UEBUNGEN!=='undefined' ? [...new Set(ALLE_UEBUNGEN.map(u=>u.name).filter(Boolean))] : []),
+    hundFilter: h => alle || state.hunde.some(x=>x.id===h.id && hundGefuehrtVon(x, person.id)) || (state.tagebuchModul.teams||[]).some(t=>t.hundId===h.id && t.personId===person.id),
     onChange: ()=>speichereState() });
   speichereState();
+  if(tbmVorbelegung){ const v=tbmVorbelegung; tbmVorbelegung=null; try{ TagebuchModul.neuerEintragFuer(v); }catch(e){} }
 }
 
 
