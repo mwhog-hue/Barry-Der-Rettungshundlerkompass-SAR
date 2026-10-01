@@ -4,20 +4,18 @@
    Alle Apps unter mwhog-hue.github.io teilen sich den Cache-Speicher: deshalb
    werden ausschließlich Caches mit dem eigenen Präfix aufgeräumt. */
 const CACHE_PREFIX = 'barry-test-';
-const CACHE_VERSION = CACHE_PREFIX + '2.1-icons-1';   // bei jeder Veröffentlichung hochzählen
+const CACHE_VERSION = CACHE_PREFIX + '2.1-icons-3';   // bei jeder Veröffentlichung hochzählen
 const APP_DATEIEN = [
   './',
   './index.html',
   './manifest.webmanifest',
   './favicon.ico',
-  './icons/rhs-apple-touch-icon.png',
-  './icons/rhs-favicon-16.png',
-  './icons/rhs-favicon-32.png',
-  './icons/rhs-favicon-48.png',
-  './icons/rhs-icon-192.png',
-  './icons/rhs-icon-512.png',
-  './icons/rhs-maskable-192.png',
-  './icons/rhs-maskable-512.png'
+  './rhs-apple-touch-icon.png',
+  './rhs-favicon-32.png',
+  './rhs-icon-192.png',
+  './rhs-icon-512.png',
+  './rhs-maskable-192.png',
+  './rhs-maskable-512.png'
 ];
 
 self.addEventListener('install', event => {
