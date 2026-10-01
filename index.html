@@ -210,7 +210,7 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
 </style>
 </head>
 <body>
-<div style="background:#B4432D;color:#fff;text-align:center;font:600 .85rem system-ui;padding:6px;position:sticky;top:0;z-index:99">TEST-INSTANZ BARRY 2.4 – eigener Speicher, keine Verbindung zum echten BARRY</div>
+<div style="background:#B4432D;color:#fff;text-align:center;font:600 .85rem system-ui;padding:6px;position:sticky;top:0;z-index:99">TEST-INSTANZ BARRY 2.5 – eigener Speicher, keine Verbindung zum echten BARRY</div>
 <div id="app"></div>
 <div id="toast-root"></div>
 <script>
@@ -3044,7 +3044,7 @@ function renderMeineFahrzeugeEinweisungen(person){
 }
 
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.4';
+const BARRY_APP_VERSION = '2.5';
 const BARRY_APP_STAND = '01.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -3151,6 +3151,15 @@ function seedState(){
 const SITZUNG_KEY = STORAGE_KEY + '-sitzung';
 function sitzungLaden(){ try{ const x = JSON.parse(sessionStorage.getItem(SITZUNG_KEY)||'null'); return (x && x.personId) ? x : null; }catch(e){ return null; } }
 function sitzungMerken(){ try{ if(session) sessionStorage.setItem(SITZUNG_KEY, JSON.stringify({personId:session.personId, route})); else sessionStorage.removeItem(SITZUNG_KEY); }catch(e){} }
+// Nach Import/Wiederherstellung angemeldet bleiben, wenn dieselbe Person (gleiche Kennung, aktiv, unverändertes Passwort) im neuen Bestand vorhanden ist
+function sitzungVorherMerken(){ const p = aktuellePerson(); return p ? { id:p.id, passwortHash:p.passwortHash||'' } : null; }
+function sitzungUebernehmen(vorher){
+  const p = vorher && state.personen.find(x=>x.id===vorher.id);
+  if(p && p.status!=='inaktiv' && !p.mussPasswortAendern && (p.passwortHash||'')===vorher.passwortHash){
+    session = { personId:p.id }; route = { bereich:'start', unter:null, id:null }; return true;
+  }
+  session = null; return false;
+}
 const gemerkteSitzung = sitzungLaden();
 let session = gemerkteSitzung ? { personId: gemerkteSitzung.personId } : null; // { personId }
 function aktuellePerson(){
@@ -4521,9 +4530,11 @@ function bindTabDatensicherung(){
     if(!confirm('Den Stand von vor dem letzten Import wiederherstellen? Der aktuelle Bestand wird dabei ersetzt.')) return;
     try{
       const roh = localStorage.getItem(STORAGE_KEY+'-vor-import-backup');
+      const sitzungVorher = sitzungVorherMerken();
       state = migriereState(Object.assign(leererState(), JSON.parse(roh)));
       speichereState();
-      session = null; loginEingabe = ''; loginFehler = '';
+      if(sitzungUebernehmen(sitzungVorher)){ loginHinweis=''; zeigeToast('Vorheriger Stand wiederhergestellt – Sie bleiben angemeldet.'); render(); return; }
+      loginEingabe = ''; loginFehler = '';
         loginHinweis = 'Der vorherige Datenbestand wurde wiederhergestellt. Bitte melde dich jetzt mit einer Person aus dem neuen Bestand an (Name oder Benutzername). Zugänge aus dem vorherigen Bestand – z. B. „Admin“ – gelten nicht mehr. Bei importierten Personen gilt das Startpasswort, das dir die Leitung mitgeteilt hat.';
         zeigeToast('Vorheriger Stand wiederhergestellt.');
       render();
@@ -6355,9 +6366,11 @@ function bestandAusDateiImportieren(file){
       try{ localStorage.setItem(STORAGE_KEY+'-vor-import-backup', JSON.stringify(state)); }catch(e){ /* Backup optional, Import trotzdem versuchen */ }
       const anlagenDaten = parsed.anlagenDaten; delete parsed.anlagenDaten;
       if(anlagenDaten && typeof anlagenDaten==='object') anlagenAusSicherungSchreiben(anlagenDaten);
+      const sitzungVorher = sitzungVorherMerken();
       state = migriereState(Object.assign(leererState(), parsed));
       speichereState();
-      session = null; loginEingabe = ''; loginFehler = '';
+      if(sitzungUebernehmen(sitzungVorher)){ loginHinweis=''; zeigeToast('Bestand importiert – Sie bleiben angemeldet. Der vorherige Stand wurde als Sicherheitskopie abgelegt.'); render(); return; }
+      loginEingabe = ''; loginFehler = '';
       loginHinweis = 'Der Datenbestand wurde ersetzt. Bitte melde dich jetzt mit einer Person aus dem neuen Bestand an (Name oder Benutzername). Zugänge aus dem vorherigen Bestand – z. B. „Admin“ – gelten nicht mehr. Bei importierten Personen gilt das Startpasswort, das dir die Leitung mitgeteilt hat.';
       zeigeToast('Bestand importiert. Vorheriger Stand wurde als Sicherheitskopie abgelegt.');
       render();
