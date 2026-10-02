@@ -3225,7 +3225,7 @@ function renderMeineFahrzeugeEinweisungen(person){
 }
 
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.9';
+const BARRY_APP_VERSION = '2.12';
 const BARRY_APP_STAND = '02.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -3438,7 +3438,8 @@ function renderLogin(){
       <p class="hint" style="margin:6px 0">Nur angehakte Bereiche erscheinen im Menü. Ohne Änderung wird alles angezeigt, wofür du berechtigt bist. Start und Hilfe sind immer sichtbar.</p>
       ${BEREICHE.filter(b=>!BEREICHE_FEST.includes(b.id)).map(b=>`<label class="row" style="gap:8px;align-items:center;padding:4px 0;cursor:pointer"><input type="checkbox" data-login-bereich="${b.id}" checked> <span>${b.icon} ${esc(b.label)}</span></label>`).join('')}
     </details>
-    <button class="btn btn-primary" id="btn-anmelden" style="width:100%">Anmelden</button>
+    <button class="btn btn-primary" id="btn-anmelden" style="width:100%;margin-bottom:10px">Anmelden</button>
+    <div id="bio-login-platz"></div>
     ${istErststartOhneDaten()?`
     <div class="card card-pad" style="background:var(--soft);border:none;margin-top:16px">
       <strong>Erste Einrichtung auf diesem Gerät</strong>
@@ -3462,6 +3463,77 @@ function renderLogin(){
     <p class="hint" style="margin-top:14px">Beim Tippen erscheinen passende Namen zur Auswahl. Wer einen Benutzernamen hat, kann diesen statt des vollen Namens eingeben. Erstzugang erhältst du von der Leitung. Alle Daten bleiben ausschließlich auf diesem Gerät.</p>
   </div></div>`;
 }
+
+/* =========================================================
+   ANMELDUNG PER BIOMETRIE (ab BARRY 2.12)
+   Fingerabdruck, Gesicht oder Display-PIN über die Gerätesperre (WebAuthn, Plattform-Authentifikator).
+   Freiwillig, nur auf diesem Gerät, Passwort bleibt als Rückfall. Bei jeder 10. Anmeldung fragt BARRY wieder
+   nach dem Passwort, damit es nicht in Vergessenheit gerät. Gespeichert wird nur die Kennung des Schlüssels,
+   getrennt vom Datenbestand (bleibt bei Importen erhalten). Biometrische Merkmale verlassen das Gerät nie.
+   ========================================================= */
+const BIO_KEY = STORAGE_KEY + '-biometrie';
+const BIO_PASSWORT_ALLE = 10;   // jede 10. Anmeldung mit Passwort
+function bioDaten(){ try{ return JSON.parse(localStorage.getItem(BIO_KEY)||'{}') || {}; }catch(e){ return {}; } }
+function bioSpeichern(d){ try{ localStorage.setItem(BIO_KEY, JSON.stringify(d)); }catch(e){} }
+function bioEintrag(pid){ const e = bioDaten()[pid]; return (e && e.credId) ? e : null; }
+function bioPasswortFaellig(pid){ const e = bioEintrag(pid); return !!e && (e.zaehler||0) >= BIO_PASSWORT_ALLE-1; }
+async function bioVerfuegbar(){
+  try{ return !!(window.PublicKeyCredential && navigator.credentials && window.isSecureContext && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()); }catch(e){ return false; }
+}
+async function bioEinrichten(person){
+  if(!await bioVerfuegbar()){ alert('Auf diesem Gerät bzw. in dieser Ansicht ist keine Anmeldung per Fingerabdruck oder Gesicht möglich. Voraussetzungen: eingerichtete Displaysperre und BARRY über die Web-Adresse (https) geöffnet.'); return false; }
+  try{
+    const cred = await navigator.credentials.create({ publicKey:{
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: { name:'BARRY' },
+      user: { id: new TextEncoder().encode(String(person.id)).slice(0,64), name: person.benutzername || person.name, displayName: person.name },
+      pubKeyCredParams: [{type:'public-key', alg:-7}, {type:'public-key', alg:-257}],
+      authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required', residentKey:'discouraged' },
+      timeout: 60000, attestation:'none' } });
+    if(!cred) return false;
+    const d = bioDaten(); d[person.id] = { credId: bytesZuB64(new Uint8Array(cred.rawId)), zaehler:0, eingerichtetAm: nowIso() }; bioSpeichern(d);
+    zeigeToast('Anmeldung per Fingerabdruck/Gesicht eingerichtet. Bei jeder 10. Anmeldung fragt BARRY nach dem Passwort.');
+    return true;
+  }catch(e){ if(e && e.name!=='NotAllowedError') alert('Einrichtung nicht möglich: '+(e.message||e.name)); return false; }
+}
+function bioAusschalten(pid){ const d = bioDaten(); delete d[pid]; bioSpeichern(d); }
+async function bioPruefen(person){
+  const e = bioEintrag(person.id); if(!e) return false;
+  try{
+    const a = await navigator.credentials.get({ publicKey:{ challenge: crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials:[{type:'public-key', id: b64ZuBytes(e.credId)}], userVerification:'required', timeout:60000 } });
+    return !!a && bytesZuB64(new Uint8Array(a.rawId))===e.credId;
+  }catch(err){ return false; }
+}
+function bioZaehlen(pid, mitPasswort){ const d = bioDaten(); if(!d[pid]) return; d[pid].zaehler = mitPasswort ? 0 : (d[pid].zaehler||0)+1; bioSpeichern(d); }
+/* Nach einer Passwort-Anmeldung einmalig anbieten (je Person und Gerät), solange nicht abgelehnt */
+async function bioAnbieten(person){
+  const d = bioDaten(); if(bioEintrag(person.id) || (d[person.id] && d[person.id].abgelehnt)) return;
+  if(!await bioVerfuegbar()) return;
+  setTimeout(async ()=>{
+    if(confirm('Künftig mit Fingerabdruck oder Gesicht anmelden?\n\nGilt nur auf diesem Gerät. Ihr Passwort bleibt gültig, und BARRY fragt bei jeder 10. Anmeldung danach, damit es nicht in Vergessenheit gerät.\n\nSie können das jederzeit unter „Mein Profil“ ändern.')){ await bioEinrichten(person); }
+    else { const x = bioDaten(); x[person.id] = Object.assign({}, x[person.id]||{}, {abgelehnt:true}); bioSpeichern(x); }
+  }, 400);
+}
+async function bioLoginBereichAktualisieren(){
+  const platz = document.getElementById('bio-login-platz'); if(!platz) return;
+  const {person:p, mehrdeutig} = findePersonFuerLogin(loginEingabe);
+  if(!p || mehrdeutig || p.mussPasswortAendern || p.status==='inaktiv' || !bioEintrag(p.id) || !await bioVerfuegbar()){ platz.innerHTML=''; return; }
+  if(bioPasswortFaellig(p.id)){ platz.innerHTML = `<p class="hint" style="margin:0 0 12px">🔑 Diesmal bitte mit <b>Passwort</b> anmelden. BARRY fragt bei jeder ${BIO_PASSWORT_ALLE}. Anmeldung danach, damit es nicht in Vergessenheit gerät.</p>`; return; }
+  const rest = BIO_PASSWORT_ALLE-1-(bioEintrag(p.id).zaehler||0);
+  platz.innerHTML = `<button type="button" class="btn" id="btn-bio-login" style="width:100%;margin-bottom:6px">🔐 Mit Fingerabdruck / Gesicht anmelden</button><p class="hint" style="margin:0 0 12px;text-align:center">Noch ${rest} Anmeldung(en) bis zur nächsten Passwortabfrage</p>`;
+  document.getElementById('btn-bio-login').onclick = async ()=>{
+    if(!await bioPruefen(p)){ loginFehler = 'Anmeldung per Fingerabdruck/Gesicht nicht bestätigt – bitte erneut versuchen oder das Passwort verwenden.'; render(); return; }
+    bioZaehlen(p.id, false);
+    loginFehler=''; loginHinweis='';
+    p.bereicheAusgeblendet = [...document.querySelectorAll('[data-login-bereich]')].filter(c=>!c.checked).map(c=>c.dataset.loginBereich);
+    p.bereicheGewaehlt = true; speichereState();
+    session = { personId:p.id };
+    try{ localStorage.setItem('barry-last-login-test', p.benutzername || p.name); }catch(e){}
+    render();
+  };
+}
+
 function bindLogin(){
   if(loginSchrittNeuesPasswort){
     document.getElementById('btn-pw-setzen').onclick = ()=>{
@@ -3477,10 +3549,12 @@ function bindLogin(){
       try{ localStorage.setItem('barry-last-login-test', p.benutzername || p.name); }catch(e){}
       loginSchrittNeuesPasswort = null; loginFehler='';
       render();
+      bioAnbieten(p);
     };
     return;
   }
-  document.getElementById('in-person').oninput = e=>{ loginEingabe=e.target.value; };
+  document.getElementById('in-person').oninput = e=>{ loginEingabe=e.target.value; bioLoginBereichAktualisieren(); };
+  bioLoginBereichAktualisieren();
   const erststart = document.getElementById('in-erststart-import');
   if(erststart) erststart.onchange = e=>{ const f=e.target.files[0]; e.target.value=''; if(f && istErststartOhneDaten()) bestandAusDateiImportieren(f); };
   const loginImport = document.getElementById('in-login-import');
@@ -3507,9 +3581,11 @@ function bindLogin(){
     p.bereicheAusgeblendet = [...document.querySelectorAll('[data-login-bereich]')].filter(c=>!c.checked).map(c=>c.dataset.loginBereich);
     p.bereicheGewaehlt = true; speichereState();
     if(p.mussPasswortAendern){ loginSchrittNeuesPasswort = p.id; render(); return; }
+    bioZaehlen(p.id, true);
     session = { personId:p.id };
     try{ localStorage.setItem('barry-last-login-test', p.benutzername || p.name); }catch(e){}
     render();
+    bioAnbieten(p);
   };
   const backupBtn = document.getElementById('btn-login-backup-wiederherstellen');
   if(backupBtn) backupBtn.onclick = ()=>{
@@ -4921,16 +4997,7 @@ function bindTabDatensicherung(){
     }catch(e){ alert('Sicherheitskopie konnte nicht gelesen werden.'); }
   };
   const bilderBtn = document.getElementById('btn-export-bilder'); if(bilderBtn) bilderBtn.onclick = ()=> sicherungMitBildern();
-  document.getElementById('btn-export').onclick = ()=>{
-    const exportDaten = Object.assign({ exportInfo:{ format:'barry-bestand', app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||'' } }, state);
-    const blob = new Blob([JSON.stringify(exportDaten,null,2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href=url; a.download = `RHS_Sicherung_BARRY_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
-    state.meta.letzteSicherungAm = nowIso(); speichereState();
-    zeigeToast('Export gestartet.');
-  };
+  document.getElementById('btn-export').onclick = ()=> datensicherungJetzt();
   document.getElementById('in-import').onchange = (e)=>{
     const file = e.target.files[0]; e.target.value=''; if(!file) return;
     bestandAusDateiImportieren(file);
@@ -5355,7 +5422,7 @@ function zugangspaketDaten(person, startpasswort){
   });
   const nurEigene = liste => (liste||[]).filter(e=>eigeneHundIds.has(e.hundId));
   const paket = Object.assign(leererState(), {
-    meta: Object.assign({}, state.meta, {erstelltAm: nowIso(), qualiKatalogVersion: state.meta.qualiKatalogVersion, lehrOrdnerVorbelegt:true}),
+    meta: Object.assign({}, state.meta, {erstelltAm: nowIso(), qualiKatalogVersion: state.meta.qualiKatalogVersion, lehrOrdnerVorbelegt:true, dateiPasswort: startpasswort, dateiPersonId: person.id}),
     organisation: state.organisation,
     personen: personenReduziert, hunde: hundeReduziert,
     termine: state.termine.filter(t=>(t.sichtbarkeit||'staff')==='staff').map(t=>{ const {planungsnotiz, ...rest} = t; return rest; }),
@@ -5370,14 +5437,14 @@ function zugangspaketDaten(person, startpasswort){
   });
   return Object.assign({ exportInfo:{ format:'barry-bestand', paket:'zugang', fuer:person.name, app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||'' } }, paket);
 }
-function zugangspaketErstellen(person, startpasswort){
+async function zugangspaketErstellen(person, startpasswort){
   const exportDaten = zugangspaketDaten(person, startpasswort);
+  let text;
+  try{ text = await barryVerschluesseln(JSON.stringify(exportDaten), startpasswort, {inhalt:'Zugangspaket', art:'zugang', personId:person.id}); }
+  catch(e){ alert('Zugangspaket nicht erstellt: '+e.message); return; }
   person.zugangErstelltAm = nowIso(); speichereState();
-  const blob = new Blob([JSON.stringify(exportDaten)], {type:'application/json'});
-  const url = URL.createObjectURL(blob); const a = document.createElement('a');
-  a.href = url; a.download = zugangsDateiname(person);
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
-  zeigeToast('Zugangspaket für '+person.name+' erstellt.');
+  textHerunterladen(text, zugangsDateiname(person));
+  zeigeToast('Zugangspaket für '+person.name+' erstellt – geschützt mit dem Startpasswort.');
 }
 /* ---------- Individuelle Startpasswörter & Zugangspakete für alle ----------
    Jede Person erhält ein eigenes, gut lesbares Startpasswort (z. B. „spur-4821“). Es wird nur auf dem Gerät der Leitung
@@ -5434,16 +5501,19 @@ function zipErstellen(dateien){ // [{name, text}]
   ende.setUint32(0,0x06054b50,true); ende.setUint16(8,dateien.length,true); ende.setUint16(10,dateien.length,true); ende.setUint32(12,zGroesse,true); ende.setUint32(16,offset,true);
   return new Blob([...teile, ...zentral, new Uint8Array(ende.buffer)], {type:'application/zip'});
 }
-function alleZugangspaketeHerunterladen(){
+async function alleZugangspaketeHerunterladen(){
   const neu = fehlendeStartpasswoerterVergeben();
   const personen = zugangsberechtigtePersonen().filter(p=>p.startPasswort);
-  const dateien = personen.map(p=>({name: zugangsDateiname(p), text: JSON.stringify(zugangspaketDaten(p, p.startPasswort))}));
+  const dateien = [];
+  zeigeToast(`${personen.length} Zugangspakete werden verschlüsselt – das kann auf dem Handy etwa eine Minute dauern …`);
+  try{ for(const p of personen) dateien.push({name: zugangsDateiname(p), text: await barryVerschluesseln(JSON.stringify(zugangspaketDaten(p, p.startPasswort)), p.startPasswort, {inhalt:'Zugangspaket', art:'zugang', personId:p.id})}); }
+  catch(e){ alert('Zugangspakete nicht erstellt: '+e.message); return; }
   personen.forEach(p=>{ if(!p.zugangErstelltAm) p.zugangErstelltAm = nowIso(); }); speichereState();
   const blob = zipErstellen(dateien);
   const url = URL.createObjectURL(blob); const a=document.createElement('a');
   a.href=url; a.download=`BARRY_Zugangspakete_${new Date().toISOString().slice(0,10)}.zip`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
-  zeigeToast(`${dateien.length} Zugangspakete erstellt${neu?` (${neu} neue Startpasswörter vergeben)`:''}. Zugangsliste nicht vergessen.`);
+  zeigeToast(`${dateien.length} Zugangspakete erstellt, jedes mit dem eigenen Startpasswort geschützt${neu?` (${neu} neue Startpasswörter vergeben)`:''}. Zugangsliste nicht vergessen.`);
 }
 
 /* =========================================================
@@ -6072,22 +6142,30 @@ function standUpdateDaten(p){
     plaketten: state.hunde.filter(h=>h.status!=='inaktiv' && hundGefuehrtVon(h,p.id)).map(h=>({hundId:h.id, plaketten:h.plaketten||[], sparten:h.sparten||[]}))};
 }
 function standUpdateDateiname(p){ return `BARRY_Stand_${p.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}.json`; }
-function standUpdateHerunterladen(p){
-  const blob=new Blob([JSON.stringify(standUpdateDaten(p))],{type:'application/json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a');
-  a.href=url; a.download=standUpdateDateiname(p); document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
+async function standUpdateHerunterladen(p){
+  if(!p.startPasswort){ alert(`Für ${p.name} ist noch kein Startpasswort vergeben. Das Stand-Update wird mit dem Startpasswort geschützt – bitte zuerst ein Zugangspaket erstellen.`); return; }
+  let text; try{ text = await barryVerschluesseln(JSON.stringify(standUpdateDaten(p)), p.startPasswort, {inhalt:'Stand-Update', art:'standupdate', personId:p.id}); }catch(e){ alert('Stand-Update nicht erstellt: '+e.message); return; }
+  textHerunterladen(text, standUpdateDateiname(p));
+  zeigeToast('Stand-Update für '+p.name+' erstellt – geschützt mit dem Startpasswort.');
 }
-function alleStandUpdatesHerunterladen(){
-  const personen=zugangsberechtigtePersonen();
-  const blob=zipErstellen(personen.map(p=>({name:standUpdateDateiname(p), text:JSON.stringify(standUpdateDaten(p))})));
+async function alleStandUpdatesHerunterladen(){
+  const alle=zugangsberechtigtePersonen(); const personen=alle.filter(p=>p.startPasswort); const ohne=alle.filter(p=>!p.startPasswort);
+  zeigeToast(`${personen.length} Stand-Updates werden verschlüsselt – das kann auf dem Handy etwa eine Minute dauern …`);
+  const dateien=[]; try{ for(const p of personen) dateien.push({name:standUpdateDateiname(p), text: await barryVerschluesseln(JSON.stringify(standUpdateDaten(p)), p.startPasswort, {inhalt:'Stand-Update', art:'standupdate', personId:p.id})}); }
+  catch(e){ alert('Stand-Updates nicht erstellt: '+e.message); return; }
+  if(ohne.length) alert(`Ohne Startpasswort und daher nicht enthalten: ${ohne.map(p=>p.name).join(', ')}. Für diese Personen bitte zuerst ein Zugangspaket erstellen.`);
+  const blob=zipErstellen(dateien);
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`BARRY_Stand-Updates_${new Date().toISOString().slice(0,10)}.zip`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
-  zeigeToast(`${personen.length} Stand-Updates erstellt.`);
+  zeigeToast(`${dateien.length} Stand-Updates erstellt, jedes mit dem eigenen Startpasswort geschützt.`);
 }
-function standUpdateEinlesen(file){
-  const r=new FileReader();
-  r.onload=()=>{
+async function standUpdateEinlesen(file){
+  let roh; try{ roh = await barryDateiLesen(file, 'Dieses Stand-Update ist geschützt. Bitte das <b>Startpasswort</b> eingeben, das Sie von der Staffelleitung erhalten haben (nicht Ihr selbst gewähltes Anmeldepasswort).', state.meta.dateiPasswort); }
+  catch(err){ alert('Stand-Update konnte nicht eingelesen werden: '+err.message); return; }
+  if(roh===null) return;
+  (()=>{
     try{
-      const d=JSON.parse(r.result); if(!d.exportInfo || d.exportInfo.format!=='barry-mein-stand') throw new Error('Das ist kein BARRY-Stand-Update.');
+      const d=JSON.parse(roh); if(!d.exportInfo || d.exportInfo.format!=='barry-mein-stand') throw new Error('Das ist kein BARRY-Stand-Update.');
       const pid=d.exportInfo.personId; const ich=aktuellePerson();
       if(!state.personen.some(p=>p.id===pid)) throw new Error('Die Person dieses Stand-Updates gibt es auf diesem Gerät nicht.');
       if(ich && ich.id!==pid && !darfTrainingBearbeiten(ich)) throw new Error('Dieses Stand-Update gehört zu einer anderen Person.');
@@ -6106,8 +6184,7 @@ function standUpdateEinlesen(file){
       state.meta.standUpdateAm=d.exportInfo.exportiertAm; speichereState();
       zeigeToast('Ausbildungsstand aktualisiert.'); render();
     }catch(err){ alert('Stand-Update konnte nicht eingelesen werden: '+err.message); }
-  };
-  r.readAsText(file);
+  })();
 }
 /* ---------- Kalender in eigenen Handy-Kalender (ICS / CSV) ---------- */
 function icsDatum(s, ganztags){ const t=String(s||''); if(ganztags) return t.slice(0,10).replace(/-/g,''); return t.slice(0,16).replace(/[-:]/g,'')+'00'; }
@@ -6172,14 +6249,15 @@ async function meldungPerMail(person){
   const daten=meldungDaten(person);
   if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
   const name=`BARRY_Meldung_${person.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}_${new Date().toISOString().slice(0,10)}.json`;
-  const ok = await dateiPerMail(new File([JSON.stringify(daten)], name, {type:'application/json'}), `BARRY – neue Angaben von ${person.name}`, `Neue Angaben von ${person.name}: ${daten.nachweise.length} Nachweis(e), ${daten.kurswuensche.length} Kurswunsch/-wünsche.`);
+  const mdatei = await meldungsDatei(person, daten, name); if(!mdatei) return;
+  const ok = await dateiPerMail(mdatei, `BARRY – neue Angaben von ${person.name}`, `Neue Angaben von ${person.name}: ${daten.nachweise.length} Nachweis(e), ${daten.kurswuensche.length} Kurswunsch/-wünsche.`);
   if(ok){ offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); speichereState(); render(); }
 }
 async function meldungSenden(person){
   const daten=meldungDaten(person);
   if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
   const name=`BARRY_Meldung_${person.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}_${new Date().toISOString().slice(0,10)}.json`;
-  const datei=new File([JSON.stringify(daten)], name, {type:'application/json'});
+  const datei=await meldungsDatei(person, daten, name); if(!datei) return;
   offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); speichereState();
   try{ if(navigator.canShare && navigator.canShare({files:[datei]})){ await navigator.share({files:[datei], title:'BARRY – meine Angaben', text:`Neue Angaben von ${person.name} für BARRY (${daten.nachweise.length} Nachweis(e)).`}); zeigeToast('Meldung geteilt.'); render(); return; } }catch(e){ if(e&&e.name==='AbortError'){ render(); return; } }
   const url=URL.createObjectURL(new Blob([datei],{type:datei.type||'application/json'})); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
@@ -6189,7 +6267,12 @@ async function meldungSenden(person){
 let meldungVorschau=null;
 function meldungenEinlesen(files){
   const liste=Array.from(files||[]).filter(Boolean); if(!liste.length) return;
-  Promise.all(liste.map(f=>f.text().then(t=>{ try{ return JSON.parse(t); }catch(e){ return null; } }))).then(dat=>{
+  (async()=>{ const dat=[];
+    for(const f of liste){ try{
+      const umschlag=istVerschluesselteDatei(await f.text()); const p=umschlag && state.personen.find(x=>x.id===umschlag.personId);
+      const t=await barryDateiLesen(f, `Meldung${p?' von '+esc(p.name):''}: Für diese Person ist kein passendes Startpasswort gespeichert. Bitte das Passwort eingeben, mit dem sie die Meldung geschützt hat.`, p && p.startPasswort);
+      dat.push(t?JSON.parse(t):null); }catch(e){ dat.push(null); } }
+    return dat; })().then(dat=>{
     const eintraege=[], wuensche=[], fehler=[], kontakte=[];
     dat.forEach((d,i)=>{
       if(!d || !d.exportInfo || d.exportInfo.format!=='barry-mitglied-meldung'){ fehler.push(liste[i].name); return; }
@@ -6363,14 +6446,13 @@ function renderStartSicherung(person){
   if(tage!==null && tage<30) return '';
   return `<div class="card card-pad" style="margin-top:16px;background:var(--soft);border:none"><div class="spread"><span>💾 <b>${tage===null?'Noch keine Datensicherung erstellt.':`Letzte Datensicherung vor ${tage} Tagen.`}</b> <span class="hint">Die Daten liegen nur auf diesem Gerät.</span></span><button class="btn btn-sm btn-primary" id="btn-start-sichern">Jetzt sichern</button></div></div>`;
 }
-function datensicherungJetzt(){
+async function datensicherungJetzt(){
   const exportDaten = Object.assign({ exportInfo:{ format:'barry-bestand', app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||'' } }, state);
-  const blob = new Blob([JSON.stringify(exportDaten,null,2)], {type:'application/json'});
-  const url = URL.createObjectURL(blob); const a = document.createElement('a');
-  a.href=url; a.download = `RHS_Sicherung_BARRY_${new Date().toISOString().slice(0,10)}.json`;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
+  let erg; try{ erg = await sicherungSchuetzen(JSON.stringify(exportDaten,null,2)); }catch(e){ alert('Sicherung nicht erstellt: '+e.message); return; }
+  if(!erg) return;
+  textHerunterladen(erg.text, `RHS_Sicherung_BARRY_${new Date().toISOString().slice(0,10)}${erg.geschuetzt?'_geschuetzt':''}.json`);
   state.meta.letzteSicherungAm = nowIso(); speichereState();
-  zeigeToast('Datensicherung erstellt – bitte an einem sicheren Ort ablegen.');
+  zeigeToast(erg.geschuetzt ? 'Geschützte Datensicherung erstellt – Passwort getrennt aufbewahren.' : 'Datensicherung erstellt (ohne Passwort) – bitte an einem sicheren Ort ablegen.');
 }
 /* ---------- Eigene Kontaktdaten (Mitglied) ---------- */
 const KONTAKT_FELDER = [['strasse','Straße, Hausnummer'],['plz','PLZ'],['ort','Ort'],['email','E-Mail'],['telefon','Telefon']];
@@ -6668,7 +6750,8 @@ function dateiArtErkennen(name, text, bytes){
   if(bytes && bytes[0]===0x50 && bytes[1]===0x4B) return /zip$/i.test(name) ? 'zip' : 'xlsx';
   const t=String(text||'').replace(/^\uFEFF/,'').trim();
   if(t.startsWith('{')){
-    try{ const d=JSON.parse(t); const f=d.exportInfo&&d.exportInfo.format;
+    try{ const d=JSON.parse(t); if(d.format===BARRY_KRYPTO_FORMAT) return ({zugang:'zugang', sicherung:'sicherung', standupdate:'standupdate', meldung:'meldung'})[d.art] || 'sicherung';
+      const f=d.exportInfo&&d.exportInfo.format;
       if(f==='barry-termine') return 'terminplan'; if(f==='barry-mein-stand') return 'standupdate'; if(f==='barry-mitglied-meldung') return 'meldung';
       if(f==='barry-bestand' || Array.isArray(d.personen)) return (d.exportInfo&&d.exportInfo.paket==='zugang') ? 'zugang' : 'sicherung';
       if(d.rhsFormat) return 'rhs';
@@ -6749,12 +6832,118 @@ async function dateiPerMail(datei, betreff, text){
   return true;
 }
 
+
+/* =========================================================
+   VERSCHLÜSSELTE DATEIEN (ab BARRY 2.10)
+   AES-256-GCM, Schlüssel aus dem Passwort per PBKDF2-SHA-256 (310.000 Durchläufe).
+   Alles läuft im Browser; ohne Passwort ist der Inhalt nicht lesbar. Unverschlüsselte Dateien bleiben importierbar.
+   ========================================================= */
+const BARRY_KRYPTO_FORMAT = 'barry-verschluesselt';
+const BARRY_KRYPTO_ITER = 310000;
+function kryptoVerfuegbar(){ return !!(window.crypto && crypto.subtle && window.TextEncoder); }
+function bytesZuB64(u8){ let s=''; for(let i=0;i<u8.length;i+=0x8000) s+=String.fromCharCode.apply(null, u8.subarray(i,i+0x8000)); return btoa(s); }
+function b64ZuBytes(b){ const s=atob(b); const u=new Uint8Array(s.length); for(let i=0;i<s.length;i++) u[i]=s.charCodeAt(i); return u; }
+async function kryptoSchluessel(passwort, salt, iter){
+  const basis = await crypto.subtle.importKey('raw', new TextEncoder().encode(passwort), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt, iterations:iter, hash:'SHA-256'}, basis, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']);
+}
+async function barryVerschluesseln(text, passwort, info){
+  if(!kryptoVerfuegbar()) throw new Error('Dieser Browser unterstützt keine Verschlüsselung. Bitte BARRY über die Web-Adresse (https) in einem aktuellen Browser öffnen.');
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await kryptoSchluessel(passwort, salt, BARRY_KRYPTO_ITER);
+  const daten = new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, new TextEncoder().encode(text)));
+  return JSON.stringify({ format:BARRY_KRYPTO_FORMAT, version:1, hinweis:'Verschlüsselte BARRY-Datei. Lesbar nur in BARRY mit dem zugehörigen Passwort.',
+    inhalt: (info&&info.inhalt)||'', art: (info&&info.art)||'', personId: (info&&info.personId)||'', erstelltAm: nowIso(), verfahren:'AES-256-GCM', ableitung:'PBKDF2-SHA-256', iterationen:BARRY_KRYPTO_ITER,
+    salt: bytesZuB64(salt), iv: bytesZuB64(iv), daten: bytesZuB64(daten) });
+}
+async function barryEntschluesseln(obj, passwort){
+  if(!kryptoVerfuegbar()) throw new Error('Dieser Browser unterstützt keine Entschlüsselung. Bitte BARRY über die Web-Adresse (https) in einem aktuellen Browser öffnen.');
+  const key = await kryptoSchluessel(passwort, b64ZuBytes(obj.salt), Number(obj.iterationen)||BARRY_KRYPTO_ITER);
+  try{ const klar = await crypto.subtle.decrypt({name:'AES-GCM', iv:b64ZuBytes(obj.iv)}, key, b64ZuBytes(obj.daten)); return new TextDecoder().decode(klar); }
+  catch(e){ const f = new Error('Das Passwort ist nicht richtig (oder die Datei ist beschädigt).'); f.falschesPasswort = true; throw f; }
+}
+function istVerschluesselteDatei(text){ if(!text || text.length>200000000) return null; try{ const o = JSON.parse(text); return (o && o.format===BARRY_KRYPTO_FORMAT) ? o : null; }catch(e){ return null; } }
+/* Kleines Passwortfenster, unabhängig vom übrigen Bildschirmaufbau. Liefert das Passwort, '' (= ohne Passwort, nur wenn erlaubt) oder null (Abbruch). */
+function passwortDialog({titel, text, bestaetigen=false, ohneErlaubt=false, knopf='OK'}){
+  return new Promise(fertig=>{
+    const w = document.createElement('div');
+    w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
+    w.innerHTML = `<div style="background:var(--card,#fff);color:inherit;max-width:420px;width:100%;border-radius:14px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:system-ui,sans-serif">
+      <h3 style="margin:0 0 8px;font-size:1.1rem">${esc(titel)}</h3><p style="margin:0 0 12px;font-size:.92rem;line-height:1.4">${text}</p>
+      <input type="password" id="pwd-1" autocomplete="new-password" placeholder="Passwort" style="width:100%;box-sizing:border-box;padding:10px;font-size:1rem;margin-bottom:8px">
+      ${bestaetigen?'<input type="password" id="pwd-2" autocomplete="new-password" placeholder="Passwort wiederholen" style="width:100%;box-sizing:border-box;padding:10px;font-size:1rem;margin-bottom:8px">':''}
+      <div id="pwd-fehler" style="color:#b3261e;font-size:.85rem;min-height:1.1em;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        ${ohneErlaubt?'<button type="button" class="btn btn-sm" id="pwd-ohne">Ohne Passwort</button>':''}
+        <button type="button" class="btn btn-sm btn-ghost" id="pwd-abbruch">Abbrechen</button>
+        <button type="button" class="btn btn-sm btn-primary" id="pwd-ok">${esc(knopf)}</button></div></div>`;
+    document.body.appendChild(w);
+    const ende = v=>{ w.remove(); fertig(v); };
+    const p1 = w.querySelector('#pwd-1'), p2 = w.querySelector('#pwd-2'), fe = w.querySelector('#pwd-fehler');
+    w.querySelector('#pwd-abbruch').onclick = ()=>ende(null);
+    const ohne = w.querySelector('#pwd-ohne'); if(ohne) ohne.onclick = ()=>{ if(confirm('Die Datei wird dann unverschlüsselt gespeichert und ist mit jedem Texteditor lesbar. Trotzdem fortfahren?')) ende(''); };
+    const ok = ()=>{ const a=p1.value; if(a.length<6){ fe.textContent='Bitte mindestens 6 Zeichen.'; return; } if(p2 && a!==p2.value){ fe.textContent='Die beiden Eingaben stimmen nicht überein.'; return; } ende(a); };
+    w.querySelector('#pwd-ok').onclick = ok;
+    [p1,p2].forEach(x=>{ if(x) x.addEventListener('keydown', e=>{ if(e.key==='Enter') ok(); }); });
+    setTimeout(()=>p1.focus(), 50);
+  });
+}
+/* Liest eine Datei als Text; ist sie verschlüsselt, wird bis zu dreimal nach dem Passwort gefragt. null = abgebrochen. */
+async function barryDateiLesen(file, hinweis, gemerktesPasswort){
+  const roh = await file.text();
+  const umschlag = istVerschluesselteDatei(roh);
+  if(!umschlag) return roh;
+  if(gemerktesPasswort){ try{ return await barryEntschluesseln(umschlag, gemerktesPasswort); }catch(e){ /* dann nachfragen */ } }
+  for(let versuch=1; versuch<=3; versuch++){
+    const pw = await passwortDialog({ titel:'🔒 Geschützte Datei', knopf:'Öffnen',
+      text: (versuch>1?'<b style="color:#b3261e">Das Passwort war nicht richtig.</b> ':'') + (hinweis || 'Diese BARRY-Datei ist mit einem Passwort geschützt. Bei einem Zugangspaket ist es das Startpasswort, das Sie von der Staffelleitung erhalten haben.') });
+    if(pw===null) return null;
+    try{ return await barryEntschluesseln(umschlag, pw); }catch(e){ if(!e.falschesPasswort || versuch===3) throw e; }
+  }
+  return null;
+}
+function textHerunterladen(text, name, typ){
+  const url = URL.createObjectURL(new Blob([text], {type:typ||'application/json'})); const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+/* Persönliches Dateipasswort eines Mitglieds = sein Startpasswort. Es ist unabhängig vom Anmeldepasswort,
+   das jede Person selbst ändert. Die Leitung kennt es aus der Zugangsliste, das Gerät des Mitglieds merkt es sich
+   beim Einspielen des Zugangspakets (state.meta.dateiPasswort). */
+async function mitgliedDateiPasswort(person){
+  if(state.meta.dateiPasswort && (!state.meta.dateiPersonId || state.meta.dateiPersonId===person.id)) return state.meta.dateiPasswort;
+  const pw = await passwortDialog({ titel:'🔒 Startpasswort eingeben', ohneErlaubt:true, knopf:'Speichern',
+    text:'Ihre Meldung wird verschlüsselt. Bitte geben Sie <b>einmalig das Startpasswort</b> ein, das Sie von der Staffelleitung erhalten haben (nicht Ihr selbst gewähltes Anmeldepasswort). BARRY merkt es sich auf diesem Gerät.' });
+  if(pw===null) return null;
+  if(pw){ state.meta.dateiPasswort = pw; state.meta.dateiPersonId = person.id; speichereState(); }
+  return pw;
+}
+async function meldungsDatei(person, daten, name){
+  const pw = await mitgliedDateiPasswort(person);
+  if(pw===null) return null;
+  const text = pw ? await barryVerschluesseln(JSON.stringify(daten), pw, {inhalt:'Meldung', art:'meldung', personId:person.id}) : JSON.stringify(daten);
+  return new File([text], name, {type:'application/json'});
+}
+/* Datensicherung der Leitung: Passwort wählen (oder bewusst ohne). Liefert {text, geschuetzt} oder null bei Abbruch. */
+async function sicherungSchuetzen(text){
+  const pw = await passwortDialog({ titel:'🔒 Sicherung mit Passwort schützen', bestaetigen:true, ohneErlaubt:true, knopf:'Verschlüsseln',
+    text:'Die Sicherung enthält personenbezogene Daten aller Mitglieder. Mit Passwort ist sie nur in BARRY und nur mit diesem Passwort lesbar. <b>Ein vergessenes Passwort lässt sich nicht wiederherstellen.</b>' });
+  if(pw===null) return null;
+  if(pw==='') return {text, geschuetzt:false};
+  return {text: await barryVerschluesseln(text, pw, {inhalt:'Datensicherung', art:'sicherung'}), geschuetzt:true};
+}
+
 /* Gemeinsame Importlogik für Datensicherung und Erststart – alle Schutzprüfungen an einer Stelle. */
-function bestandAusDateiImportieren(file){
-    const reader = new FileReader();
-  reader.onload = ()=>{
+async function bestandAusDateiImportieren(file){
+  let text;
+  try{ text = await barryDateiLesen(file); }catch(err){ alert('Diese Datei konnte nicht gelesen werden: '+err.message); return; }
+  if(text===null) return;
+  bestandAusTextImportieren(text);
+}
+function bestandAusTextImportieren(text){
+  (()=>{
     try{
-      const parsed = JSON.parse(reader.result);
+      const parsed = JSON.parse(text);
+      if(parsed && parsed.format===BARRY_KRYPTO_FORMAT) throw new Error('Die Datei ist noch verschlüsselt.');
       if(parsed.exportInfo && parsed.exportInfo.format==='barry-mitglied-meldung') throw new Error('Das ist eine Meldung eines Mitglieds. Bitte unter Verwaltung → Personen → 🔑 Zugänge & Selbstauskunft → „Meldungen der Mitglieder einlesen“ übernehmen.');
       if(parsed.exportInfo && parsed.exportInfo.format==='barry-mein-stand') throw new Error('Das ist ein Stand-Update, keine Datensicherung. Bitte unter Ausbildung & Team → 🎓 Mein Stand → „Stand-Update einlesen“ einspielen – dein Passwort bleibt dabei erhalten.');
       if(parsed.exportInfo && parsed.exportInfo.format==='barry-termine') throw new Error('Das ist ein Terminplan, keine Datensicherung. Bitte unter Organisation & Termine → Kalender → „Terminplan einlesen“ einspielen – dort werden nur die Termine abgeglichen.');
@@ -6782,8 +6971,7 @@ function bestandAusDateiImportieren(file){
     }catch(err){
       alert('Diese Datei konnte nicht gelesen werden: '+err.message);
     }
-  };
-  reader.readAsText(file);
+  })();
 }
 
 /* =========================================================
@@ -12709,6 +12897,11 @@ function renderModalMeinProfil(){
         </div>
       </div>
       <hr style="margin:18px 0;border:none;border-top:1px solid var(--line)">
+      <h3>Anmeldung per Fingerabdruck / Gesicht</h3>
+      <p class="hint" style="margin:4px 0 8px">Gilt nur auf diesem Gerät. Das Passwort bleibt gültig; bei jeder ${BIO_PASSWORT_ALLE}. Anmeldung fragt BARRY danach.</p>
+      ${bioEintrag(p.id)?`<p class="hint" style="margin:0 0 8px">✅ Eingerichtet am ${fmtDatum(bioEintrag(p.id).eingerichtetAm)}</p><button type="button" class="btn btn-sm" id="mp-bio-aus">Ausschalten</button>`
+        :`<button type="button" class="btn btn-sm" id="mp-bio-ein">🔐 Einrichten</button>`}
+      <hr style="margin:18px 0;border:none;border-top:1px solid var(--line)">
       <h3>Eigenes Passwort ändern</h3>
       <div class="grid-2">
         <div class="field"><label>Neues Passwort</label><input id="mp-pw1" type="password"></div>
@@ -12724,6 +12917,8 @@ function renderModalMeinProfil(){
 }
 function bindModalMeinProfil(){
   document.getElementById('m-schliessen').onclick = schliesseModal;
+  const bioEin = document.getElementById('mp-bio-ein'); if(bioEin) bioEin.onclick = async ()=>{ if(await bioEinrichten(aktuellePerson())) render(); };
+  const bioAus = document.getElementById('mp-bio-aus'); if(bioAus) bioAus.onclick = ()=>{ if(!confirm('Anmeldung per Fingerabdruck/Gesicht auf diesem Gerät ausschalten?')) return; bioAusschalten(aktuellePerson().id); zeigeToast('Ausgeschaltet – Anmeldung wieder nur mit Passwort.'); render(); };
   document.getElementById('m-abbrechen').onclick = schliesseModal;
   document.querySelectorAll('[data-mp-sparte]').forEach(cb=>{
     cb.onchange = ()=>{ cb.closest('.chip-select').classList.toggle('active', cb.checked); };
@@ -13181,7 +13376,9 @@ async function sicherungMitBildern(){
   const ids = state.einsaetze.flatMap(e=>(e.anlagen||[]).map(a=>a.id)); const daten = {}; let fehlt = 0;
   for(const id of ids){ const b = await anlageLesen(id).catch(()=>null); if(b) daten[id] = await blobZuDataUrl(b); else fehlt++; }
   const exportDaten = Object.assign({ exportInfo:{ format:'barry-bestand', app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||'', mitBildern:true } }, state, { anlagenDaten: daten });
-  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(exportDaten)],{type:'application/json'})); a.download = `RHS_Sicherung_BARRY_mit_Fotos_${nowIso().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove();
+  let erg; try{ erg = await sicherungSchuetzen(JSON.stringify(exportDaten)); }catch(e){ alert('Sicherung nicht erstellt: '+e.message); return; }
+  if(!erg) return;
+  textHerunterladen(erg.text, `RHS_Sicherung_BARRY_mit_Fotos_${nowIso().slice(0,10)}${erg.geschuetzt?'_geschuetzt':''}.json`);
   state.meta.letzteSicherungAm = nowIso(); speichereState();
   zeigeToast('Sicherung inkl. '+Object.keys(daten).length+' Bildern erstellt'+(fehlt?' ('+fehlt+' Bild(er) fehlten auf diesem Gerät)':'')+'.');
 }
