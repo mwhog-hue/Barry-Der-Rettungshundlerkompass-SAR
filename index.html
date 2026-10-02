@@ -3225,7 +3225,7 @@ function renderMeineFahrzeugeEinweisungen(person){
 }
 
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.12';
+const BARRY_APP_VERSION = '2.13';
 const BARRY_APP_STAND = '02.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -3658,6 +3658,65 @@ function render(){
 /* =========================================================
    START / DASHBOARD
    ========================================================= */
+
+/* =========================================================
+   FREIGABEN (Selbstauskunft) & GEBURTSTAGE (ab BARRY 2.13)
+   Jedes Mitglied entscheidet je Bereich selbst. Ohne Angabe gilt die Vorgabe der Staffelleitung (02.10.2026):
+   Geburtstage von Menschen sieht nur die Leitung, Wurftage der Hunde sehen alle.
+   ========================================================= */
+const FREIGABEN = [
+  {k:'geburtstag', label:'Mein Geburtstag (nur Tag und Monat, ohne Jahr) wird allen Mitgliedern in BARRY angezeigt', vorgabe:false, genutzt:true},
+  {k:'hundGeburtstag', label:'Der Wurftag meiner Hunde (Tag und Monat) wird allen Mitgliedern in BARRY angezeigt', vorgabe:true, genutzt:true},
+  {k:'telefon', label:'Meine Telefonnummer darf für Staffelmitglieder sichtbar sein (z. B. Fahrgemeinschaften, Rückfragen)', vorgabe:false, genutzt:false},
+  {k:'email', label:'Meine E-Mail-Adresse darf für Staffelmitglieder sichtbar sein', vorgabe:false, genutzt:false},
+  {k:'wohnort', label:'Mein Wohnort (nur Ort, ohne Straße) darf für Staffelmitglieder sichtbar sein (Fahrgemeinschaften)', vorgabe:false, genutzt:false},
+];
+function freigabe(p, k){ const v = p && p.freigaben && p.freigaben[k]; if(typeof v==='boolean') return v; const d = FREIGABEN.find(x=>x.k===k); return d ? d.vorgabe : false; }
+const GEB_TAGE_VORHER = 7, GEB_TAGE_NACHHER = 7;
+function tagMonat(iso){ const m = /^(\d{4})?-?(\d{2})-(\d{2})/.exec(String(iso||'')); return m ? {j:m[1]?Number(m[1]):null, m:Number(m[2]), t:Number(m[3])} : null; }
+function tmText(iso){ const m=/^\d{4}-(\d{2})-(\d{2})/.exec(String(iso||'')); return m ? m[1]+'-'+m[2] : ''; }
+/* Abstand in Tagen zum nächstgelegenen Geburtstag (negativ = vorbei); 29.02. gilt in Nicht-Schaltjahren am 28.02. */
+function geburtstagAbstand(tm, heute){
+  const h = new Date(Date.UTC(heute.getFullYear(), heute.getMonth(), heute.getDate()));
+  let best = null;
+  [-1,0,1].forEach(dj=>{ const j=h.getUTCFullYear()+dj; let t=tm.t; if(tm.m===2 && t===29 && !((j%4===0 && j%100!==0) || j%400===0)) t=28;
+    const d = Math.round((Date.UTC(j, tm.m-1, t) - h.getTime())/86400000); if(best===null || Math.abs(d)<Math.abs(best.d)) best={d, j}; });
+  return best;
+}
+function geburtstageListe(person, heute){
+  heute = heute || new Date();
+  const leitung = istLeitungOderAdmin(person);
+  const liste = [];
+  state.personen.filter(p=>p.status!=='inaktiv').forEach(p=>{
+    const sichtbar = leitung || p.id===person.id || freigabe(p,'geburtstag');
+    if(!sichtbar) return;
+    const tm = tagMonat(p.geburtsdatum) || tagMonat(p.geburtstagTM); if(!tm) return;
+    const a = geburtstagAbstand(tm, heute); if(a.d < -GEB_TAGE_NACHHER || a.d > GEB_TAGE_VORHER) return;
+    liste.push({art:'mensch', name:p.name, d:a.d, alter: (leitung && tm.j) ? a.j-tm.j : null});
+  });
+  state.hunde.filter(h=>h.status!=='inaktiv').forEach(h=>{
+    const hf = state.personen.find(p=>p.id===h.hundefuehrerId);
+    const eigen = hundGefuehrtVon(h, person.id);
+    const sichtbar = leitung || eigen || freigabe(hf,'hundGeburtstag');
+    if(!sichtbar) return;
+    const tm = tagMonat(h.geburtsdatum) || tagMonat(h.wurftagTM); if(!tm) return;
+    const a = geburtstagAbstand(tm, heute); if(a.d < -GEB_TAGE_NACHHER || a.d > GEB_TAGE_VORHER) return;
+    liste.push({art:'hund', name:h.name, halter: hf ? hf.name : '', d:a.d, alter: tm.j ? a.j-tm.j : null});
+  });
+  return liste.sort((x,y)=>x.d-y.d || x.name.localeCompare(y.name,'de'));
+}
+function renderStartGeburtstage(person){
+  if(!person) return '';
+  const liste = geburtstageListe(person); if(!liste.length) return '';
+  const wann = d => d===0 ? '<b>heute</b>' : d===1 ? 'morgen' : d===-1 ? 'gestern' : d>0 ? `in ${d} Tagen` : `vor ${-d} Tagen`;
+  const zeile = x => `<li>${wann(x.d)}: ${x.art==='hund'?'🐕 ':''}<b>${esc(x.name)}</b>${x.art==='hund'&&x.halter?` <span class="hint">(Hund von ${esc(x.halter)})</span>`:''}${x.alter?` <span class="hint">– ${x.d<0?'ist':'wird'} ${x.alter}</span>`:''}</li>`;
+  return `<div class="card card-pad" style="margin:16px 0;border-left:4px solid #e0b400">
+    <h3 style="margin:0">🎂 Geburtstage</h3>
+    <ul style="margin:8px 0 0;padding-left:18px">${liste.map(zeile).join('')}</ul>
+    <p class="hint" style="margin:8px 0 0">Angezeigt von ${GEB_TAGE_VORHER} Tagen vorher bis ${GEB_TAGE_NACHHER} Tage danach${istLeitungOderAdmin(person)?' · Geburtstage von Menschen sehen nur Leitungspersonen, außer das Mitglied hat sie in der Selbstauskunft freigegeben.':'.'}</p>
+  </div>`;
+}
+
 /* Startseite: persönliche Einsatzfähigkeit, offene Punkte und Fristen im laufenden Kalenderjahr (für alle Mitglieder) */
 function renderStartEinsatzfaehigkeit(person){
   if(!person || (person.name||'').toLowerCase()==='admin') return '';
@@ -3770,6 +3829,7 @@ function renderStart(person){
     ${schnell}
     ${renderStartSicherung(person)}
     ${renderStartEinsatzfaehigkeit(person)}
+    ${renderStartGeburtstage(person)}
     ${(istLeitung || hatAusbilderRecht(person)) ? leitungKarte + einsatzKarte + termineKarte + teamKarte + (eigeneHunde.length?meinStandKarte:'') : meinStandKarte + termineKarte + teamKarte}
     ${renderStartGeteilteZiele(eigeneHunde)}
     ${renderUebungDesTages(person, eigeneHunde)}
@@ -5302,6 +5362,7 @@ function renderModalCsvVorschau(){
     <div class="modal-body">
       ${a.quelleText?`<p style="margin:0 0 6px"><strong>${esc(a.quelleText)}</strong></p>`:''}
       <p class="hint">Noch ist nichts gespeichert. So würde BARRY die Tabelle übernehmen:</p>
+      ${a.freigaben && Object.keys(a.freigaben).length?`<p class="hint">Freigaben: ${FREIGABEN.filter(d=>d.k in a.freigaben).map(d=>esc(({geburtstag:'Geburtstag',hundGeburtstag:'Wurftag Hunde',telefon:'Telefon',email:'E-Mail',wohnort:'Wohnort'})[d.k])+': '+(a.freigaben[d.k]?'Ja':'Nein')).join(' · ')}</p>`:''}
       ${(a.sonstige||[]).length?`<p class="hint">Sonstige Ausbildungen: ${a.sonstige.map(x=>esc(x.label)+' ('+esc(x.datum)+')').join(' · ')}</p>`:''}
       ${!a.personenNeu.length && !a.personenUpdates.length && !a.hundeNeu.length && !a.hundeUpdates.some(u=>Object.values(u.werte).some(Boolean)) && !a.zweitZuordnungen.length && !a.ausbNeu.length ? '<p class="hint" style="color:var(--accent-ink)"><strong>Die Tabelle enthält gegenüber dem aktuellen Stand nichts Neues.</strong></p>' : ''}
       <div class="grid-2" style="gap:8px;margin-bottom:10px">
@@ -5343,6 +5404,7 @@ function bindModalCsvVorschau(){
       const d = x.datumIso || '';
       if(!state.personQualifikationen.some(pq=>pq.personId===pers.id && pq.qualifikationId===q.id && (pq.datum||'')===d)) state.personQualifikationen.push({id:uid(), personId:pers.id, qualifikationId:q.id, datum:d, gueltigBis:null});
     });
+    if(a.freigaben && Object.keys(a.freigaben).length){ const fp = state.personen.find(p=>p.status!=='inaktiv' && p.name===a.selbstName); if(fp){ fp.freigaben = Object.assign({}, fp.freigaben||{}, a.freigaben); fp.freigabenStand = nowIso(); speichereState(); } }
     if((a.sonstige||[]).length) speichereState();
     if((a.weitereDateien||[]).length) setTimeout(()=>selbstauskunftEinlesen(a.weitereDateien), 400);
     if(startpw){
@@ -5411,10 +5473,11 @@ function zugangspaketDaten(person, startpasswort){
     mitgliedsnummer:'', dienstbuchNr:'', geburtsdatum:'', mitgliedSeit:'',
     strasse: p.id===person.id?(p.strasse||''):'', plz: p.id===person.id?(p.plz||''):'', ort: p.id===person.id?(p.ort||''):'', email: p.id===person.id?(p.email||''):'', telefon: p.id===person.id?(p.telefon||''):'',
     passwortHash: p.id===person.id ? einfacherHash(startpasswort) : '', mussPasswortAendern: p.id===person.id, angelegtAm: p.angelegtAm||nowIso(),
+    geburtstagTM: (p.id===person.id || freigabe(p,'geburtstag')) ? tmText(p.geburtsdatum) : '', freigaben: p.id===person.id ? (p.freigaben||{}) : {hundGeburtstag: freigabe(p,'hundGeburtstag'), geburtstag: freigabe(p,'geburtstag')},
   }));
   const hundeReduziert = state.hunde.filter(h=>h.status!=='inaktiv').map(h=>{
     const eigen = eigeneHundIds.has(h.id);
-    return { id:h.id, name:h.name, rasse:h.rasse||'', geburtsdatum: eigen ? (h.geburtsdatum||'') : '', geschlecht: eigen?(h.geschlecht||''):'', chipnummer: eigen?(h.chipnummer||''):'',
+    return { id:h.id, name:h.name, rasse:h.rasse||'', geburtsdatum: eigen ? (h.geburtsdatum||'') : '', wurftagTM: (eigen || freigabe(state.personen.find(p=>p.id===h.hundefuehrerId),'hundGeburtstag')) ? tmText(h.geburtsdatum) : '', geschlecht: eigen?(h.geschlecht||''):'', chipnummer: eigen?(h.chipnummer||''):'',
       hundefuehrerId:h.hundefuehrerId||'', zweitHundefuehrerId:h.zweitHundefuehrerId||'', status:'aktiv', sparten:h.sparten||[], anzeigeart: eigen?(h.anzeigeart||''):'', rassegruppe: eigen?(h.rassegruppe||''):'',
       plaketten: eigen?(h.plaketten||[]):[], anzeigeaufbauSchritt: eigen?(h.anzeigeaufbauSchritt||{}):{}, entwicklungsthemen: eigen?(h.entwicklungsthemen||[]):[],
       schwachstellenBewertung: eigen?(h.schwachstellenBewertung||{}):{}, trainingsaufbauCheck: eigen?(h.trainingsaufbauCheck||{}):{}, selbstcheck: eigen?(h.selbstcheck||{}):{},
@@ -5564,7 +5627,8 @@ function selbstauskunftBlaetter(p){
     ['3. Blatt „Ausbildungen“: bei jeder abgeschlossenen Ausbildung das Datum eintragen (TT.MM.JJJJ; nur Monat bekannt: MM.JJJJ; Datum unbekannt: x).'],
     ['   Modulprüfungen 1.1–1.3 und Modulprüfung 2 (Suchprüfung) sind Teamprüfungen: je Hund eine Zeile; bei der Suchprüfung auch Sparte und Plakettennummer.'],
     ['   Weitere Ausbildungen, die nicht aufgeführt sind, ganz unten unter „Sonstige Ausbildungen“ mit eigenem Namen eintragen.'],
-    ['4. Datei speichern (Dateiname und Format .xlsx beibehalten) und an die Staffelleitung zurückschicken'+(leitungEmail()?': '+leitungEmail():'.')],
+    ['4. Blatt „Freigaben“: je Bereich „Ja“ oder „Nein“ wählen – Sie entscheiden selbst, was andere Mitglieder in BARRY sehen dürfen.'],
+    ['5. Datei speichern (Dateiname und Format .xlsx beibehalten) und an die Staffelleitung zurückschicken'+(leitungEmail()?': '+leitungEmail():'.')],
     [''], ['Bitte den Namen und die grauen Kennungen in Spalte A nicht ändern – daran erkennt BARRY die Einträge.'],
     ['Bereits bekannte Angaben sind schon eingetragen. Nichts löschen: fehlende oder falsche Angaben einfach ergänzen bzw. korrigieren.'],
   ]};
@@ -5581,6 +5645,11 @@ function selbstauskunftBlaetter(p){
   const hundBlatt = {name:'Hunde', breiten:[12,18,24,14,10,20,26,16,16,16], fixiert:1, zeilen:[
     [{v:'Kennung',s:1},{v:'Name',s:1},{v:'Rasse',s:1},{v:'Wurftag',s:1},{v:'Geschlecht',s:1},{v:'Chipnummer',s:1},{v:'Sparten (Fläche, Trümmer, Mantrailing)',s:1},{v:'Plakette Fläche',s:1},{v:'Plakette Trümmer',s:1},{v:'Plakette Mantrailing',s:1}], ...hRows],
     listen:[{sqref:`E2:E${hRows.length+1}`, werte:['Rüde','Hündin']}]};
+  const fgZeilen = FREIGABEN.map(d=>[{v:'fg_'+d.k,s:4}, d.label, E(freigabe(p,d.k)?'Ja':'Nein'), (d.vorgabe?'Vorgabe: Ja':'Vorgabe: Nein')+(d.genutzt?'':' · wird erst genutzt, wenn BARRY eine Mitgliederliste anbietet')]);
+  const freigabenBlatt = {name:'Freigaben', breiten:[18,80,16,58], fixiert:1, zeilen:[
+    [{v:'Kennung',s:1},{v:'Was dürfen andere Mitglieder in BARRY sehen?',s:1},{v:'Ihre Entscheidung',s:1},{v:'Hinweis',s:1}], ...fgZeilen,
+    [''], ['', 'Die Staffelleitung sieht Ihre Stammdaten unabhängig davon, da sie sie verwaltet. Ihre Entscheidung können Sie jederzeit bei der Staffelleitung ändern.']],
+    listen:[{sqref:`C2:C${fgZeilen.length+1}`, werte:['Ja','Nein']}]};
   const hundNamen = hunde.map(h=>h.name);
   const zeilen=[[{v:'Kennung',s:1},{v:'Ausbildung / Prüfung',s:1},{v:'UE',s:1},{v:'Datum (TT.MM.JJJJ / MM.JJJJ / x)',s:1},{v:'Hund',s:1},{v:'Sparte',s:1},{v:'Plakette',s:1},{v:'Bemerkung',s:1}]];
   const hundListe=[], spartenListe=[];
@@ -5614,7 +5683,7 @@ function selbstauskunftBlaetter(p){
   if(hundNamen.length && hundListe.length) listen.push({sqref:hundListe.join(' '), werte:hundNamen});
   if(spartenListe.length) listen.push({sqref:spartenListe.join(' '), werte:SA_SPARTEN});
   const ausb = {name:'Ausbildungen', breiten:[12,62,6,20,16,14,16,24], fixiert:1, zeilen, listen};
-  return [anleitung, daten, hundBlatt, ausb];
+  return [anleitung, daten, freigabenBlatt, hundBlatt, ausb];
 }
 function selbstauskunftDateiname(p){ return `BARRY_Selbstauskunft_${p.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}.xlsx`; }
 function selbstauskunftHerunterladen(p){
@@ -5705,7 +5774,8 @@ function selbstauskunftZuCsv(bl){
     } else setz(erste, spalte, datum);
   });
   const alle=[zeilen[0], erste, ...hundZeilen];
-  return {csv: alle.map(z=>z.map(csvZeileEscapen).join(';')).join('\r\n'), sonstige, name, personGefunden: !!person};
+  const freigaben = {}; (bl['Freigaben']||[]).forEach(z=>{ if(z && /^fg_/.test(z[0]||'')){ const w=String(z[2]||'').trim().toLowerCase(); if(w==='ja'||w==='nein') freigaben[z[0].slice(3)] = (w==='ja'); } });
+  return {csv: alle.map(z=>z.map(csvZeileEscapen).join(';')).join('\r\n'), sonstige, name, personGefunden: !!person, freigaben};
 }
 function selbstauskunftEinlesen(files){
   const liste=Array.from(files||[]); if(!liste.length) return;
@@ -5716,6 +5786,7 @@ function selbstauskunftEinlesen(files){
       csvVorschau = csvSchnellstartAnalysieren(r.csv);
       csvVorschau.sonstige = r.sonstige.map(s=>({...s, datumIso: parseCsvDatum(s.datum)}));
       csvVorschau.selbstName = r.name;
+      csvVorschau.freigaben = r.freigaben;
       csvVorschau.quelleText = `Selbstauskunft von ${r.name}${r.personGefunden?'':' (Person noch nicht im Bestand – wird neu angelegt)'}`;
       csvVorschau.weitereDateien = liste.slice(1);
       modal={type:'csvVorschau'}; render();
@@ -7297,7 +7368,10 @@ function renderModalPerson(){
         </div>
         <div class="hint" id="pf-zp-hint" style="margin-top:6px"></div>
         <button class="btn btn-sm" id="pf-selbstauskunft" type="button" style="margin-top:8px">📋 Selbstauskunft-Datei (Excel) für diese Person</button>
-        <button class="btn btn-sm" id="pf-standupdate" type="button" style="margin-top:8px">📥 Stand-Update (eigene Nachweise, ohne Passwort)</button>
+        <button class="btn btn-sm" id="pf-standupdate" type="button" style="margin-top:8px">📥 Stand-Update (eigene Nachweise; Anmeldepasswort bleibt)</button>
+        <div style="margin-top:14px"><strong>Freigaben</strong> <span class="hint">${bestehend.freigabenStand?'Stand '+fmtDatum(bestehend.freigabenStand):'noch keine Angabe – es gelten die Vorgaben'}</span>
+          ${FREIGABEN.map(d=>`<label class="row" style="gap:8px;align-items:flex-start;padding:3px 0;cursor:pointer"><input type="checkbox" data-pf-freigabe="${d.k}" ${freigabe(bestehend,d.k)?'checked':''} style="margin-top:3px"> <span class="hint" style="color:var(--ink)">${esc(d.label)}${d.genutzt?'':' <i>(noch nicht genutzt)</i>'}</span></label>`).join('')}
+        </div>
       </div>`}
       ${bestehend?renderPersonQualifikationenBereich(bestehend):''}
       ${bestehend?renderPersonHospitationenBereich(bestehend):''}
@@ -7311,6 +7385,8 @@ function renderModalPerson(){
 }
 function bindModalPerson(){
   document.getElementById('m-schliessen').onclick = schliesseModal;
+  document.querySelectorAll('[data-pf-freigabe]').forEach(cb=>{ cb.onchange = ()=>{ const pp = state.personen.find(x=>x.id===modal.id); if(!pp) return;
+    pp.freigaben = Object.assign({}, pp.freigaben||{}, {[cb.dataset.pfFreigabe]: cb.checked}); pp.freigabenStand = nowIso(); speichereState(); zeigeToast('Freigabe gespeichert.'); }; });
   document.getElementById('m-abbrechen').onclick = schliesseModal;
   if(modal.id){ const pp = state.personen.find(x=>x.id===modal.id); bindPersonQualifikationenBereich(pp); bindPersonHospitationenBereich(pp); }
   if(!modal.id){
