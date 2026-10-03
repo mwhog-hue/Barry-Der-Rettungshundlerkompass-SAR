@@ -20,8 +20,8 @@
   --bg:#f5f6f7;
   --card:#ffffff;
   --line:#d9dde1;
-  --muted:#687078;
-  --muted-soft:#8b939b;
+  --muted:#434a51;      /* 2.23: dunkler – Hinweistext gut lesbar, nicht „gesperrt“-grau */
+  --muted-soft:#4f575f;
 
   /* Primärakzent (Aktionen, Marke) */
   --accent:#b51f2e;
@@ -118,7 +118,7 @@ input,select,textarea{font-family:inherit;font-size:.95rem}
   padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink);
 }
 .field input:disabled{background:#f2f3f4;color:var(--muted)}
-.hint{font-size:.78rem;color:var(--muted-soft)}
+.hint{font-size:.84rem;color:var(--muted-soft)}
 
 .btn{
   display:inline-flex;align-items:center;gap:6px;
@@ -128,7 +128,7 @@ input,select,textarea{font-family:inherit;font-size:.95rem}
 .btn:hover{background:#f7f8f9}
 .btn-primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn-primary:hover{background:var(--accent-ink);border-color:var(--accent-ink)}
-.btn-ghost{background:none;border-color:transparent;color:var(--muted)}
+.btn-ghost{background:transparent;border-color:var(--line);color:var(--ink)}
 .btn-ghost:hover{background:#f2f3f4}
 .btn-danger{color:var(--accent-ink);border-color:var(--soft);background:var(--soft)}
 .btn-sm{padding:8px 12px;font-size:.8rem;min-height:34px}
@@ -142,7 +142,13 @@ input,select,textarea{font-family:inherit;font-size:.95rem}
   padding:4px 10px;border-radius:999px;background:var(--soft);color:var(--accent-ink);
   font-size:.78rem;font-weight:600;border:1px solid transparent;
 }
-.chip.muted{background:#eef0f1;color:var(--muted)}
+.chip.muted{background:#eef0f1;color:var(--ink)}
+/* 2.23: anklickbare Chips sehen nach Link aus, nicht nach „ausgegraut“ */
+.chip[data-goto-verwaltung],.chip[data-goto-meinstand],.chip[data-goto-inline],.chip[data-goto-planung],.chip[data-goto-alltag-uebungen],.chip[data-goto-kurswuensche],.chip[data-goto-hausaufgaben]{background:#fff;color:var(--accent-ink);border-color:var(--accent-ink);cursor:pointer}
+/* 2.23: Sprungziele – Platz für die feste Kopfleiste und kurze Markierung nach dem Sprung */
+#content,.sprung-ziel{scroll-margin-top:76px}
+.sprung-markiert{box-shadow:0 0 0 3px var(--accent) !important;transition:box-shadow .4s ease}
+@media (max-width:640px){body{font-size:16px}.hint{font-size:.9rem}.chip{font-size:.85rem}}
 .chip button{background:none;border:none;color:inherit;padding:0;margin-left:2px;font-size:.9em}
 .chip-select{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:999px;border:1px solid var(--line);cursor:pointer;font-size:.85rem;margin:2px 6px 2px 0}
 .chip-select.active{background:var(--soft);color:var(--accent-ink);border-color:var(--accent-ink)}
@@ -2499,6 +2505,7 @@ const LC_HINWEIS = 'Online-Modul im DRK-Lerncampus. Beim Eintragen Modulname (dr
 const QUALIFIKATIONEN_KATALOG_VORSCHLAG = [
   // 1) Grundausbildung Einsatzkraft Bereitschaft – Pflicht für Rettungshundehelfende und -führende
   { code:'rke', label:'RKE – Rotkreuz-Einführungsseminar', kategorie:K_GA, ue:9, pflichtRHF:true, aliase:['Einführungsseminar','DRK Einführungsseminar'] },
+  { code:'rke_online', label:'RKE – Online-Teil (Rotkreuz-Einführungsseminar)', kategorie:K_GA, hinweis:'Online-Teil des Rotkreuz-Einführungsseminars. Festlegung der Staffel (03.10.2026): reicht als Mindestvoraussetzung für den Einsatz als Helfer/-in; der Präsenzteil (RKE) ist anschließend nachzuholen. Wer das vollständige RKE hat, braucht diesen Eintrag nicht.', aliase:['RKE – nur Online-Teil (Präsenzseminar nicht nachgewiesen)','Onlineangebot zum Rot-Kreuz-Einführungsseminar','RKE online','RKE Online-Teil'] },
   { code:'eh', label:'EH – Erste Hilfe', kategorie:K_GA, ue:9, pflichtRHF:true, intervallMonate:24, hinweis:'Wiederholung alle 2 Jahre nur ohne Sanitätsausbildung; mit Sanitätsausbildung ersetzt die Sanitätsfortbildung (16 UE in 2 Jahren) die EH-Wiederholung.' },
   { code:'ds', label:'DS – Datenschutz (online)', kategorie:K_GA, ue:2, pflichtRHF:true, hinweis:'Voraussetzung: RKE' },
   { code:'ekga_e', label:'EKGA-E – Grundausbildung Einsatz (HGA Einsatz)', kategorie:K_GA, ue:10, pflichtRHF:true, aliase:['HGA Einsatz','EKGA-E – Einsatz','EGA Einsatz'] },
@@ -2660,7 +2667,7 @@ const QUALIFIKATIONEN_KATALOG_VORSCHLAG = [
   { code:'lc_pruef', label:'DRK-Lerncampus – Prüfungen', kategorie:K_LC, hinweis:LC_HINWEIS, aliase:['DRK-Lerncampus - Prüfungen','Lerncampus - Prüfungen','Lerncampus – Prüfungen'] },
   { code:'lc_sonst', label:'DRK-Lerncampus – Sonstige Module', kategorie:K_LC, hinweis:LC_HINWEIS, aliase:['DRK-Lerncampus - Sonstige Module','Lerncampus - Sonstige Module','Lerncampus – Sonstige Module'] },
 ].map(q=>({ intervallMonate:null, hinweis:'', pflicht:false, pflichtRHF:false, empfohlen:false, ue:null, aliase:[], ...q }));
-const QUALI_KATALOG_VERSION = 14;
+const QUALI_KATALOG_VERSION = 15;   // 15: RKE-Online-Teil als eigener Eintrag (03.10.2026)
 // Vorbelegte Ordner (entsprechen der bestehenden Ordnerstruktur der Staffel); jederzeit umbenenn-, lösch- und erweiterbar.
 const LEHRMATERIAL_STANDARD_ORDNER = ['Flächensuche','Mantrailing','Trümmerkunde','Kynologie','Geruch und Geruchsverteilung','Orientierung und Kartenkunde','EH Hund','UVV, Sicherheit im Einsatz, Transport','Funk','PSNV','Wasserrettung, Wassersuche','Organisation','Rechtliches und Grundlagen','Geschichte und Entwicklung','Hospitationen','Formulare & Vordrucke'];
 /* Jährliche Nachweise (Intervall 12 Monate) – Festlegung 02.10.2026: Prüfung kalenderjährlich mit fließendem Übergang.
@@ -2720,6 +2727,7 @@ const LC_ANRECHNUNG = [
   ['ds_jaehrlich', 'zählt als Datenschutzunterweisung (jährlich)'],
   ['hygiene', 'zählt als Hygieneunterweisung (jährlich)'],
   ['ds', 'zählt als DS – Datenschutz (online, einmalig)'],
+  ['rke_online', 'zählt als RKE – Online-Teil (Präsenzteil nachholen)'],
   ['suwr', 'zählt als SuWR – Sonder- und Wegerechte (jährlich)'],
   ['modul_10', 'zählt als Modulprüfung 1.0 – Fachfragen'],
   ['ifsg', 'zählt als IfSG-Folgebelehrung (alle 2 Jahre)'],
@@ -2743,7 +2751,7 @@ const LC_MODUL_REGELN = new Map([
   ['hygienemaßnahmen in betreuungsdienstlichen einsätzen', ''],
   ['einsatzfahrten durchführen', 'suwr'],
   ['fachfragenprüfung zur rettungshundeprüfung sparte fläche', 'modul_10'],
-  ['onlineangebot zum rot-kreuz-einführungsseminar', ''],             // nur Online-Teil des RKE
+  ['onlineangebot zum rot-kreuz-einführungsseminar', 'rke_online'],   // Festlegung 03.10.2026: zählt als RKE-Online-Teil
   ['schulung zur lebensmittelhygiene', ''],
 ]);
 function lcModulRegel(thema){ const k=qualiNorm(thema); return LC_MODUL_REGELN.has(k) ? LC_MODUL_REGELN.get(k) : null; }
@@ -2804,6 +2812,12 @@ function lerncampusAusZusatzfeldern(s){
     s.personQualifikationen.forEach(pq=>{ if(pq.quelle!=='drkserver' || !pq.thema) return; const q=s.qualifikationen.find(x=>x.id===pq.qualifikationId); if(!istLerncampus(q)) return;
       const r = lcModulRegel(pq.thema); const neu = r!==null ? r : q.code==='lc_rsd' ? 'san_fb_offen' : ''; pq.anrechnung = neu || undefined; });
     s.meta.lcRegelnVersion = 1;
+  }
+  // 2.24: RKE-Onlineangebot zählt als RKE-Online-Teil – vorhandene Einträge ohne eigene Anrechnung nachziehen
+  if((s.meta.lcRegelnVersion||0) < 2){
+    s.personQualifikationen.forEach(pq=>{ if(!pq.thema || pq.anrechnung) return; const q=s.qualifikationen.find(x=>x.id===pq.qualifikationId); if(!istLerncampus(q)) return;
+      if(lcModulRegel(pq.thema)==='rke_online') pq.anrechnung = 'rke_online'; });
+    s.meta.lcRegelnVersion = 2;
   }
   return n;
 }
@@ -3225,7 +3239,7 @@ function renderMeineFahrzeugeEinweisungen(person){
 }
 
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.22';
+const BARRY_APP_VERSION = '2.25';
 const BARRY_APP_STAND = '03.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -3417,7 +3431,7 @@ function renderLogin(){
       <div class="brand"><h1>${esc(APP_NAME)}</h1><small>Eigenes Passwort festlegen</small></div>
       <p class="hint">Hallo ${esc(p?p.name:'')}. Das ist deine erste Anmeldung – bitte lege jetzt ein eigenes Passwort fest.</p>
       <div class="field"><label>Neues Passwort</label><input type="password" id="in-neues-pw" autofocus autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-      <div class="field"><label>Neues Passwort wiederholen</label><input type="password" id="in-neues-pw2" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+      <div class="field"><label>Neues Passwort wiederholen</label><input type="password" id="in-neues-pw2" enterkeyhint="go" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
       ${loginFehler?`<p class="hint" style="color:var(--accent-ink)">${esc(loginFehler)}</p>`:''}
       <button class="btn btn-primary" id="btn-pw-setzen" style="width:100%">Passwort speichern und anmelden</button>
     </div></div>`;
@@ -3429,10 +3443,11 @@ function renderLogin(){
     ${(()=>{ try{ const installiert = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent); const web=/^https?:$/.test(location.protocol);
       if(web && !installiert && istErststartOhneDaten()) return `<p class="hint" style="margin:8px 0 12px;padding:8px 10px;background:#fff8e1;border-radius:8px">📲 <b>Tipp vor dem Einspielen:</b> BARRY zuerst auf den Startbildschirm legen${ios?' (Safari: Teilen → „Zum Home-Bildschirm“)':' (Chrome: ⋮ → „App installieren“)'} und das Zugangspaket dann <b>in der installierten App</b> einspielen. ${ios?'Auf dem iPhone haben Safari und die installierte App getrennte Speicher – sonst müssen Anmeldung und Passwort dort wiederholt werden.':'Sonst kann es sein, dass Anmeldung und Passwort in der App wiederholt werden müssen.'}</p>`; }catch(e){} return ''; })()}</div>
     <div class="field"><label>Name oder Benutzername</label>
-      <input id="in-person" list="in-person-liste" autocomplete="off" placeholder="Namen eintippen …" value="${esc(loginEingabe)}">
+      <input id="in-person" list="in-person-liste" autocomplete="off" enterkeyhint="next" placeholder="Namen eintippen …" value="${esc(loginEingabe)}">
       <datalist id="in-person-liste">${aktive.map(p=>`<option value="${esc(p.name)}">${p.benutzername?`Benutzername: ${esc(p.benutzername)}`:''}</option>`).join('')}</datalist>
     </div>
-    <div class="field"><label>Passwort</label><input type="password" id="in-pw" autofocus autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label>Passwort</label><input type="password" id="in-pw" autofocus enterkeyhint="go" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <button class="btn btn-primary" id="btn-anmelden" style="width:100%;margin-bottom:10px">Anmelden</button>
     ${loginHinweis?`<div class="card card-pad" style="background:var(--soft);border:none;margin-bottom:12px"><p class="hint" style="margin:0">${esc(loginHinweis)}</p></div>`:''}
     ${loginFehler?`<p class="hint" style="color:var(--accent-ink)">${esc(loginFehler)}</p>`:''}
     <details id="login-bereiche" style="margin:0 0 12px">
@@ -3440,7 +3455,6 @@ function renderLogin(){
       <p class="hint" style="margin:6px 0">Nur angehakte Bereiche erscheinen im Menü. Ohne Änderung wird alles angezeigt, wofür du berechtigt bist. Start und Hilfe sind immer sichtbar.</p>
       ${BEREICHE.filter(b=>!BEREICHE_FEST.includes(b.id)).map(b=>`<label class="row" style="gap:8px;align-items:center;padding:4px 0;cursor:pointer"><input type="checkbox" data-login-bereich="${b.id}" checked> <span>${b.icon} ${esc(b.label)}</span></label>`).join('')}
     </details>
-    <button class="btn btn-primary" id="btn-anmelden" style="width:100%;margin-bottom:10px">Anmelden</button>
     <div id="bio-login-platz"></div>
     ${istErststartOhneDaten()?`
     <div class="card card-pad" style="background:var(--soft);border:none;margin-top:16px">
@@ -3536,6 +3550,18 @@ async function bioLoginBereichAktualisieren(){
   };
 }
 
+/* 2.23: Anmeldung per Tastatur – Enter im Namensfeld springt zum Passwort, Enter im Passwortfeld meldet an;
+   beim Öffnen der Tastatur wird der Anmelden-Knopf sichtbar gehalten. */
+function loginTastaturHilfen(){
+  const pers=document.getElementById('in-person'), pw=document.getElementById('in-pw'), btn=document.getElementById('btn-anmelden');
+  if(!pw || !btn) return;
+  if(pers) pers.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); pw.focus(); } });
+  pw.addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); if(pers) loginEingabe = pers.value; btn.click(); } });
+  const zeigen=()=>setTimeout(()=>{ try{ btn.scrollIntoView({block:'center'}); }catch(err){} }, 350);
+  pw.addEventListener('focus', zeigen);
+  if(window.visualViewport && !window.__barryVvLogin){ window.__barryVvLogin=true;
+    window.visualViewport.addEventListener('resize', ()=>{ const b=document.getElementById('btn-anmelden'); if(b && document.activeElement && document.activeElement.id==='in-pw') try{ b.scrollIntoView({block:'center'}); }catch(err){} }); }
+}
 function bindLogin(){
   if(loginSchrittNeuesPasswort){
     document.getElementById('btn-pw-setzen').onclick = ()=>{
@@ -3553,9 +3579,13 @@ function bindLogin(){
       render();
       bioAnbieten(p);
     };
+    const pw2el=document.getElementById('in-neues-pw2'), pw1el=document.getElementById('in-neues-pw');
+    if(pw1el) pw1el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); pw2el.focus(); } };
+    if(pw2el) pw2el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btn-pw-setzen').click(); } };
     return;
   }
   document.getElementById('in-person').oninput = e=>{ loginEingabe=e.target.value; bioLoginBereichAktualisieren(); };
+  loginTastaturHilfen();
   bioLoginBereichAktualisieren();
   const erststart = document.getElementById('in-erststart-import');
   if(erststart) erststart.onchange = e=>{ const f=e.target.files[0]; e.target.value=''; if(f && istErststartOhneDaten()) bestandAusDateiImportieren(f); };
@@ -3655,6 +3685,7 @@ function render(){
   });
 
   renderBereich(person);
+  sprungAusfuehren();
 }
 
 /* =========================================================
@@ -3897,19 +3928,19 @@ function renderStartLeitungsHinweise(person){
     return `<li>${terminDatumKurz(t)} · ${esc(t.titel)} — <strong>${zusagen}</strong> Zusagen, <strong>${offen}</strong> ohne Rückmeldung</li>`;
   }).join('');
   const hinweise = [];
-  if(f.abgelaufen.length) hinweise.push({txt:`${f.abgelaufen.length} Qualifikation(en) abgelaufen`, unter:'fristen', warn:true});
-  if(f.baldAblaufend.length) hinweise.push({txt:`${f.baldAblaufend.length} Qualifikation(en) laufen in den nächsten ${FRISTEN_BALD_TAGE} Tagen ab`, unter:'fristen', warn:true});
-  if(f.fehlendePflicht.length) hinweise.push({txt:`${f.fehlendePflicht.length}× Pflichtqualifikation fehlt`, unter:'fristen', warn:true});
-  if(f.rhfLuecken.length) hinweise.push({txt:`${f.rhfLuecken.length} Rettungshundeführende mit offenen Pflichtausbildungen`, unter:'fristen', warn:true});
-  if(f.hundeKurzDavor.filter(x=>x.anteil>=HUND_KURZ_DAVOR_ANTEIL).length) hinweise.push({txt:`${f.hundeKurzDavor.filter(x=>x.anteil>=HUND_KURZ_DAVOR_ANTEIL).length} Hund/Team-Modul(e) kurz vor Abschluss`, unter:'fristen'});
+  if(f.abgelaufen.length) hinweise.push({txt:`${f.abgelaufen.length} Qualifikation(en) abgelaufen`, unter:'fristen', anker:'fr-abgelaufen', warn:true});
+  if(f.baldAblaufend.length) hinweise.push({txt:`${f.baldAblaufend.length} Qualifikation(en) laufen in den nächsten ${FRISTEN_BALD_TAGE} Tagen ab`, unter:'fristen', anker:'fr-bald', warn:true});
+  if(f.fehlendePflicht.length) hinweise.push({txt:`${f.fehlendePflicht.length}× Pflichtqualifikation fehlt`, unter:'fristen', anker:'fr-pflicht', warn:true});
+  if(f.rhfLuecken.length) hinweise.push({txt:`${f.rhfLuecken.length} Rettungshundeführende mit offenen Pflichtausbildungen`, unter:'fristen', anker:'fr-rhf', warn:true});
+  if(f.hundeKurzDavor.filter(x=>x.anteil>=HUND_KURZ_DAVOR_ANTEIL).length) hinweise.push({txt:`${f.hundeKurzDavor.filter(x=>x.anteil>=HUND_KURZ_DAVOR_ANTEIL).length} Hund/Team-Modul(e) kurz vor Abschluss`, unter:'fristen', anker:'fr-hunde'});
   const ueberfaelligeZiele = state.hunde.filter(h=>h.status!=='inaktiv').reduce((n,h)=>n+(h.ziele||[]).filter(zielUeberfaellig).length, 0);
   if(ueberfaelligeZiele) hinweise.push({txt:`${ueberfaelligeZiele} überfällige(s) Ausbildungsziel(e) bei Teams`, ausbildungPlanung:true, warn:true});
-  if(f.jubilaeen.length) hinweise.push({txt:`🎉 ${f.jubilaeen.length} Jubiläum/Jubiläen ${f.heuteJahr}`, unter:'fristen'});
+  if(f.jubilaeen.length) hinweise.push({txt:`🎉 ${f.jubilaeen.length} Jubiläum/Jubiläen ${f.heuteJahr}`, unter:'fristen', anker:'fr-jubi'});
   if(f.duplikate.length && istLeitungOderAdmin(person)) hinweise.push({txt:`⚠️ ${f.duplikate.length} mögliche Personen-Duplikate`, unter:'personen', warn:true});
   return `
     <div class="card card-pad" style="border-left:4px solid var(--t-verwaltung)">
       <div class="spread"><h3>Für Leitung & Ausbildung</h3><span class="chip muted" data-goto-verwaltung="fristen" style="cursor:pointer">Fristen & Lücken →</span></div>
-      ${hinweise.length ? `<ul class="hint" style="margin:8px 0 0 -18px">${hinweise.map(h=>`<li style="${h.warn?'color:var(--accent-ink)':''}"><span ${h.ausbildungPlanung?'data-goto-planung="1"':`data-goto-verwaltung="${h.unter}"`} style="cursor:pointer;text-decoration:underline dotted">${esc(h.txt)}</span></li>`).join('')}</ul>`
+      ${hinweise.length ? `<ul class="hint" style="margin:8px 0 0 -18px">${hinweise.map(h=>`<li style="${h.warn?'color:var(--accent-ink)':''}"><span ${h.ausbildungPlanung?'data-goto-planung="1"':`data-goto-verwaltung="${h.unter}"${h.anker?` data-anker="${h.anker}"`:''}`} style="cursor:pointer;text-decoration:underline dotted">${esc(h.txt)}</span></li>`).join('')}</ul>`
         : '<p class="hint" style="margin:8px 0 0">Keine offenen Fristen, fehlenden Pflichtqualifikationen oder Jubiläen.</p>'}
       ${termineBald.length ? `<p class="hint" style="margin:12px 0 4px"><strong>Termine der nächsten 7 Tage</strong></p><ul class="hint" style="margin:0 0 0 -18px">${termineHtml}</ul>` : ''}
       ${istLeitungOderAdmin(person)?'<p class="hint" style="margin-top:12px">Mitglieder, Hunde, Rollen und den Staffelnamen pflegst du unter „Verwaltung".</p>':''}
@@ -3919,7 +3950,7 @@ function bindStart(person){
   bindZusageButtons(person);
   if(modal) bindModal(person);
   document.querySelectorAll('[data-goto-verwaltung]').forEach(el=>{
-    el.onclick = ()=>{ route = {bereich:'verwaltung', unter:el.dataset.gotoVerwaltung, id:null}; render(); };
+    el.onclick = ()=>{ route = {bereich:'verwaltung', unter:el.dataset.gotoVerwaltung, id:null}; sprungZiel = el.dataset.anker || 'content'; render(); };
   });
   document.querySelectorAll('[data-goto-meinstand]').forEach(el=>el.onclick=()=>{ route={bereich:'ausbildung',unter:null,id:null}; ausbildungTab='meinstand'; render(); window.scrollTo(0,0); });
   const sich=document.getElementById('btn-start-sichern'); if(sich) sich.onclick=()=>{ datensicherungJetzt(); render(); };
@@ -3928,10 +3959,10 @@ function bindStart(person){
   const fkBtn=document.getElementById('btn-start-funk');
   if(fkBtn) fkBtn.onclick = ()=>{ route={bereich:'wissen',unter:null,id:null}; wissenTab='funk'; render(); window.scrollTo(0,0); };
   document.querySelectorAll('[data-goto-planung]').forEach(el=>{
-    el.onclick = ()=>{ route = {bereich:'ausbildung', unter:null, id:null}; ausbildungTab='planung'; render(); };
+    el.onclick = ()=>{ route = {bereich:'ausbildung', unter:null, id:null}; ausbildungTab='planung'; sprungZiel='content'; render(); };
   });
   document.querySelectorAll('[data-goto-alltag-uebungen]').forEach(el=>{
-    el.onclick = ()=>{ route = {bereich:'alltag', unter:null, id:null}; alltagTab='bibliothek'; render(); };
+    el.onclick = ()=>{ route = {bereich:'alltag', unter:null, id:null}; alltagTab='bibliothek'; sprungZiel='content'; render(); };
   });
   const udt = document.getElementById('btn-udt-uebernehmen');
   if(udt) udt.onclick = ()=>{
@@ -3943,10 +3974,10 @@ function bindStart(person){
   };
   document.querySelectorAll('[data-goto-inline]').forEach(el=>{
     el.style.cursor='pointer';
-    el.onclick = ()=>{ route = {bereich:el.dataset.gotoInline, unter:null, id:null}; render(); };
+    el.onclick = ()=>{ route = {bereich:el.dataset.gotoInline, unter:null, id:null}; sprungZiel='content'; render(); };
   });
   document.querySelectorAll('[data-goto-hausaufgaben]').forEach(el=>{
-    el.onclick = ()=>{ hausaufgabenHundId = el.dataset.gotoHausaufgaben; alltagTab='hausaufgaben'; route={bereich:'alltag',unter:null,id:null}; render(); };
+    el.onclick = ()=>{ hausaufgabenHundId = el.dataset.gotoHausaufgaben; alltagTab='hausaufgaben'; route={bereich:'alltag',unter:null,id:null}; sprungZiel='content'; render(); };
   });
   document.querySelectorAll('[data-start-art]').forEach(b=>{
     b.onclick = ()=>{
@@ -4126,6 +4157,15 @@ function darfVerwaltungTabSehen(tab, person){
   return true; // 'ausbilderPlus'-Bereich ist bereits vorgefiltert (siehe darfBereichSehen)
 }
 let modal = null; // {type, id|null}
+/* 2.23: Sprungziel nach einem Link – BARRY scrollt nach dem Aufbau der Seite genau dorthin */
+let sprungZiel = null;
+function sprungAusfuehren(){
+  if(!sprungZiel) return; const z = sprungZiel; sprungZiel = null;
+  requestAnimationFrame(()=>{ const el = document.getElementById(z);
+    if(!el){ window.scrollTo(0,0); return; }
+    el.scrollIntoView({block:'start'});
+    if(z!=='content'){ el.classList.add('sprung-markiert'); setTimeout(()=>el.classList.remove('sprung-markiert'), 1800); } });
+}
 
 function renderVerwaltung(person){
   const sichtbareTabs = VERWALTUNG_TABS.filter(t=>darfVerwaltungTabSehen(t,person));
@@ -4290,7 +4330,7 @@ function bindTabAustausch(){
   const asu=document.getElementById('btn-alle-standupdates'); if(asu) asu.onclick = ()=>alleStandUpdatesHerunterladen();
   const isa=document.getElementById('in-selbstauskunft'); if(isa) isa.onchange = e=>{ const fs=Array.from(e.target.files||[]); e.target.value=''; selbstauskunftEinlesen(fs); };
   const em=document.getElementById('org-leitung-email-ok'); if(em) em.onclick=()=>{ state.organisation.leitungEmail=document.getElementById('org-leitung-email').value.trim(); speichereState(); zeigeToast('E-Mail-Adresse gespeichert.'); };
-  document.querySelectorAll('[data-goto-kurswuensche]').forEach(el=>el.onclick=()=>{ route={bereich:'ausbildung',unter:null,id:null}; ausbildungTab='auswertung'; auswAnsicht='wuensche'; render(); });
+  document.querySelectorAll('[data-goto-kurswuensche]').forEach(el=>el.onclick=()=>{ route={bereich:'ausbildung',unter:null,id:null}; ausbildungTab='auswertung'; auswAnsicht='wuensche'; sprungZiel='content'; render(); });
 }
 
 /* ---------- Personen ---------- */
@@ -4835,35 +4875,35 @@ function renderTabFristen(){
     <div class="stack">
       <p class="hint">Übersicht für Ausbilder/-in und Staffelleitung: abgelaufene/bald ablaufende Personen-Qualifikationen, fehlende Pflichtqualifikationen und Hund/Team-Module, die kurz vor dem Abschluss stehen. Fristen beruhen auf den bei „Qualifikationen" hinterlegten Gültig-bis-Daten — dort selbst eintragen oder pflegen. Jährliche Nachweise werden kalenderjährlich geprüft: ab 01.01. des Folgejahres fällig (gelb), ab 01.09. abgelaufen (orange, zählt noch für die Einsatzfähigkeit), ab 01.12. kritisch (rot).</p>
 
-      <div class="card card-pad">
+      <div class="card card-pad sprung-ziel" id="fr-abgelaufen">
         <h3>⛔ Abgelaufen (${abgelaufen.length} bei ${new Set(abgelaufen.map(r=>r.p.id)).size} Personen)</h3>
         ${proPerson(abgelaufen, r=>`<li>${stufenPunkt(r)} ${esc(r.q.label)} <span class="hint">– seit ${Math.abs(r.tage)} Tagen (${fmtDatum(r.pq.gueltigBis)})${stufenText(r)?' · '+esc(stufenText(r)):''}</span></li>`)}
       </div>
 
-      <div class="card card-pad">
+      <div class="card card-pad sprung-ziel" id="fr-bald">
         <h3>⚠️ Läuft bald ab (nächste ${FRISTEN_BALD_TAGE} Tage) (${baldAblaufend.length} bei ${new Set(baldAblaufend.map(r=>r.p.id)).size} Personen)</h3>
         ${proPerson(baldAblaufend, r=>`<li>${r.stufe?stufenPunkt(r):'⚠️'} ${esc(r.q.label)} <span class="hint">– ${r.tage<0?'abgelaufen':'noch '+r.tage+' Tage'} (${fmtDatum(r.pq.gueltigBis)})${stufenText(r)?' · '+esc(stufenText(r)):''}</span></li>`)}
       </div>
 
-      <div class="card card-pad">
+      <div class="card card-pad sprung-ziel" id="fr-rhf">
         <h3>🐕 Pflichtausbildungen Rettungshundeführende (${rhfLuecken.length})</h3>
         <p class="hint">Personen, die einen aktiven Hund führen, und die noch nicht alle ${rhfPflichtAnzahl} Pflicht-Einträge (★) laut Dienstanweisung „Rettungshundearbeit in Hessen“ und Staffel-Merkblatt nachgewiesen haben. Wer die <strong>Modulprüfung 2 (Suchprüfung)</strong> bestanden hat, gilt für alle einmaligen Pflichtausbildungen als erfüllt – dann werden nur noch die wiederkehrenden Nachweise geprüft: <strong>jährlich</strong> HLW/AED, UVV, Hygiene, Datenschutz und Sonderrechte; <strong>alle 2 Jahre</strong> Suchprüfung und Sanitätsfortbildung; <strong>alle 5 Jahre</strong> Erste Hilfe am Hund (nur Warnung). Die Erste-Hilfe-Wiederholung (alle 2 Jahre) gilt nur für Personen ohne Sanitätsausbildung. Zum Aufklappen antippen.</p>
         ${rhfLuecken.map(x=>`<details style="border-top:1px dashed var(--line);padding:6px 0"><summary style="cursor:pointer"><strong>${esc(x.p.name)}</strong> – ${x.durchSuch?`fehlt: ${x.fehlt.length} wiederkehrende(r) Nachweis(e)`:`fehlt: ${x.fehlt.length} von ${rhfPflichtAnzahl}`}</summary><ul class="hint" style="margin:6px 0 0 -18px">${x.fehlt.map(q=>`<li>${esc(q.label)}</li>`).join('')}</ul></details>`).join('') || '<p class="hint">Alle Rettungshundeführenden haben die Pflichtausbildungen vollständig eingetragen.</p>'}
       </div>
 
-      <div class="card card-pad">
+      <div class="card card-pad sprung-ziel" id="fr-pflicht">
         <div class="spread"><h3>❌ Pflichtqualifikation fehlt komplett (${fehlendePflicht.length})</h3></div>
         <p class="hint">${pflichtQualis.length===0?'Noch keine Qualifikation im Katalog als „Pflicht" markiert (bearbeitbar unter „Qualifikationen").':''}</p>
         ${proPerson(fehlendePflicht, r=>`<li>❌ ${esc(r.q.label)}</li>`)}
       </div>
 
-      <div class="card card-pad">
+      <div class="card card-pad sprung-ziel" id="fr-hunde">
         <h3>🐾 Hund/Team-Module kurz vor Abschluss (${hundeKurzDavor.length})</h3>
         <table><thead><tr><th>Hund/Team</th><th>Modul</th><th>Stand</th></tr></thead>
         <tbody>${zeile(r=>`<tr><td>${esc(teamLabel(r.h))}</td><td>${esc(r.m.label)}</td><td>${r.bestanden}/${r.gesamt} bestanden${r.anteil>=HUND_KURZ_DAVOR_ANTEIL?' — <strong>kurz davor</strong>':''}</td></tr>`, hundeKurzDavor)}</tbody></table>
       </div>
 
-      <div class="card card-pad">
+      <div class="card card-pad sprung-ziel" id="fr-jubi">
         <h3>🎉 Jubiläen ${heuteJahr} (${jubilaeen.length})</h3>
         <p class="hint">Mitgliedschaft im DRK seit 5, 10, 15 … Jahren, bezogen auf das laufende Kalenderjahr. Datum unter Verwaltung → Personen → „Mitglied im DRK seit" pflegen.</p>
         <table><thead><tr><th>Person</th><th>Jubiläum</th><th>Mitglied seit</th></tr></thead>
@@ -5893,9 +5933,9 @@ const RHD_HELFER = ['eh','rke','ds','ekga_e','ekga_s','ekga_b','ekga_t','slg','e
 const AUSBILDUNGSPROFILE = [
   {id:'rhf_einsatz', gruppe:'Rettungshundearbeit', label:'Einsatzfähig als Rettungshundeführer/in (alle ★ gültig)', pflichtRHF:true, nurHundefuehrende:true,
    quelle:'Dienstanweisung 8.2 und Staffel-Festlegungen (wiederkehrende Nachweise)'},
-  {id:'helfer_einsatz', gruppe:'Rettungshundearbeit', label:'Einsatzbereite/r Helfer/in (ohne gültige Modulprüfung 2)', codes:['rke','ekga_e','eh','hlw'], empfohlen:['slg','bos'], hinweisCodes:['ds_jaehrlich','uvv_jaehrlich'],
-   quelle:'Festlegung der Staffelleitung (01.10.2026): Alle Mitglieder ohne gültige Modulprüfung 2 gelten als Helfer/-innen. Mindestvoraussetzung RKE, EKGA-E (EGA Einsatz), Erste Hilfe (entfällt mit Sanitätsausbildung) und HLW/AED; mit Sanitätsausbildung Sanitäter/-in, sonst Praktikant/-in; BOS-Funk für die Funkerrolle. Datenschutz und UVV werden 2026 nachgeholt.'},
-  {id:'rhd_helfer', gruppe:'Rettungshundearbeit', label:'Rettungshundehelfer/in (RHd)', codes:RHD_HELFER,
+  {id:'helfer_einsatz', gruppe:'Rettungshundearbeit', label:'Alarmierbar als Helfer/in (bis zur Modulprüfung 2) – Mindestvoraussetzung', codes:['eh','ekga_e','rke_online','ds','hlw'], empfohlen:['rke','slg','bos'], hinweisCodes:['ds_jaehrlich','uvv_jaehrlich'],
+   quelle:'Festlegung der Staffelleitung (01.10.2026): Alle Mitglieder ohne gültige Modulprüfung 2 gelten als Helfer/-innen – auch Hundeführende, bis ihr Team die Modulprüfung 2 bestanden hat. Mindestvoraussetzung Erste Hilfe (entfällt mit Sanitätsausbildung), EKGA-E (EGA Einsatz), mindestens der Online-Teil des Rotkreuz-Einführungsseminars, Datenschutz-Grundkurs (online) und HLW/AED; der RKE-Präsenzteil ist nachzuholen (Festlegung 03.10.2026); mit Sanitätsausbildung Sanitäter/-in, sonst Praktikant/-in; BOS-Funk für die Funkerrolle. Datenschutz und UVV werden 2026 nachgeholt'},
+  {id:'rhd_helfer', gruppe:'Rettungshundearbeit', label:'Rettungshundehelfer/in – Ausbildung komplett (ohne Modulprüfungen)', codes:RHD_HELFER, hinweisCodes:['hlw','ds_jaehrlich','uvv_jaehrlich'],
    quelle:'Dienstanweisung 8.1 / Übersicht Seminare; EKF.Prüf laut Übersicht „Notwendige Qualifikation Rettungshundeführende“'},
   {id:'zul_suchpruefung', gruppe:'Rettungshundearbeit', label:'Zulassung zur Rettungshundeprüfung (Modul 2)', codes:[...RHD_HELFER,'modul_10','modul_11','modul_12','modul_13'], nurHundefuehrende:true,
    quelle:'Seminarbroschüre 2025: „gemäß Dienstanweisung“; Übersicht: Voraussetzung RHd. Module 1.0–1.3 (in beliebiger Reihenfolge) nach Festlegung der Staffelleitung.'},
@@ -5947,14 +5987,23 @@ function profilAuswerten(personId, profil){
   const codes = profilCodes(profil);
   const posten = codes.map(c=>{ const q = state.qualifikationen.find(x=>x.code===c) || state.qualifikationen.find(x=>x.id===c); return {q, code:c, st: qualiStatusFuer(personId, q)}; });
   const relevant = posten.filter(p=>p.st.s!=='entfaellt');
+  relevant.forEach(p=>{ if(p.q && ['fehlt','abgelaufen'].includes(p.st.s) && ersatzErfuellt(personId, p.q.code)) p.st = Object.assign({}, p.st, {s:'gueltig', ersatz:true}); });
   const ok = relevant.filter(p=>p.st.s==='gueltig' || p.st.s==='durchSuch' || p.st.s==='nachfrist');
   return {gesamt: relevant.length, erfuellt: ok.length, fehlt: relevant.filter(p=>p.st.s==='fehlt'), abgelaufen: relevant.filter(p=>p.st.s==='abgelaufen'), nachfrist: relevant.filter(p=>p.st.s==='nachfrist'), faellig: relevant.filter(p=>p.st.faellig), posten};
 }
 let auswKurs = '';
 let auswAnsicht = 'profil', auswProfil = 'rhf_einsatz', auswPerson = '', auswQuali = '', auswKategorie = '', auswNurHF = true;
+/* 2.23: Personenkreis – 'auto' richtet sich nach dem gewählten Ziel (Hundeführer-Ziele: nur mit Hund; Helfer-Ziele: alle) */
+let auswKreis = 'auto';
+function auswKreisWirksam(){
+  /* 2.23 (Festlegung 03.10.2026): Hundeführende ohne bestandene Modulprüfung 2 gehen als Helfer/-innen in den Einsatz –
+     ein Filter mit/ohne Hund ist daher nicht nötig. Nur reine Hundeführer-Ziele zeigen automatisch Personen mit aktivem Hund. */
+  if(auswAnsicht==='profil'){ const pr=AUSBILDUNGSPROFILE.find(p=>p.id===auswProfil)||AUSBILDUNGSPROFILE[0]; return pr.nurHundefuehrende?'hf':'alle'; }
+  return 'alle';
+}
 function auswPersonen(){
   return state.personen.filter(p=>(auswArchiv || p.status!=='inaktiv') && (p.name||'').toLowerCase()!=='admin' && !(p.name||'').startsWith('#'))
-    .filter(p=>!auswNurHF || state.hunde.some(h=>(auswArchiv || h.status!=='inaktiv') && hundGefuehrtVon(h,p.id)))
+    .filter(p=>{ const k=auswKreisWirksam(); if(k==='alle') return true; const hf=state.hunde.some(h=>(auswArchiv || h.status!=='inaktiv') && hundGefuehrtVon(h,p.id)); return k==='hf'?hf:!hf; })
     .sort((a,b)=>a.name.localeCompare(b.name,'de'));
 }
 const AUSW_SYMBOL = {gueltig:'✓', durchSuch:'✓*', nachfrist:'🟠', abgelaufen:'⚠', fehlt:'–', entfaellt:'·'};
@@ -5973,7 +6022,8 @@ function renderAusbildungAuswertung(person){
       <p class="hint" style="margin:0 0 8px">Quelle: ${esc(pr.quelle)}. <b>${voll} von ${liste.length}</b> erfüllen alle Voraussetzungen.</p>
       ${liste.map(({p,r})=>`<details style="border-top:1px dashed var(--line);padding:6px 0"><summary style="cursor:pointer">${r.erfuellt===r.gesamt?'✅':r.abgelaufen.length?'⚠️':'⬜'} <strong>${esc(p.name)}</strong> <span class="hint">${r.erfuellt}/${r.gesamt}${r.fehlt.length?` · fehlt ${r.fehlt.length}`:''}${r.abgelaufen.length?` · abgelaufen ${r.abgelaufen.length}`:''}</span></summary>
         ${r.fehlt.length||r.abgelaufen.length?`<ul class="hint" style="margin:6px 0 0 -18px">${r.abgelaufen.map(x=>`<li>⚠ ${esc(qLabel(x.q))} – abgelaufen am ${fmtDatum(x.st.e.gueltigBis)}</li>`).join('')}${r.fehlt.map(x=>`<li>– ${esc(qLabel(x.q))}</li>`).join('')}</ul>`:'<p class="hint" style="margin:6px 0 0">Alle Voraussetzungen erfüllt.</p>'}
-        ${pr.empfohlen?pr.empfohlen.map(c=>{ const q=state.qualifikationen.find(x=>x.code===c); const st=qualiStatusFuer(p.id,q); return st.s==='gueltig'?'':`<p class="hint" style="margin:4px 0 0">Empfohlen: ${esc(qLabel(q))}</p>`; }).join(''):''}
+        ${pr.empfohlen?pr.empfohlen.map(c=>{ const q=state.qualifikationen.find(x=>x.code===c); const st=qualiStatusFuer(p.id,q); return st.s==='gueltig'?'':`<p class="hint" style="margin:4px 0 0">${q&&q.code==='rke'&&hatQualiCode(p.id,'rke_online')?'⏳ '+esc(empfehlungText(p.id,q)):'Empfohlen: '+esc(qLabel(q))}</p>`; }).join(''):''}
+        ${pr.hinweisCodes?pr.hinweisCodes.filter(c=>!(pr.codes||[]).includes(c)).map(c=>{ const q=state.qualifikationen.find(x=>x.code===c); if(!q) return ''; const st=qualiStatusFuer(p.id,q); return ['gueltig','durchSuch'].includes(st.s)||ersatzErfuellt(p.id,c)?'':`<p class="hint" style="margin:4px 0 0">Jährlicher Nachweis offen: ${esc(qLabel(q))}</p>`; }).join(''):''}
       </details>`).join('') || '<p class="hint">Keine Personen in dieser Auswahl.</p>'}
       <button class="btn btn-sm" id="aw-csv" style="margin-top:10px">Als Tabelle herunterladen (CSV)</button>`;
   } else if(auswAnsicht==='kurs'){
@@ -6041,14 +6091,12 @@ function renderAusbildungAuswertung(person){
   return `
     <p class="lead">Wer hat welche Ausbildung – und was fehlt für Einsatz, Prüfung oder den nächsten Lehrgang?</p>
     <div class="row" style="gap:6px;flex-wrap:wrap;margin-bottom:8px">${ans.map(([id,l])=>`<button class="btn btn-sm ${auswAnsicht===id?'btn-primary':'btn-ghost'}" data-aw-ansicht="${id}">${esc(l)}</button>`).join('')}</div>
-    <label class="row" style="gap:6px;align-items:center;margin-bottom:10px;cursor:pointer"><input type="checkbox" id="aw-nurhf" ${auswNurHF?'checked':''}> <span class="hint" style="color:var(--ink)">nur Hundeführende (Personen mit aktivem Hund)</span></label>
     ${state.personen.some(p=>p.status==='inaktiv')?`<label class="row" style="gap:6px;align-items:center;margin:-4px 0 10px;cursor:pointer"><input type="checkbox" id="aw-archiv" ${auswArchiv?'checked':''}> <span class="hint" style="color:var(--ink)">📦 Archivierte Mitglieder einbeziehen (${state.personen.filter(p=>p.status==='inaktiv').length})</span></label>`:''}
     <div class="card card-pad">${inhalt}</div>
     <p class="hint" style="margin-top:8px">Grundlage sind die in BARRY eingetragenen Qualifikationen. Die Ziel-Voraussetzungen sind aus den genannten Quellen zusammengestellt; verbindlich bleiben Dienstanweisung, Prüfungsordnung und Seminarbroschüre in der jeweils gültigen Fassung.</p>`;
 }
 function bindAusbildungAuswertung(person){
   document.querySelectorAll('[data-aw-ansicht]').forEach(b=>b.onclick=()=>{ auswAnsicht=b.dataset.awAnsicht; render(); });
-  const nh=document.getElementById('aw-nurhf'); if(nh) nh.onchange=()=>{ auswNurHF=nh.checked; render(); };
   const ar=document.getElementById('aw-archiv'); if(ar) ar.onchange=()=>{ auswArchiv=ar.checked; render(); };
   const sp=document.getElementById('aw-profil'); if(sp) sp.onchange=()=>{ auswProfil=sp.value; render(); };
   const pe=document.getElementById('aw-person'); if(pe) pe.onchange=()=>{ auswPerson=pe.value; render(); };
@@ -6562,9 +6610,11 @@ const HLW_UEBERGANG_AB = '2025-01-01', HLW_UEBERGANG_BIS = '2026-12-31';
 const SAN_AUSB_CODES = ['slg','rettsan','notsan'];
 function hatQualiCode(pid, code){ const q = state.qualifikationen.find(x=>x.code===code); return !!q && pqAlle().some(pq=>pq.personId===pid && pq.qualifikationId===q.id); }
 function hatSanAusbildung(pid){ return SAN_AUSB_CODES.some(c=>hatQualiCode(pid,c)); }
+function empfehlungText(pid, q){ return q && q.code==='rke' && hatQualiCode(pid,'rke_online') ? 'Präsenzteil RKE nachholen' : (q?q.label:''); }
 function ersatzErfuellt(pid, code){
   const heute = new Date().toISOString().slice(0,10);
   if(code==='eh') return hatSanAusbildung(pid);
+  if(code==='rke_online') return hatQualiCode(pid,'rke');   // vollständiges RKE schließt den Online-Teil ein
   if(code==='hlw' && heute<=HLW_UEBERGANG_BIS){
     const q = state.qualifikationen.find(x=>x.code==='hlw');
     return !!q && state.personQualifikationen.some(pq=>pq.personId===pid && pq.qualifikationId===q.id && (pq.datum||'')>=HLW_UEBERGANG_AB);
@@ -6598,7 +6648,7 @@ function renderStartEinsatzbereit(person){
     <p style="margin:10px 0 2px"><b>Rettungshundeteams</b></p>
     <ul class="hint" style="margin:10px 0 0 -18px">${teams.sort((a,b)=>(b.voll-a.voll)||a.h.name.localeCompare(b.h.name,'de')).map(t=>`<li>${t.voll?'✅':'⚠️'} <b>${esc(t.h.name)}</b> (${esc(t.p.name)}) · ${t.sparten.map(spartenLabel).join(', ')}${t.voll?'':` <span style="color:var(--accent-ink)">– offen: ${t.offen.slice(0,4).map(x=>esc(x.q.label.split(' – ')[0])).join(', ')}${t.offen.length>4?' …':''}</span>`}${t.nachfrist&&t.nachfrist.length?` <span style="color:#a35200">– 🟠 abgelaufen, zählt noch bis 30.11.: ${t.nachfrist.map(x=>esc(x.q.label.split(' – ')[0].split(' (')[0])).join(', ')}</span>`:''}${t.hinweise&&t.hinweise.length?` <span>– ℹ️ nachholen: ${t.hinweise.map(x=>esc(x.q.label.split(' – ')[0].split(' (')[0])).join(', ')}</span>`:''}${t.ehHund?` <span style="color:#9a5b00">– ⚠ ${esc(t.ehHund)}</span>`:''}</li>`).join('') || '<li>Keine Teams mit gültiger Suchprüfung eingetragen.</li>'}</ul>
     <p style="margin:12px 0 2px"><b>Helfer/-innen</b> <span class="hint">(alle ohne gültige Modulprüfung 2)</span> <span class="hint">(${hBereit.length} von ${helfer.length} einsatzbereit)</span></p>
-    <ul class="hint" style="margin:4px 0 0 -18px">${hBereit.map(h=>`<li>✅ <b>${esc(h.p.name)}</b> <span class=\"chip\" style=\"font-size:.75em\">${esc(h.rolle)}${h.funk?' · Funk':''}</span>${h.empf.length?` <span>– empfohlen fehlt: ${h.empf.map(q=>esc(q.label.split(' – ')[0])).join(', ')}</span>`:''}${h.abgelaufenSonst.length?` <span style="color:var(--accent-ink)">· abgelaufen: ${h.abgelaufenSonst.map(q=>esc(q.label.split(' – ')[0])).join(', ')}</span>`:''}</li>`).join('') || '<li>Derzeit niemand mit vollständiger Mindestvoraussetzung.</li>'}</ul>
+    <ul class="hint" style="margin:4px 0 0 -18px">${hBereit.map(h=>`<li>✅ <b>${esc(h.p.name)}</b> <span class=\"chip\" style=\"font-size:.75em\">${esc(h.rolle)}${h.funk?' · Funk':''}</span>${h.empf.length?` <span>– empfohlen fehlt: ${h.empf.map(q=>esc(q.code==='rke'&&hatQualiCode(h.p.id,'rke_online')?'Präsenzteil RKE':q.label.split(' – ')[0])).join(', ')}</span>`:''}${h.abgelaufenSonst.length?` <span style="color:var(--accent-ink)">· abgelaufen: ${h.abgelaufenSonst.map(q=>esc(q.label.split(' – ')[0])).join(', ')}</span>`:''}</li>`).join('') || '<li>Derzeit niemand mit vollständiger Mindestvoraussetzung.</li>'}</ul>
     ${(()=>{ const n=helfer.filter(h=>h.hinweis.length).length; return n?`<p class="hint" style="margin:4px 0 0">ℹ️ Datenschutz- und UVV-Unterweisung 2026 noch nachzuholen: ${n} Person(en) – ohne Einfluss auf die Einsatzbereitschaft.</p>`:''; })()}
     ${helfer.length>hBereit.length?`<details style="margin-top:4px"><summary class="hint" style="cursor:pointer">Noch nicht einsatzbereit (${helfer.length-hBereit.length})</summary><ul class="hint" style="margin:4px 0 0 -18px">${helfer.filter(h=>!h.bereit).map(h=>`<li>⬜ ${esc(h.p.name)} – fehlt: ${h.fehlt.map(x=>esc((x.q?x.q.label:x.code).split(' – ')[0])+(x.st&&x.st.s==='abgelaufen'?' (abgelaufen)':'')).join(', ')}</li>`).join('')}</ul></details>`:''}
     ${renderFahrerEinsatzbereit()}
