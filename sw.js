@@ -2,7 +2,7 @@
    Damit bekommt jede/r nach dem Hochladen einer neuen index.html sofort die neue Version,
    und BARRY bleibt trotzdem offline nutzbar. */
 const CACHE_PREFIX = 'barry-shell-';
-const CACHE = CACHE_PREFIX + 'v26-2.25';   // bei jeder Veröffentlichung hochzählen (BARRY 2.25)
+const CACHE = CACHE_PREFIX + 'v28-2.27';   // bei jeder Veröffentlichung hochzählen (BARRY 2.27)
 // App-Dateien inkl. Icons (aus der Fassung 2.8 übernommen); fehlt eine Datei, wird nur diese übersprungen
 const SHELL = ['./', './index.html', './manifest.webmanifest', './rhs-apple-touch-icon.png', './rhs-favicon-32.png'];
 

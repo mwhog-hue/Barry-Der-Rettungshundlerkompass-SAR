@@ -3238,9 +3238,32 @@ function renderMeineFahrzeugeEinweisungen(person){
     <p class="hint" style="margin:6px 0 0">Mit Sonder- und Wegerechten: ${suwrGueltig(person.id)?'✓ SuWR gültig':'⚠ SuWR fehlt oder abgelaufen'}</p></div>`;
 }
 
+/* Trainingsorte der Staffel (Treffpunkte, Stand 04.10.2026). Feste IDs, damit Termine, Entfernungen und
+   Austauschdateien auf allen Geräten zusammenpassen. Wird einmalig je Vorlagen-Stand eingespielt. */
+const TRAININGSORTE_STAFFEL = [{"id": "ort-tp-albshausen-foersterteich", "name": "Albshausen Försterteich", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 37304 71702", "lat": "51.195509", "lon": "9.533875"}, {"id": "ort-tp-albshausen-muellers-ruh", "name": "Albshausen Müllers Ruh", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 37765 72370", "lat": "51.201485", "lon": "9.540542"}, {"id": "ort-tp-alter-hundeplatz", "name": "Alter Hundeplatz", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 36919 87473", "lat": "51.337344", "lon": "9.529994"}, {"id": "ort-tp-bad-arolsen-sued", "name": "Bad Arolsen Süd", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 02477 90354", "lat": "51.364441", "lon": "9.03558"}, {"id": "ort-tp-besse-deutschlands-mitte", "name": "Besse Deutschlands Mitte", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 25262 74571", "lat": "51.221966", "lon": "9.361743"}, {"id": "ort-tp-deponie-grossenritte", "name": "Deponie Großenritte", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 25280 77179", "lat": "51.245416", "lon": "9.362185"}, {"id": "ort-tp-elan-kassel", "name": "ELAN Kassel", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 35592 81686", "lat": "51.285392", "lon": "9.510367"}, {"id": "ort-tp-emmeluth", "name": "Emmeluth", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 35497 79868", "lat": "51.269051", "lon": "9.508824"}, {"id": "ort-tp-falkenstein", "name": "Falkenstein", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 21284 78786", "lat": "51.26003", "lon": "9.305031"}, {"id": "ort-tp-falkenstein-sand", "name": "Falkenstein Sand", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 19834 78255", "lat": "51.255307", "lon": "9.284221"}, {"id": "ort-tp-hundeplatz-niestetal", "name": "Hundeplatz Niestetal", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 40226 86819", "lat": "51.331238", "lon": "9.577405"}, {"id": "ort-tp-kesselhaken-immenhausen", "name": "Kesselhaken Immenhausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 35460 98167", "lat": "51.43359", "lon": "9.510118"}, {"id": "ort-tp-landesfeuerwehrschule-kassel", "name": "Landesfeuerwehrschule Kassel", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 29787 83099", "lat": "51.298431", "lon": "9.427254"}, {"id": "ort-tp-marbachsgraben", "name": "Marbachsgraben", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 30994 83929", "lat": "51.305831", "lon": "9.444642"}, {"id": "ort-tp-neudorf", "name": "Neudorf", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U MC 94873 01114", "lat": "51.461176", "lon": "8.9262"}, {"id": "ort-tp-parkplatz-bilsteinblick", "name": "Parkplatz Bilsteinblick", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 24334 76114", "lat": "51.235881", "lon": "9.348559"}, {"id": "ort-tp-parkplatz-gestecke", "name": "Parkplatz Gestecke", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 24366 73546", "lat": "51.212788", "lon": "9.348843"}, {"id": "ort-tp-parkplatz-kleebergstrasse-holzhausen", "name": "Parkplatz Kleebergstraße Holzhausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 37237 97634", "lat": "51.428684", "lon": "9.535624"}, {"id": "ort-tp-parkplatz-lungenfachklinik-immenhausen", "name": "Parkplatz Lungenfachklinik Immenhausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 33116 96986", "lat": "51.423113", "lon": "9.476288"}, {"id": "ort-tp-transkal-grebenstein", "name": "Transkal Grebenstein", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 26308 97361", "lat": "51.426842", "lon": "9.378403"}, {"id": "ort-tp-volkhardinghausen", "name": "Volkhardinghausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 04024 85186", "lat": "51.317962", "lon": "9.057742"}, {"id": "ort-tp-volkhardinghausen-aws", "name": "Volkhardinghausen AWS", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 02593 85841", "lat": "51.32386", "lon": "9.037213"}];
+const ORTE_VORLAGE_STAND = 'rhs-kassel-2026-10-04';
+function ortNameNorm(n){ return String(n||'').toLowerCase().replace(/^\s*tp[\s_:.-]+/,'').replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,' ').trim(); }
+function ortNameBereinigen(n){ let x=String(n||'').replace(/^\s*TP[\s_:.-]+/i,'').replace(/[_\s]+/g,' ').trim(); return x ? x.charAt(0).toUpperCase()+x.slice(1) : ''; }
+function ortIdUmschreiben(s, alt, neu){
+  if(!alt || alt===neu) return;
+  (s.termine||[]).forEach(t=>{ if(t.ortId===alt) t.ortId=neu; });
+  (s.rhEintraege||[]).forEach(e=>{ if(e.ortId===alt) e.ortId=neu; });
+  (s.personen||[]).forEach(p=>{ if(p.ortEntfernungen && p.ortEntfernungen[alt]){ if(!p.ortEntfernungen[neu]) p.ortEntfernungen[neu]=p.ortEntfernungen[alt]; delete p.ortEntfernungen[alt]; } });
+}
+function orteVorlageEinspielen(s){
+  if(!Array.isArray(s.orte)) s.orte=[];
+  s.meta=s.meta||{}; if(s.meta.orteVorlage===ORTE_VORLAGE_STAND) return 0;
+  let n=0;
+  TRAININGSORTE_STAFFEL.forEach(v=>{
+    const o=s.orte.find(x=>x.id===v.id) || s.orte.find(x=>ortNameNorm(x.name)===ortNameNorm(v.name));
+    if(o){ if(o.id!==v.id){ ortIdUmschreiben(s,o.id,v.id); o.id=v.id; } if(!o.lat||!o.lon){ o.lat=v.lat; o.lon=v.lon; } if(!o.hinweis) o.hinweis=v.hinweis; if(!o.art) o.art=v.art; }
+    else { s.orte.push(Object.assign({}, v, {geometrie:null, erstelltVon:'vorlage'})); n++; }
+  });
+  s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
+}
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.25';
-const BARRY_APP_STAND = '03.10.2026';
+const BARRY_APP_VERSION = '2.27';
+const BARRY_APP_STAND = '04.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
 // Bei künftigen strukturellen Änderungen am state-Objekt: Versionsnummer hochzählen und
@@ -3286,6 +3309,7 @@ function migriereState(s){
   ['personFahrerlaubnisse','fahrerlaubnisKontrollen','fahrerlaubnisKlassen','personStammdatenDrk','stammdatenAbweichungen','zusatzKurse','personZusatzKurse'].forEach(k=>{ if(!Array.isArray(s[k])) s[k]=[]; });
   if(!Array.isArray(s.fahrzeuge)){ s.fahrzeuge = []; }
   if(!s.meta.fahrzeugeVorbelegt){ FAHRZEUGE_STANDARD.forEach(f=>{ if(!s.fahrzeuge.some(x=>x.rufname===f.rufname)) s.fahrzeuge.push({id:uid(), ...f, kennzeichen:''}); }); s.meta.fahrzeugeVorbelegt=true; }
+  orteVorlageEinspielen(s);
   s.organisation = s.organisation || {}; if(!s.organisation.leitungEmail) s.organisation.leitungEmail = 'Michaela.Weisse@rotkreuz.team';
   if(s.organisation.kmSatz===undefined) s.organisation.kmSatz = 0.32;
   s.hunde.forEach(h=>{
@@ -3341,6 +3365,7 @@ function seedState(){
   });
   s.qualifikationen = QUALIFIKATIONEN_KATALOG_VORSCHLAG.map(({aliase, ...q})=>({id:uid(), ...q}));
   s.meta = s.meta || {}; s.meta.qualiKatalogVersion = QUALI_KATALOG_VERSION;
+  orteVorlageEinspielen(s);
   return s;
 }
 
@@ -4982,10 +5007,69 @@ function renderTabOrte(){
       <div class="field" style="margin-bottom:0"><label>Hinweis / Treffpunkt</label><input id="ort-hinweis" placeholder="z. B. Waldparkplatz, Schranke, Zufahrt"></div>
       <button class="btn btn-primary" id="btn-ort-anlegen" style="margin-top:10px">Ort / Gelände anlegen</button>
     </div>
+    <div class="card card-pad" style="margin-bottom:16px">
+      <h3>Mehrere Orte aus Datei einlesen</h3>
+      <p class="hint">Wegpunkte aus Gaia GPS, CalTopo oder Google Earth (GPX/KML) oder eine Liste (CSV mit Name, Breite, Länge). Mehrere Dateien auf einmal sind möglich. Das Kürzel „TP“ am Namensanfang wird entfernt; gleichnamige Orte werden aktualisiert statt doppelt angelegt.</p>
+      <input type="file" id="orte-sammel-datei" multiple accept=".gpx,.kml,.csv,.txt,.json,application/gpx+xml,application/vnd.google-earth.kml+xml,text/xml,application/xml,text/csv,application/json" style="display:none">
+      <div class="row" style="gap:6px;flex-wrap:wrap">
+        <button class="btn btn-sm" id="orte-sammel-btn">📥 Datei(en) auswählen</button>
+        <button class="btn btn-sm btn-ghost" id="orte-vorlage-btn">↻ Staffel-Trainingsorte (${TRAININGSORTE_STAFFEL.length}) ergänzen</button>
+      </div>
+    </div>
     ${zeilen}
   `;
 }
+function orteAusDatei(text, dateiname){
+  const t=String(text||'').replace(/^\uFEFF/,'').trim(); const erg=[];
+  const zahl=v=>{ const x=parseFloat(String(v||'').replace(',','.')); return isFinite(x)?x:null; };
+  const add=(name,lat,lon,hinweis)=>{ name=ortNameBereinigen(name); lat=zahl(lat); lon=zahl(lon); if(name && lat!=null && lon!=null && Math.abs(lat)<=90 && Math.abs(lon)<=180) erg.push({name, lat:String(lat), lon:String(lon), hinweis:hinweis||''}); };
+  if(t.startsWith('{')||t.startsWith('[')){
+    const j=JSON.parse(t); const liste=Array.isArray(j)?j:(j.orte||[]);
+    liste.forEach(o=>add(o.name, o.lat, o.lon, o.hinweis)); return erg;
+  }
+  if(t.startsWith('<')){
+    const doc=new DOMParser().parseFromString(t,'application/xml');
+    if(doc.querySelector('parsererror')) throw new Error('Die Datei ist keine gültige GPX- oder KML-Datei.');
+    const kind=(el,n)=>{ const x=el.getElementsByTagNameNS('*',n)[0]; return x?x.textContent.trim():''; };
+    [...doc.getElementsByTagNameNS('*','wpt')].forEach(w=>add(kind(w,'name'), w.getAttribute('lat'), w.getAttribute('lon'), kind(w,'desc')));
+    [...doc.getElementsByTagNameNS('*','Placemark')].forEach(pm=>{ const pt=pm.getElementsByTagNameNS('*','Point')[0]; if(!pt) return;
+      const c=kind(pt,'coordinates').split(/[\s]+/)[0].split(','); add(kind(pm,'name'), c[1], c[0], kind(pm,'description')); });
+    return erg;
+  }
+  const zeilen=t.split(/\r?\n/).filter(z=>z.trim()); if(!zeilen.length) return erg;
+  const trenn=(zeilen[0].match(/;/g)||[]).length ? ';' : (zeilen[0].match(/\t/)?'\t':',');
+  const kopf=zeilen[0].split(trenn).map(x=>x.trim().toLowerCase());
+  const iName=kopf.findIndex(k=>/^(name|ort|bezeichnung|titel)/.test(k));
+  const iLat=kopf.findIndex(k=>/^(breite|lat|latitude|breitengrad|y)\b/.test(k));
+  const iLon=kopf.findIndex(k=>/^(länge|laenge|lon|lng|longitude|längengrad|x)\b/.test(k));
+  const mitKopf = iName>=0 && iLat>=0 && iLon>=0;
+  (mitKopf?zeilen.slice(1):zeilen).forEach(z=>{ const f=z.split(trenn).map(x=>x.trim().replace(/^"|"$/g,''));
+    if(mitKopf) add(f[iName], f[iLat], f[iLon]); else add(f[0], f[1], f[2]); });
+  return erg;
+}
+function orteUebernehmen(liste){
+  let neu=0, aktual=0;
+  liste.forEach(x=>{
+    const v=state.orte.find(o=>ortNameNorm(o.name)===ortNameNorm(x.name));
+    if(v){ v.lat=x.lat; v.lon=x.lon; if(!v.hinweis && x.hinweis) v.hinweis=x.hinweis; aktual++; }
+    else { state.orte.push({id:uid(), name:x.name, art:'Trainingsgelände', adresse:'', lat:x.lat, lon:x.lon, hinweis:x.hinweis||'', geometrie:null, erstelltVon:aktuellePerson()?.id}); neu++; }
+  });
+  return {neu, aktual};
+}
 function bindTabOrte(){
+  const sBtn=document.getElementById('orte-sammel-btn'), sDat=document.getElementById('orte-sammel-datei');
+  if(sBtn && sDat){ sBtn.onclick=()=>sDat.click();
+    sDat.onchange=async e=>{ const dateien=[...e.target.files]; e.target.value=''; if(!dateien.length) return;
+      const gefunden=[], fehler=[];
+      for(const d of dateien){ try{ const l=orteAusDatei(await d.text(), d.name); if(!l.length) fehler.push(d.name+' (keine Punkte)'); l.forEach(x=>{ if(!gefunden.some(g=>ortNameNorm(g.name)===ortNameNorm(x.name))) gefunden.push(x); }); }catch(err){ fehler.push(d.name+' ('+err.message+')'); } }
+      if(!gefunden.length){ alert('Keine Orte gefunden.'+(fehler.length?'\n'+fehler.join('\n'):'')); return; }
+      const vorh=gefunden.filter(x=>state.orte.some(o=>ortNameNorm(o.name)===ortNameNorm(x.name)));
+      if(!confirm(`${gefunden.length} Ort(e) gefunden:\n\n${gefunden.map(x=>'• '+x.name+(vorh.includes(x)?' (wird aktualisiert)':'')).join('\n')}${fehler.length?'\n\nNicht lesbar: '+fehler.join(', '):''}\n\nÜbernehmen?`)) return;
+      const r=orteUebernehmen(gefunden); speichereState(); zeigeToast(`${r.neu} Ort(e) neu angelegt, ${r.aktual} aktualisiert.`); render(); };
+  }
+  const vBtn=document.getElementById('orte-vorlage-btn');
+  if(vBtn) vBtn.onclick=()=>{ if(!confirm('Fehlende Staffel-Trainingsorte (Treffpunkte, Stand 04.10.2026) ergänzen? Vorhandene Orte bleiben erhalten, nur fehlende Koordinaten werden nachgetragen.')) return;
+    state.meta.orteVorlage=''; const n=orteVorlageEinspielen(state); speichereState(); zeigeToast(n?`${n} Trainingsort(e) ergänzt.`:'Alle Staffel-Trainingsorte sind bereits vorhanden.'); render(); };
   const coordsInput = document.getElementById('ort-coords');
   if(coordsInput) coordsInput.oninput = ()=>{
     const m = coordsInput.value.match(/(-?\d+(?:\.\d+)?)[,;\s]+(-?\d+(?:\.\d+)?)/);
@@ -6453,26 +6537,36 @@ function eigenerNachweisHinzufuegen(person, qualId, datum, hundId, sparte, plake
   speichereState(); return e;
 }
 function offeneMeldungen(personId){ return state.personQualifikationen.filter(pq=>pq.personId===personId && pq.vomMitglied && !pq.bestaetigt); }
+function entfernungenZumMelden(p){
+  const e=p.ortEntfernungen||{};
+  return Object.entries(e).filter(([id,v])=>v && v.km!=null && (!p.entfernungenGemeldetAm || (v.am||'')>p.entfernungenGemeldetAm))
+    .map(([id,v])=>({ortId:id, ortName:(state.orte.find(o=>o.id===id)||{}).name||'', km:v.km, art:v.art||'', am:v.am||''}));
+}
+function zusagenZumMelden(p){
+  return (state.ruckmeldungen||[]).filter(r=>r.personId===p.id && (!p.zusagenGemeldetAm || (r.aktualisiertAm||'')>p.zusagenGemeldetAm))
+    .map(r=>({terminId:r.terminId, status:r.status, km:r.km??null, stunden:r.stunden??null, aktualisiertAm:r.aktualisiertAm||''}));
+}
 function meldungDaten(person){
   return {exportInfo:{format:'barry-mitglied-meldung', app:'BARRY', appVersion:BARRY_APP_VERSION, von:person.name, personId:person.id, exportiertAm:nowIso()},
     nachweise: offeneMeldungen(person.id).map(pq=>{ const q=state.qualifikationen.find(x=>x.id===pq.qualifikationId)||{}; return {...pq, code:q.code||'', label:q.label||''}; }),
     kurswuensche: (state.kurswuensche||[]).filter(w=>w.personId===person.id && w.status==='offen'),
-    kontakt: kontaktOffen(person) ? Object.fromEntries(KONTAKT_FELDER.map(([k])=>[k, person[k]||''])) : null};
+    kontakt: kontaktOffen(person) ? Object.fromEntries(KONTAKT_FELDER.map(([k])=>[k, person[k]||''])) : null,
+    entfernungen: entfernungenZumMelden(person), zusagen: zusagenZumMelden(person)};
 }
 async function meldungPerMail(person){
   const daten=meldungDaten(person);
-  if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
+  if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt && !daten.entfernungen.length && !daten.zusagen.length){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
   const name=`BARRY_Meldung_${person.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}_${new Date().toISOString().slice(0,10)}.json`;
   const mdatei = await meldungsDatei(person, daten, name); if(!mdatei) return;
   const ok = await dateiPerMail(mdatei, `BARRY – neue Angaben von ${person.name}`, `Neue Angaben von ${person.name}: ${daten.nachweise.length} Nachweis(e), ${daten.kurswuensche.length} Kurswunsch/-wünsche.`);
-  if(ok){ offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); speichereState(); render(); }
+  if(ok){ offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); if(daten.entfernungen.length) person.entfernungenGemeldetAm=nowIso(); if(daten.zusagen.length) person.zusagenGemeldetAm=nowIso(); speichereState(); render(); }
 }
 async function meldungSenden(person){
   const daten=meldungDaten(person);
-  if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
+  if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt && !daten.entfernungen.length && !daten.zusagen.length){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
   const name=`BARRY_Meldung_${person.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}_${new Date().toISOString().slice(0,10)}.json`;
   const datei=await meldungsDatei(person, daten, name); if(!datei) return;
-  offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); speichereState();
+  offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); if(daten.entfernungen.length) person.entfernungenGemeldetAm=nowIso(); if(daten.zusagen.length) person.zusagenGemeldetAm=nowIso(); speichereState();
   try{ if(navigator.canShare && navigator.canShare({files:[datei]})){ await navigator.share({files:[datei], title:'BARRY – meine Angaben', text:`Neue Angaben von ${person.name} für BARRY (${daten.nachweise.length} Nachweis(e)).`}); zeigeToast('Meldung geteilt.'); render(); return; } }catch(e){ if(e&&e.name==='AbortError'){ render(); return; } }
   const url=URL.createObjectURL(new Blob([datei],{type:datei.type||'application/json'})); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
   zeigeToast('Meldung gespeichert – bitte die Datei an die Staffelleitung schicken.'); render();
@@ -6487,7 +6581,7 @@ function meldungenEinlesen(files){
       const t=await barryDateiLesen(f, `Meldung${p?' von '+esc(p.name):''}: Für diese Person ist kein passendes Startpasswort gespeichert. Bitte das Passwort eingeben, mit dem sie die Meldung geschützt hat.`, p && p.startPasswort);
       dat.push(t?JSON.parse(t):null); }catch(e){ dat.push(null); } }
     return dat; })().then(dat=>{
-    const eintraege=[], wuensche=[], fehler=[], kontakte=[];
+    const eintraege=[], wuensche=[], fehler=[], kontakte=[], entfernungen=[], zusagen=[];
     dat.forEach((d,i)=>{
       if(!d || !d.exportInfo || d.exportInfo.format!=='barry-mitglied-meldung'){ fehler.push(liste[i].name); return; }
       const person=state.personen.find(p=>p.id===d.exportInfo.personId) || state.personen.find(p=>p.name===d.exportInfo.von);
@@ -6498,9 +6592,11 @@ function meldungenEinlesen(files){
         eintraege.push({person, n, q, doppelt, uebernehmen: !doppelt});
       });
       (d.kurswuensche||[]).forEach(w=>{ if(!(state.kurswuensche||[]).some(x=>x.id===w.id)) wuensche.push({person, w}); });
+      if((d.entfernungen||[]).length) entfernungen.push({person, liste:d.entfernungen.map(x=>Object.assign({}, x, {ort: state.orte.find(o=>o.id===x.ortId) || state.orte.find(o=>ortNameNorm(o.name)===ortNameNorm(x.ortName))})).filter(x=>x.ort)});
+      if((d.zusagen||[]).length) zusagen.push({person, liste:d.zusagen.filter(z=>state.termine.some(t=>t.id===z.terminId))});
       if(d.kontakt){ const diff=KONTAKT_FELDER.filter(([k])=>(d.kontakt[k]||'')!==(person[k]||'')).map(([k,l])=>({k,l,alt:person[k]||'',neu:d.kontakt[k]||''})); if(diff.length) kontakte.push({person, diff}); }
     });
-    meldungVorschau={eintraege, wuensche, fehler, kontakte}; modal={type:'meldungImport'}; render();
+    meldungVorschau={eintraege, wuensche, fehler, kontakte, entfernungen:entfernungen.filter(x=>x.liste.length), zusagen:zusagen.filter(x=>x.liste.length)}; modal={type:'meldungImport'}; render();
   });
 }
 function renderModalMeldungImport(){
@@ -6515,6 +6611,8 @@ function renderModalMeldungImport(){
         <span><b>${esc(e.person.name)}</b>: ${esc(e.q?e.q.label:(e.n.label||'unbekannte Ausbildung'))}${e.n.datum?' · '+fmtDatum(e.n.datum):' · Datum unbekannt'}${e.n.hundId?' · 🐕 '+esc((state.hunde.find(h=>h.id===e.n.hundId)||{}).name||''):''}${e.n.sparte?' · '+esc(spartenLabel(e.n.sparte)):''}${e.n.plakette?' · Plakette '+esc(e.n.plakette):''}
         ${e.doppelt?'<br><span class="hint">bereits vorhanden</span>':''}${!e.q?'<br><span class="hint">nicht im Katalog – bitte manuell eintragen</span>':''}</span></label>`).join('') || '<p class="hint">Keine neuen Nachweise.</p>'}
       ${(v.kontakte||[]).map((k,i)=>`<label class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-top:1px dashed var(--line);cursor:pointer"><input type="checkbox" data-mk="${i}" checked style="margin-top:3px"><span><b>${esc(k.person.name)}</b> – Kontaktdaten: ${k.diff.map(d=>`${esc(d.l)}: <s>${esc(d.alt||'–')}</s> → ${esc(d.neu||'–')}`).join(' · ')}</span></label>`).join('')}
+      ${(v.entfernungen||[]).map((k,i)=>`<label class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-top:1px dashed var(--line);cursor:pointer"><input type="checkbox" data-me="${i}" checked style="margin-top:3px"><span><b>${esc(k.person.name)}</b> – Entfernung zu ${k.liste.length} Trainingsort(en): ${k.liste.map(x=>`${esc(x.ort.name)} ${String(x.km).replace('.',',')} km`).join(' · ')}</span></label>`).join('')}
+      ${(v.zusagen||[]).map((k,i)=>`<label class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-top:1px dashed var(--line);cursor:pointer"><input type="checkbox" data-mz="${i}" checked style="margin-top:3px"><span><b>${esc(k.person.name)}</b> – ${k.liste.length} Rückmeldung(en) zu Terminen, davon ${k.liste.filter(z=>z.km!=null).length} mit gefahrenen Km (für den Dienstnachweis)</span></label>`).join('')}
       ${v.wuensche.length?`<p style="margin:12px 0 4px"><b>Kurswünsche (${v.wuensche.length})</b> – werden unter Auswertung → Kurswünsche übernommen:</p><ul class="hint" style="margin:0 0 0 -18px">${v.wuensche.map(x=>`<li>${esc(x.person.name)}: ${esc(kursLabel({code:x.w.kursCode}))}</li>`).join('')}</ul>`:''}
     </div>
     <div class="modal-foot"><button class="btn btn-ghost" id="m-abbrechen">Abbrechen</button><button class="btn btn-primary" id="m-meldung-ok">Bestätigen und übernehmen</button></div>
@@ -6532,6 +6630,12 @@ function bindModalMeldungImport(){
       n++; });
     state.kurswuensche=state.kurswuensche||[]; v.wuensche.forEach(x=>state.kurswuensche.push(x.w));
     document.querySelectorAll('[data-mk]').forEach(cb=>{ if(!cb.checked) return; const k=v.kontakte[+cb.dataset.mk]; k.diff.forEach(d=>{ k.person[d.k]=d.neu; }); n++; });
+    document.querySelectorAll('[data-me]').forEach(cb=>{ if(!cb.checked) return; const k=v.entfernungen[+cb.dataset.me]; k.person.ortEntfernungen=k.person.ortEntfernungen||{};
+      k.liste.forEach(x=>{ const alt=k.person.ortEntfernungen[x.ort.id]; if(!alt || !alt.am || (x.am||'')>=alt.am) k.person.ortEntfernungen[x.ort.id]={km:x.km, art:x.art||'gemeldet', am:x.am||nowIso()}; }); n++; });
+    document.querySelectorAll('[data-mz]').forEach(cb=>{ if(!cb.checked) return; const k=v.zusagen[+cb.dataset.mz];
+      k.liste.forEach(z=>{ let r=rueckmeldungFuer(z.terminId, k.person.id);
+        if(!r){ state.ruckmeldungen.push({id:uid(), terminId:z.terminId, personId:k.person.id, status:z.status, km:z.km, stunden:z.stunden, aktualisiertAm:z.aktualisiertAm||nowIso()}); }
+        else if(!r.aktualisiertAm || (z.aktualisiertAm||'')>=r.aktualisiertAm){ Object.assign(r, {status:z.status, km:z.km, stunden:z.stunden, aktualisiertAm:z.aktualisiertAm||nowIso()}); } }); n++; });
     speichereState(); meldungVorschau=null;
     zeigeToast(`${n} Nachweis(e) bestätigt${v.wuensche.length?`, ${v.wuensche.length} Kurswunsch/-wünsche übernommen`:''}. Tipp: Stand-Update an die Person zurückschicken.`);
     schliesseModal();
@@ -6816,6 +6920,13 @@ function ortFuerTermin(t){
   return null;
 }
 function meineEntfernung(person, ortId){ const e=(person.ortEntfernungen||{})[ortId]; return e && e.km!=null ? e : null; }
+function kmFuerDienst(p, t, a){
+  if(a && a.km!=null) return {km:a.km, quelle:'erfasst'};
+  const r = t ? rueckmeldungFuer(t.id, p.id) : null; if(r && r.km!=null) return {km:r.km, quelle:'Zusage'};
+  const v = t ? kmVorschlagFuerTermin(p, (a && a.ortId) ? Object.assign({}, t, {ortId:a.ortId}) : t) : null; if(v) return {km:v.km, quelle:'Entfernung '+v.ort.name};
+  if(p.kmStandard) return {km:Math.round(p.kmStandard*2*10)/10, quelle:'Standard-Km'};
+  return {km:null, quelle:''};
+}
 function kmVorschlagFuerTermin(person, t){ const o=ortFuerTermin(t); const e=o?meineEntfernung(person,o.id):null; return e ? {km:Math.round(e.km*2*10)/10, ort:o} : null; }
 async function geocodeAdresse(text){
   const url='https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=de&q='+encodeURIComponent(text);
@@ -6841,6 +6952,7 @@ function renderOrganisationOrte(person){
     <div class="card card-pad" style="margin-bottom:12px">
       <p class="hint" style="margin:0 0 6px"><b>Deine Adresse:</b> ${adr?esc(adr):'noch nicht hinterlegt (🎓 Mein Stand → Meine Kontaktdaten)'}</p>
       <button class="btn btn-sm" id="orte-alle-berechnen" ${adr&&state.orte.length?'':'disabled'}>🌐 Alle Entfernungen online berechnen</button>
+      ${!darfTrainingBearbeiten(person)?`<button class="btn btn-sm btn-ghost" id="orte-melden" style="margin-left:6px">📤 Entfernungen an die Leitung senden</button>`:''}
       <p class="hint" style="margin:6px 0 0">Die Online-Berechnung überträgt deine Adresse und die Adressen der Trainingsorte an die freien Dienste von OpenStreetMap (Adresssuche Nominatim, Routenberechnung OSRM). Wer das nicht möchte, trägt die Kilometer einfach selbst ein.</p>
       ${istLeitungOderAdmin(person)?`<div class="row" style="gap:6px;margin-top:10px;align-items:center"><label class="hint" style="color:var(--ink)">Kilometersatz der Staffel (€ je km):</label><input id="orte-kmsatz" type="number" step="0.01" min="0" value="${satz??''}" style="width:90px"><button class="btn btn-sm" id="orte-kmsatz-ok">Speichern</button></div>`:''}
     </div>
@@ -6859,6 +6971,7 @@ function bindOrganisationOrte(person){
     if(inp.value==='') delete person.ortEntfernungen[inp.dataset.ortKm]; else person.ortEntfernungen[inp.dataset.ortKm]={km:parseFloat(inp.value), art:'selbst eingetragen', am:nowIso()};
     speichereState(); render(); });
   const ks=document.getElementById('orte-kmsatz-ok'); if(ks) ks.onclick=()=>{ const v=document.getElementById('orte-kmsatz').value; state.organisation.kmSatz = v===''?null:parseFloat(v); speichereState(); zeigeToast('Kilometersatz gespeichert.'); render(); };
+  const om=document.getElementById('orte-melden'); if(om) om.onclick=()=>meldungSenden(person);
   const alle=document.getElementById('orte-alle-berechnen');
   if(alle) alle.onclick=async()=>{
     if(!navigator.onLine){ alert('Dafür ist eine Internetverbindung nötig.'); return; }
@@ -7238,6 +7351,7 @@ function renderModal(){
   if(modal.type==='terminImport') return renderModalTerminImport();
   if(modal.type==='trainingskarte') return renderModalTrainingskarte();
   if(modal.type==='meldungImport') return renderModalMeldungImport();
+  if(modal.type==='hiorgImport') return renderModalHiorgImport();
   if(modal.type==='bereicheWahl') return renderModalBereicheWahl();
   if(modal.type==='vorpruefung') return renderModalVorpruefung();
   if(modal.type==='qualifikation') return renderModalQualifikation();
@@ -7268,6 +7382,7 @@ function bindModal(person){
   if(modal.type==='terminImport') return bindModalTerminImport();
   if(modal.type==='trainingskarte') return bindModalTrainingskarte();
   if(modal.type==='meldungImport') return bindModalMeldungImport();
+  if(modal.type==='hiorgImport') return bindModalHiorgImport();
   if(modal.type==='bereicheWahl') return bindModalBereicheWahl();
   if(modal.type==='vorpruefung') return bindModalVorpruefung();
   if(modal.type==='qualifikation') return bindModalQualifikation();
@@ -8440,9 +8555,9 @@ function bindZusageButtons(person){
     };
   });
   document.querySelectorAll('[data-rm-km]').forEach(inp=>{
-    inp.onchange = ()=>{ const r = rueckmeldungFuer(inp.dataset.rmKm, person.id); if(r){ r.km = inp.value?parseFloat(inp.value):null; speichereState(); } };
+    inp.onchange = ()=>{ const r = rueckmeldungFuer(inp.dataset.rmKm, person.id); if(r){ r.km = inp.value?parseFloat(inp.value):null; r.aktualisiertAm = nowIso(); speichereState(); } };
   });
-  document.querySelectorAll('[data-rm-km-vorschlag]').forEach(b=>b.onclick=()=>{ const r=rueckmeldungFuer(b.dataset.rmKmVorschlag, person.id); if(r){ r.km=parseFloat(b.dataset.km); speichereState(); render(); } });
+  document.querySelectorAll('[data-rm-km-vorschlag]').forEach(b=>b.onclick=()=>{ const r=rueckmeldungFuer(b.dataset.rmKmVorschlag, person.id); if(r){ r.km=parseFloat(b.dataset.km); r.aktualisiertAm=nowIso(); speichereState(); render(); } });
   document.querySelectorAll('[data-rm-stunden]').forEach(inp=>{
     inp.onchange = ()=>{ const r = rueckmeldungFuer(inp.dataset.rmStunden, person.id); if(r){ r.stunden = inp.value?parseFloat(inp.value):null; speichereState(); } };
   });
@@ -8567,13 +8682,13 @@ function terminplanAnalysieren(daten){
     const treffer = state.termine.find(x=>x.id===g.id) || (g.titel && g.beginn ? state.termine.find(x=>(x.sichtbarkeit||'staff')==='staff' && terminSchluessel(x)===terminSchluessel(g)) : null);
     if(treffer) loeschen.push({lok:treffer, g});
   });
-  const orteAenderung=(daten.orte||[]).filter(o=>{ const v=state.orte.find(x=>x.id===o.id); return !v || ['name','art','adresse','lat','lon','hinweis'].some(k=>String(v[k]||'')!==String(o[k]||'')); });
+  const orteAenderung=(daten.orte||[]).filter(o=>{ const v=state.orte.find(x=>x.id===o.id) || state.orte.find(x=>ortNameNorm(x.name)===ortNameNorm(o.name)); return !v || ['name','art','adresse','lat','lon','hinweis'].some(k=>String(v[k]||'')!==String(o[k]||'')); });
    return {neu, aktualisiert, unveraendert, uebersprungen, loeschen, geloeschteListe: daten.geloeschteTermine||[], info: daten.exportInfo, orte: daten.orte||[], orteAenderung, kmSatz: daten.kmSatz};
 }
 function terminplanUebernehmen(a){
   if(a.kmSatz!==undefined && a.kmSatz!==null) state.organisation.kmSatz = a.kmSatz;
   if(a.kmSatz!=null && !isNaN(a.kmSatz)) state.organisation.kmSatz = a.kmSatz;
-  (a.orte||[]).forEach(o=>{ const vorh=state.orte.find(x=>x.id===o.id); if(vorh) Object.assign(vorh, {name:o.name, art:o.art, adresse:o.adresse, lat:o.lat, lon:o.lon, hinweis:o.hinweis}); else state.orte.push({...o, geometrie:null}); });
+  (a.orte||[]).forEach(o=>{ const vorh=state.orte.find(x=>x.id===o.id) || state.orte.find(x=>ortNameNorm(x.name)===ortNameNorm(o.name)); if(vorh){ if(o.id && vorh.id!==o.id){ ortIdUmschreiben(state, vorh.id, o.id); vorh.id=o.id; } Object.assign(vorh, {name:o.name, art:o.art, adresse:o.adresse, lat:o.lat, lon:o.lon, hinweis:o.hinweis}); } else state.orte.push({...o, geometrie:null}); });
   a.neu.forEach(t=>state.termine.push(Object.assign({}, t)));
   a.aktualisiert.forEach(({lok,t})=>{ const {planungsnotiz, ...rest} = t; Object.assign(lok, rest); });
   const ids = new Set(a.loeschen.map(x=>x.lok.id));
@@ -9114,19 +9229,21 @@ function bindModalAnwesenheit(){
       modal.draftStatus[pid] = (modal.draftStatus[pid]===wert) ? undefined : wert;
       if(modal.draftStatus[pid]==='anwesend' && !modal.draftKm[pid]){
         const p = state.personen.find(x=>x.id===pid);
-        if(p && p.kmStandard){ modal.draftKm[pid] = String(Math.round(p.kmStandard*2*10)/10); }
+        if(p){ const v=kmFuerDienst(p, state.termine.find(x=>x.id===modal.terminId), null); if(v.km!=null) modal.draftKm[pid] = String(v.km); }
       }
       render();
     };
   });
   document.getElementById('m-speichern').onclick = ()=>{
     merkeKmEingaben();
+    const bisher = state.anwesenheiten.filter(a=>a.terminId===modal.terminId);
     state.anwesenheiten = state.anwesenheiten.filter(a=>a.terminId!==modal.terminId);
     Object.entries(modal.draftStatus).forEach(([personId,status])=>{
       if(!status) return;
       const kmRoh = modal.draftKm[personId];
       const km = kmRoh ? parseFloat(kmRoh) : null;
-      state.anwesenheiten.push({id:uid(), terminId:modal.terminId, personId, status, km:(km!=null && !isNaN(km))?km:null});
+      const alt = bisher.find(a=>a.personId===personId) || {};
+      state.anwesenheiten.push(Object.assign({}, alt, {id:alt.id||uid(), terminId:modal.terminId, personId, status, km:(km!=null && !isNaN(km))?km:null}));
     });
     speichereState(); zeigeToast('Anwesenheit gespeichert.'); schliesseModal();
   };
@@ -9139,21 +9256,187 @@ function renderTabAnwesenheit(){
   if(jahre.length===0) jahre.push(anwesenheitJahrFilter);
   const terminIdsImJahr = state.termine.filter(t=> new Date(t.beginn).getFullYear()===anwesenheitJahrFilter).map(t=>t.id);
   const aktive = state.personen.filter(p=>p.status!=='inaktiv');
+  const staffTermineImJahr = state.termine.filter(t=>terminIdsImJahr.includes(t.id) && (t.sichtbarkeit||'staff')==='staff').length;
   const zeilen = aktive.map(p=>{
     const eintraege = state.anwesenheiten.filter(a=>a.personId===p.id && terminIdsImJahr.includes(a.terminId));
     const anwesend = eintraege.filter(e=>e.status==='anwesend').length;
     const entschuldigt = eintraege.filter(e=>e.status==='entschuldigt').length;
     const unentschuldigt = eintraege.filter(e=>e.status==='unentschuldigt').length;
-    const km = eintraege.reduce((sum,e)=> sum + (e.km||0), 0);
-    return `<tr><td>${esc(p.name)}</td><td>${anwesend}</td><td>${entschuldigt}</td><td>${unentschuldigt}</td><td>${terminIdsImJahr.length}</td><td>${km?km.toLocaleString('de-DE'):'–'}</td><td><button class="btn btn-sm btn-ghost" data-dn-person="${p.id}">Dienstnachweis (Excel)</button></td></tr>`;
-  }).join('') || `<tr><td colspan="7" class="hint">Keine Personen im Bestand.</td></tr>`;
+    const km = Math.round(eintraege.filter(e=>e.status==='anwesend').reduce((sum,e)=> sum + (kmFuerDienst(p, state.termine.find(t=>t.id===e.terminId), e).km||0), 0)*10)/10;
+    const std = Math.round(eintraege.filter(e=>e.status==='anwesend').reduce((sum,e)=> sum + (dienstStunden(state.termine.find(t=>t.id===e.terminId), e)||0), 0)*100)/100;
+    return `<tr><td>${esc(p.name)}</td><td>${anwesend}</td><td>${entschuldigt}</td><td>${unentschuldigt}</td><td>${staffTermineImJahr}</td><td>${std?std.toLocaleString('de-DE'):'–'}</td><td>${km?km.toLocaleString('de-DE'):'–'}</td><td><button class="btn btn-sm btn-ghost" data-dn-person="${p.id}">Dienstnachweis (Excel)</button></td></tr>`;
+  }).join('') || `<tr><td colspan="8" class="hint">Keine Personen im Bestand.</td></tr>`;
   return `
     <div class="spread" style="margin-bottom:14px">
-      <p class="hint">Grundlage für den Jahres-Dienstnachweis inkl. Kilometern für die Spendenquittung. Erfasst wird je Termin unter Organisation & Termine.</p>
+      <p class="hint">Grundlage für den Jahres-Dienstnachweis inkl. Kilometern (Hin- und Rückfahrt) für die Spendenquittung. Erfasst wird je Termin unter Organisation & Termine. Fehlen dort Kilometer, nimmt BARRY der Reihe nach: Km aus der Zusage des Mitglieds, seine Entfernung zum Trainingsort × 2, zuletzt seine Standard-Km × 2.</p>
       <select id="af-jahr" style="width:auto">${jahre.map(j=>`<option value="${j}" ${j===anwesenheitJahrFilter?'selected':''}>${j}</option>`).join('')}</select>
     </div>
-    <div class="card table-scroll"><table><thead><tr><th>Person</th><th>Anwesend</th><th>Entschuldigt</th><th>Unentschuldigt</th><th>Termine gesamt</th><th>Km gesamt</th><th></th></tr></thead><tbody>${zeilen}</tbody></table></div>
+    <div class="card table-scroll"><table><thead><tr><th>Person</th><th>Anwesend</th><th>Entschuldigt</th><th>Unentschuldigt</th><th>Staffeltermine</th><th>Stunden</th><th>Km gesamt</th><th></th></tr></thead><tbody>${zeilen}</tbody></table></div>
+    <div class="card card-pad" style="margin-top:14px">
+      <h3>⏱️ Helferstunden aus HiOrg einlesen</h3>
+      <p class="hint">HiOrg-Export „Helferstunden“ (.xls/.xlsx) oder eine CSV-Datei einer Person. BARRY ordnet jede Zeile einem vorhandenen Staffeltermin zu (gleicher Tag, Beginn bis 1 Stunde abweichend) oder legt einen persönlichen Termin an, schlägt das Trainings- bzw. Einsatzgebiet vor und übernimmt die HiOrg-Stunden in den Dienstnachweis. Vor dem Übernehmen siehst du jede Zeile in einer Vorschau. Erneutes Einlesen aktualisiert, statt doppelt anzulegen.</p>
+      <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
+        <select id="hi-person" style="width:auto">${state.personen.filter(p=>p.status!=='inaktiv').slice().sort((a,b)=>a.name.localeCompare(b.name,'de')).map(p=>`<option value="${p.id}" ${p.id===(aktuellePerson()||{}).id?'selected':''}>${esc(p.name)}</option>`).join('')}</select>
+        <input type="file" id="hi-datei" accept=".xls,.xlsx,.csv" style="display:none">
+        <button class="btn btn-sm" id="hi-waehlen">📥 Datei auswählen</button>
+      </div>
+    </div>
   `;
+}
+/* =========================================================
+   HELFERSTUNDEN AUS HIORG: Zeilen lesen, Termin/Gebiet zuordnen, in Anwesenheit übernehmen
+   ========================================================= */
+function dienstStunden(t, a){
+  if(a && a.stunden!=null) return a.stunden;
+  if(!t || t.ganztags) return null;
+  const d = new Date(t.ende||t.beginn) - new Date(t.beginn); return d>0 ? Math.round((d/3600000)*4)/4 : null;
+}
+const ORT_STOPPWORTE = new Set(['parkplatz','kassel','sued','mitte','deutschlands','bad','training']);
+const ORT_KUERZEL = { landesfeuerwehrschule:['lfws','hlfs'] };
+function ortVorschlagAusText(text){
+  const t = ' '+ortNameNorm(text)+' ';
+  const kand = [];
+  state.orte.forEach(o=>{
+    const tok = ortNameNorm(o.name).split(' ').filter(w=>w.length>=4 && !ORT_STOPPWORTE.has(w)); if(!tok.length) return;
+    const treffer = tok.filter(w=>[w, ...(ORT_KUERZEL[w]||[])].some(v=>t.includes(' '+v+' '))).length;
+    if(treffer) kand.push({o, treffer, voll: treffer===tok.length});
+  });
+  if(!kand.length) return {ortId:'', stufe:''};
+  const voll = kand.filter(k=>k.voll);
+  if(voll.length===1) return {ortId:voll[0].o.id, stufe:'erkannt'};
+  if(kand.length===1) return {ortId:kand[0].o.id, stufe:'vermutet'};
+  const max = Math.max(...kand.map(k=>k.treffer)), top = kand.filter(k=>k.treffer===max);
+  if(top.length===1 && max>=2) return {ortId:top[0].o.id, stufe:'vermutet'};
+  return {ortId:'', stufe:'mehrdeutig', auswahl: kand.map(k=>k.o.name)};
+}
+function hiorgKategorie(typ, titel){
+  const x = (typ+' '+titel).toLowerCase();
+  if(/einsatz/.test(typ.toLowerCase())) return 'einsatzbereitschaft';
+  if(/sanitätsdienst/.test(x)) return 'einsatzbereitschaft';
+  if(/prüfung|pruefung/.test(x)) return 'pruefung';
+  if(/übung/.test(typ.toLowerCase())) return 'einsatzuebung';
+  if(/führung|leitung/.test(typ.toLowerCase())) return 'versammlung';
+  if(/training|rhs|rh /.test(x)) return 'rhs_ausbildung';
+  if(/bereitschaftsabend|ba:|sanität|sz:/.test(x)) return 'sanitaetsausbildung';
+  if(/fortbildung|lehrgang|ausbildung|kurs/.test(x)) return 'fortbildung';
+  if(/führung|leitung|versammlung|besprechung|treffen/.test(x)) return 'versammlung';
+  return 'sonstiges';
+}
+function hiorgZeilenLesen(sheets){
+  for(const sh of sheets){
+    const rows = sh.rows||[];
+    const hi = rows.findIndex(r=>(r||[]).some(v=>/^\s*datum\s*$/i.test(String(v??''))) && (r||[]).some(v=>/^\s*von\s*$/i.test(String(v??''))));
+    if(hi<0) continue;
+    const h = rows[hi].map(v=>String(v??'').trim().toLowerCase());
+    const f = (...ks)=>h.findIndex(x=>ks.some(k=>x===k || x.startsWith(k)));
+    const c = {datum:f('datum'), von:f('von'), bis:f('bis'), std:f('stunden','std','dauer'), typ:f('typ','art'), titel:f('veranstaltung','bezeichnung','titel'), ort:f('ort')};
+    const kopfText = rows.slice(0,hi).map(r=>(r||[]).join(' ')).join(' ');
+    const nameM = kopfText.match(/von:\s*(.+)$/i);
+    const zeilen = [];
+    rows.slice(hi+1).forEach(r=>{ r=r||[];
+      const datum = RHSKit.parseDate(r[c.datum]); if(!datum) return;
+      const von = RHSKit.parseTime(r[c.von]), bis = RHSKit.parseTime(r[c.bis]);
+      const roh = String(r[c.std]??'').trim();
+      const unbestaetigt = /^\(.*\)$/.test(roh);
+      let stunden = null; const m = roh.replace(/[()\s]/g,'').match(/^(\d+)(?::(\d{2}))?(?:[.,](\d+))?$/);
+      if(m) stunden = m[2]!=null ? +m[1] + (+m[2])/60 : parseFloat(m[1]+'.'+(m[3]||'0'));
+      if(stunden==null && typeof r[c.std]==='number') stunden = r[c.std];
+      zeilen.push({datum, von, bis, stunden: stunden!=null ? Math.round(stunden*100)/100 : null, unbestaetigt,
+        typ: c.typ>=0 ? String(r[c.typ]??'').trim() : '', titel: c.titel>=0 ? String(r[c.titel]??'').trim() : '', ortText: c.ort>=0 ? String(r[c.ort]??'').trim() : ''});
+    });
+    return {name: nameM ? nameM[1].trim() : '', zeilen};
+  }
+  return {name:'', zeilen:[]};
+}
+function hiorgSchluessel(personId, z){ return 'hiorg|'+personId+'|'+z.datum+'|'+(z.von||'')+'|'+ortNameNorm(z.titel); }
+function hiorgTerminFinden(z){
+  if(!z.von) return null;
+  const minuten = s=>{ const [h,m]=s.split(':').map(Number); return h*60+m; };
+  let best=null;
+  state.termine.filter(t=>(t.sichtbarkeit||'staff')==='staff' && !t.ganztags && t.beginn && t.beginn.slice(0,10)===z.datum).forEach(t=>{
+    const d = Math.abs(minuten(t.beginn.slice(11,16)) - minuten(z.von)); if(d<=60 && (!best || d<best.d)) best={t,d}; });
+  return best ? best.t : null;
+}
+let hiorgVorschau = null;
+async function hiorgStundenVorschau(datei, personId){
+  const buf = await datei.arrayBuffer(); let sheets;
+  const name = datei.name.toLowerCase();
+  if(name.endsWith('.csv')){ const text = new TextDecoder('utf-8').decode(buf); const tr = text.includes(';')?';':','; sheets=[{name:'CSV', rows:text.split(/\r?\n/).map(l=>l.split(tr).map(x=>x.replace(/^"|"$/g,'').trim()))}]; }
+  else if(name.endsWith('.xlsx')) sheets = await RHSKit.readXlsx(buf);
+  else sheets = await RHSKit.readXls(buf);
+  const erg = hiorgZeilenLesen(sheets);
+  if(!erg.zeilen.length) throw new Error('Keine Zeilen mit Datum gefunden. Ist das der HiOrg-Export „Helferstunden“?');
+  let person = state.personen.find(p=>p.id===personId);
+  const namensTreffer = erg.name && state.personen.find(p=>p.status!=='inaktiv' && p.name && ortNameNorm(p.name)===ortNameNorm(erg.name));
+  if(namensTreffer && namensTreffer.id!==personId && confirm(`Die Datei gehört laut Kopfzeile zu „${erg.name}“. Für diese Person einlesen?`)) person = namensTreffer;
+  const heute = new Date(); const heuteIso = heute.getFullYear()+'-'+String(heute.getMonth()+1).padStart(2,'0')+'-'+String(heute.getDate()).padStart(2,'0');
+  const zeilen = erg.zeilen.map(z=>{
+    const schluessel = hiorgSchluessel(person.id, z);
+    const vorhanden = state.anwesenheiten.find(a=>a.hiorgSchluessel===schluessel);
+    const termin = vorhanden ? state.termine.find(t=>t.id===vorhanden.terminId) : hiorgTerminFinden(z);
+    const ortQuelle = termin && termin.ortId ? {ortId:termin.ortId, stufe:'aus Termin'} : ortVorschlagAusText([z.titel, z.ortText].join(' '));
+    const ortId = (vorhanden && vorhanden.ortId) || ortQuelle.ortId;
+    const zukunft = z.datum > heuteIso;
+    return Object.assign({}, z, {schluessel, vorhanden:!!vorhanden, terminId: termin?termin.id:'', terminTitel: termin?termin.titel:'', terminIstStaff: !!(termin && (termin.sichtbarkeit||'staff')==='staff'),
+      ortId, stufe: (vorhanden && vorhanden.ortId) ? 'gespeichert' : ortQuelle.stufe, auswahl: ortQuelle.auswahl||[], zukunft, an: !zukunft && z.stunden!=null});
+  }).sort((a,b)=>(a.datum+a.von).localeCompare(b.datum+b.von));
+  hiorgVorschau = {personId: person.id, personName: person.name, dateiName: datei.name, zeilen};
+  modal = {type:'hiorgImport'}; render();
+}
+function renderModalHiorgImport(){
+  const v = hiorgVorschau; if(!v) return '';
+  const orteSort = state.orte.slice().sort((a,b)=>a.name.localeCompare(b.name,'de'));
+  const fmtStd = x=>x==null?'–':String(x).replace('.',',');
+  const gewaehlt = v.zeilen.filter(z=>z.an);
+  const summe = Math.round(gewaehlt.reduce((s,z)=>s+(z.stunden||0),0)*100)/100;
+  const stufenText = {erkannt:'erkannt', vermutet:'vermutet – bitte prüfen', mehrdeutig:'mehrdeutig', 'aus Termin':'aus Termin', gespeichert:'bereits zugeordnet'};
+  return `<div class="modal-back"><div class="modal" style="max-width:900px">
+    <div class="modal-head"><h3>Helferstunden übernehmen – ${esc(v.personName)}</h3><button class="btn btn-ghost btn-sm" id="m-schliessen">✕</button></div>
+    <div class="modal-body" style="max-height:65vh;overflow-y:auto">
+      <p class="hint">${esc(v.dateiName)} · ${v.zeilen.length} Zeilen · ausgewählt ${gewaehlt.length} mit ${fmtStd(summe)} Std. Zukünftige Termine sind abgewählt. In HiOrg noch unbestätigte Stunden (in Klammern) sind markiert. Gebiete mit „vermutet“ oder „mehrdeutig“ bitte prüfen bzw. auswählen; ohne Gebiet nimmt der Dienstnachweis die Standard-Km oder lässt die Km offen.</p>
+      <div class="table-scroll"><table style="font-size:.85rem"><thead><tr><th></th><th>Datum</th><th>Std.</th><th>Veranstaltung</th><th>Gebiet</th></tr></thead><tbody>
+      ${v.zeilen.map((z,i)=>`<tr style="${z.zukunft?'opacity:.55':''}">
+        <td><input type="checkbox" data-hz="${i}" ${z.an?'checked':''} ${z.stunden==null?'disabled':''}></td>
+        <td style="white-space:nowrap">${fmtDatum(z.datum)}<br><span class="hint">${esc(z.von)}–${esc(z.bis)}</span></td>
+        <td>${fmtStd(z.stunden)}${z.unbestaetigt?'<br><span class="chip muted">unbestätigt</span>':''}</td>
+        <td>${esc(z.titel)}<br><span class="hint">${esc(z.typ||'')}${z.terminTitel?` · Termin: ${esc(z.terminTitel)}`:''}${z.vorhanden?' · bereits übernommen (wird aktualisiert)':''}${z.zukunft?' · liegt in der Zukunft':''}</span></td>
+        <td><select data-ho="${i}" style="width:100%;min-width:150px"><option value="">– kein Gebiet –</option>${orteSort.map(o=>`<option value="${o.id}" ${o.id===z.ortId?'selected':''}>${esc(o.name)}</option>`).join('')}</select>
+          ${z.stufe?`<span class="hint">${esc(stufenText[z.stufe]||z.stufe)}${z.stufe==='mehrdeutig'?': '+esc(z.auswahl.join(' / ')):''}</span>`:''}</td>
+      </tr>`).join('')}
+      </tbody></table></div>
+    </div>
+    <div class="modal-foot"><button class="btn btn-ghost" id="m-abbrechen">Abbrechen</button><button class="btn btn-primary" id="m-hiorg-ok">${gewaehlt.length} Einträge übernehmen</button></div>
+  </div></div>`;
+}
+function bindModalHiorgImport(){
+  const zu=()=>{ hiorgVorschau=null; schliesseModal(); };
+  document.getElementById('m-schliessen').onclick=zu; document.getElementById('m-abbrechen').onclick=zu;
+  const merken=()=>{ document.querySelectorAll('[data-ho]').forEach(s=>{ const z=hiorgVorschau.zeilen[+s.dataset.ho]; if(s.value!==z.ortId){ z.ortId=s.value; z.stufe=s.value?'gewählt':''; } }); };
+  document.querySelectorAll('[data-hz]').forEach(cb=>cb.onchange=()=>{ merken(); hiorgVorschau.zeilen[+cb.dataset.hz].an=cb.checked; render(); });
+  document.querySelectorAll('[data-ho]').forEach(s=>s.onchange=merken);
+  document.getElementById('m-hiorg-ok').onclick=()=>{ merken(); const r=hiorgUebernehmen(hiorgVorschau); speichereState(); hiorgVorschau=null; schliesseModal();
+    zeigeToast(`${r.neuTermine} persönliche Termine angelegt, ${r.zuStaff} Staffeltermin(en) zugeordnet, ${r.aktualisiert} aktualisiert.`); };
+}
+function hiorgUebernehmen(v){
+  const r={neuTermine:0, zuStaff:0, aktualisiert:0};
+  v.zeilen.filter(z=>z.an).forEach(z=>{
+    const ort = z.ortId ? state.orte.find(o=>o.id===z.ortId) : null;
+    const felder = {status:'anwesend', stunden:z.stunden, hiorgSchluessel:z.schluessel, hiorgTyp:z.typ||'', hiorgUnbestaetigt:!!z.unbestaetigt, ortId:z.ortId||'', hiorgAm:nowIso()};
+    let a = state.anwesenheiten.find(x=>x.hiorgSchluessel===z.schluessel);
+    if(a){ Object.assign(a, felder); const t=state.termine.find(x=>x.id===a.terminId); if(t && t.quelle==='hiorg'){ t.ortId=z.ortId||''; t.ort=ort?ort.name:(t.ort||''); } r.aktualisiert++; return; }
+    let t = z.terminId ? state.termine.find(x=>x.id===z.terminId) : null;
+    if(!t){
+      let endeDatum = z.datum;
+      if(z.von && z.bis && z.bis<=z.von){ const d=new Date(z.datum+'T12:00'); d.setDate(d.getDate()+1); endeDatum = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+      t = {id:uid(), titel:z.titel||z.typ||'Dienst', kategorie:hiorgKategorie(z.typ||'', z.titel||''), ganztags:!z.von,
+        beginn: z.datum+'T'+(z.von||'00:00'), ende: endeDatum+'T'+(z.bis||'23:59'), ort: ort?ort.name:'', ortId: z.ortId||'',
+        beschreibung:'Aus HiOrg-Helferstunden übernommen'+(z.typ?' ('+z.typ+')':''), sichtbarkeit:'personal', ownerId:v.personId, quelle:'hiorg', aktualisiertAm:nowIso()};
+      state.termine.push(t); r.neuTermine++;
+    } else r.zuStaff++;
+    a = state.anwesenheiten.find(x=>x.terminId===t.id && x.personId===v.personId);
+    if(a) Object.assign(a, felder); else state.anwesenheiten.push(Object.assign({id:uid(), terminId:t.id, personId:v.personId, km:null}, felder));
+  });
+  return r;
 }
 function exportiereDienstnachweis(personId, jahr){
   const p = state.personen.find(x=>x.id===personId); if(!p) return;
@@ -9166,7 +9449,8 @@ function exportiereDienstnachweis(personId, jahr){
       const diffMs = new Date(t.ende||t.beginn) - new Date(t.beginn);
       hours = diffMs>0 ? Math.round((diffMs/3600000)*4)/4 : null;
     }
-    return { date: t?t.beginn.slice(0,10):'', start, end, hours, type: t?terminKategorieLabel(t.kategorie):'', km: a.km??null, title: t?t.titel:'', place: t?t.ort:'' };
+    if(a.stunden!=null) hours = a.stunden;
+    return { date: t?t.beginn.slice(0,10):'', start, end, hours, type: a.hiorgTyp || (t?terminKategorieLabel(t.kategorie):''), km: kmFuerDienst(p, t, a).km, title: t?t.titel:'', place: t?t.ort:'' };
   }).sort((a,b)=> a.date.localeCompare(b.date));
   const bin = RHSKit.buildServiceRecordXlsx({
     year: jahr,
@@ -9179,6 +9463,9 @@ function exportiereDienstnachweis(personId, jahr){
 }
 function bindTabAnwesenheit(){
   document.getElementById('af-jahr').onchange = e=>{ anwesenheitJahrFilter = parseInt(e.target.value,10); render(); };
+  const hw=document.getElementById('hi-waehlen'), hd=document.getElementById('hi-datei');
+  if(hw && hd){ hw.onclick=()=>hd.click(); hd.onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
+    try{ await hiorgStundenVorschau(f, document.getElementById('hi-person').value); }catch(err){ alert('Datei konnte nicht gelesen werden: '+err.message); } }; }
   document.querySelectorAll('[data-dn-person]').forEach(b=>{
     b.onclick = ()=> exportiereDienstnachweis(b.dataset.dnPerson, anwesenheitJahrFilter);
   });
@@ -13455,7 +13742,10 @@ function tbmSync(){
     });
   });
   m.orte = m.orte||[];
-  (state.orte||[]).forEach(o=>{ if(o.name && !m.orte.some(x=>x.name===o.name)) m.orte.push({name:o.name, lat:o.lat||null, lon:o.lon||null, entfernungKm:o.entfernungKm!=null?Number(o.entfernungKm):null, gelaendeart:o.gelaendeart||''}); });
+  (state.orte||[]).forEach(o=>{ if(!o.name) return; let x=m.orte.find(y=>y.name===o.name);
+    if(!x){ x={name:o.name, lat:null, lon:null, entfernungKm:o.entfernungKm!=null?Number(o.entfernungKm):null, gelaendeart:o.gelaendeart||''}; m.orte.push(x); }
+    if(o.lat && o.lon){ x.lat=Number(o.lat); x.lon=Number(o.lon); }
+    const e = ich ? meineEntfernung(ich, o.id) : null; if(e) x.entfernungKm = e.km; });
   state.tagebuchModul = m;
   tbmMigriereAlt(m);
 }
