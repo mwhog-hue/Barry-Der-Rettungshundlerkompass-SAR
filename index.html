@@ -3225,8 +3225,8 @@ function renderMeineFahrzeugeEinweisungen(person){
 }
 
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.13';
-const BARRY_APP_STAND = '02.10.2026';
+const BARRY_APP_VERSION = '2.18';
+const BARRY_APP_STAND = '03.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
 // Bei künftigen strukturellen Änderungen am state-Objekt: Versionsnummer hochzählen und
@@ -3385,7 +3385,7 @@ function zeigeToast(text){
 /* =========================================================
    LOGIN
    ========================================================= */
-let loginEingabe = (function(){ try{ return localStorage.getItem('barry-last-login-test') || ''; }catch(e){ return ''; } })();
+let loginEingabe = (function(){ try{ return localStorage.getItem('barry-last-login') || localStorage.getItem('barry-last-login-test') || ''; }catch(e){ return ''; } })();
 let loginHinweis = ''; // neutraler Hinweis, z. B. nach einem Import
 let loginFehler = '';
 let loginSchrittNeuesPasswort = null; // personId, wenn Erstpasswort geändert werden muss
@@ -3529,7 +3529,7 @@ async function bioLoginBereichAktualisieren(){
     p.bereicheAusgeblendet = [...document.querySelectorAll('[data-login-bereich]')].filter(c=>!c.checked).map(c=>c.dataset.loginBereich);
     p.bereicheGewaehlt = true; speichereState();
     session = { personId:p.id };
-    try{ localStorage.setItem('barry-last-login-test', p.benutzername || p.name); }catch(e){}
+    try{ localStorage.setItem('barry-last-login', p.benutzername || p.name); }catch(e){}
     render();
   };
 }
@@ -3546,7 +3546,7 @@ function bindLogin(){
       p.mussPasswortAendern = false;
       speichereState();
       session = { personId:p.id };
-      try{ localStorage.setItem('barry-last-login-test', p.benutzername || p.name); }catch(e){}
+      try{ localStorage.setItem('barry-last-login', p.benutzername || p.name); }catch(e){}
       loginSchrittNeuesPasswort = null; loginFehler='';
       render();
       bioAnbieten(p);
@@ -3583,7 +3583,7 @@ function bindLogin(){
     if(p.mussPasswortAendern){ loginSchrittNeuesPasswort = p.id; render(); return; }
     bioZaehlen(p.id, true);
     session = { personId:p.id };
-    try{ localStorage.setItem('barry-last-login-test', p.benutzername || p.name); }catch(e){}
+    try{ localStorage.setItem('barry-last-login', p.benutzername || p.name); }catch(e){}
     render();
     bioAnbieten(p);
   };
@@ -4108,6 +4108,7 @@ function bindTabMeldungen(){ bindFormularMeldungBereich(); }
 const VERWALTUNG_TABS = [
   {id:'personen', label:'Personen', nur:'leitungAdmin'},
   {id:'austausch', label:'Mitglieder & Austausch', nur:'leitungAdmin'},
+  {id:'freigaben', label:'Freigaben & Einwilligungen', nur:'leitungAdmin'},
   {id:'hunde', label:'Hunde', nur:null},
   {id:'qualifikationen', label:'Qualifikationen', nur:null},
   {id:'fristen', label:'Fristen & Lücken', nur:null},
@@ -4159,6 +4160,7 @@ function renderVerwaltungTab(tab, person){
     case 'orte': return renderTabOrte();
     case 'fahrzeuge': return renderTabFahrzeuge();
     case 'meldungen': return renderTabMeldungen();
+    case 'freigaben': return renderTabFreigaben();
     case 'rechte': return renderTabRechte();
     case 'datensicherung': return renderTabDatensicherung();
     default: return renderTabPersonen();
@@ -4190,8 +4192,42 @@ function bindVerwaltungTab(tab, person){
   else if(tab==='orte') bindTabOrte();
   else if(tab==='fahrzeuge') bindTabFahrzeuge();
   else if(tab==='meldungen') bindTabMeldungen();
+  else if(tab==='freigaben') bindTabFreigaben();
   else if(tab==='rechte') bindTabRechte();
   else if(tab==='datensicherung') bindTabDatensicherung();
+}
+
+
+/* ---------- Freigaben & Einwilligungen (nur Leitung) ----------
+   Je Person: Freigaben nach Einwilligung sowie Nachweis (Datum, Form, Ablageort). Ohne Eintrag gelten die Vorgaben. */
+const EINWILLIGUNG_FORMEN = ['Papier, unterschrieben','PDF, digital unterschrieben','Excel-Selbstauskunft','in BARRY gemeldet','mündlich (mit Vermerk)'];
+const FREIGABE_KURZ = {geburtstag:'Geburtstag', hundGeburtstag:'Wurftag Hunde', telefon:'Telefon', email:'E-Mail', wohnort:'Wohnort'};
+function renderTabFreigaben(){
+  const personen = state.personen.filter(p=>p.status!=='inaktiv' && (p.name||'').toLowerCase()!=='admin').sort((a,b)=>a.name.localeCompare(b.name,'de'));
+  const ohne = personen.filter(p=>!(p.einwilligung && p.einwilligung.datum));
+  const kopf = FREIGABEN.map(d=>`<th style="text-align:center;font-size:.8rem;padding:6px 4px" title="${esc(d.label)}">${esc(FREIGABE_KURZ[d.k]||d.k)}${d.genutzt?'':'<br><span class="hint" style="font-weight:400">(noch nicht genutzt)</span>'}</th>`).join('');
+  const zeilen = personen.map(p=>{ const e = p.einwilligung||{};
+    return `<tr style="border-top:1px solid var(--line)">
+      <td style="padding:6px 6px 6px 0;white-space:nowrap"><b>${esc(p.name)}</b></td>
+      ${FREIGABEN.map(d=>`<td style="text-align:center"><input type="checkbox" data-fg-person="${p.id}" data-fg-k="${d.k}" ${freigabe(p,d.k)?'checked':''} title="${esc(d.label)}"></td>`).join('')}
+      <td style="padding:4px"><input type="date" data-ew-person="${p.id}" data-ew-feld="datum" value="${esc(e.datum||'')}" style="min-width:130px"></td>
+      <td style="padding:4px"><select data-ew-person="${p.id}" data-ew-feld="form"><option value="">–</option>${EINWILLIGUNG_FORMEN.map(f=>`<option ${e.form===f?'selected':''}>${esc(f)}</option>`).join('')}</select></td>
+      <td style="padding:4px"><input data-ew-person="${p.id}" data-ew-feld="ablage" value="${esc(e.ablage||'')}" placeholder="z. B. Ordner Führerscheine" style="min-width:170px"></td>
+    </tr>`; }).join('');
+  return `<div class="card card-pad">
+    <h3 style="margin-top:0">Freigaben &amp; Einwilligungen</h3>
+    <p class="hint">Hier tragen Sie ein, was jedes Mitglied anderen Mitgliedern in BARRY zeigen möchte – nach der unterschriebenen Selbstauskunft, der Excel-Datei oder einer Meldung. Ohne Einwilligung gelten die Vorgaben: Geburtstag nur für die Leitung sichtbar, Wurftage der Hunde für alle, Kontaktdaten nicht sichtbar. Änderungen werden sofort gespeichert und erreichen die Mitglieder mit dem nächsten Zugangspaket.</p>
+    <p class="hint"><b>${ohne.length} von ${personen.length}</b> Mitgliedern ohne erfasste Einwilligung${ohne.length&&ohne.length<=12?': '+ohne.map(p=>esc(p.name)).join(', '):''}.</p>
+    <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.9rem">
+      <thead><tr><th style="text-align:left;padding:6px 6px 6px 0">Name</th>${kopf}<th style="text-align:left">Einwilligung vom</th><th style="text-align:left">Form</th><th style="text-align:left">Ablage</th></tr></thead>
+      <tbody>${zeilen}</tbody></table></div>
+  </div>`;
+}
+function bindTabFreigaben(){
+  document.querySelectorAll('[data-fg-person]').forEach(cb=>{ cb.onchange = ()=>{ const p = state.personen.find(x=>x.id===cb.dataset.fgPerson); if(!p) return;
+    p.freigaben = Object.assign({}, p.freigaben||{}, {[cb.dataset.fgK]: cb.checked}); p.freigabenStand = nowIso(); speichereState(); zeigeToast('Freigabe für '+p.name+' gespeichert.'); }; });
+  document.querySelectorAll('[data-ew-person]').forEach(el=>{ el.onchange = ()=>{ const p = state.personen.find(x=>x.id===el.dataset.ewPerson); if(!p) return;
+    p.einwilligung = Object.assign({}, p.einwilligung||{}, {[el.dataset.ewFeld]: el.value.trim()}); speichereState(); zeigeToast('Einwilligung für '+p.name+' gespeichert.'); }; });
 }
 
 /* ---------- Mitglieder & Austausch ---------- */
@@ -5470,7 +5506,8 @@ function zugangspaketDaten(person, startpasswort){
   const nurTeam = e => e.sichtbarkeit==='team';
   const personenReduziert = state.personen.filter(p=>p.status!=='inaktiv').map(p=>({
     id:p.id, name:p.name, benutzername:p.benutzername||'', rollen:(p.rollen||[]).filter(r=>r==='mitglied' || r.startsWith('ausbilder') || r==='leitung' || r==='bereitschaftsleitung' || r==='admin'), zusatzrechte:[], status:'aktiv',
-    mitgliedsnummer:'', dienstbuchNr:'', geburtsdatum:'', mitgliedSeit:'',
+    mitgliedsnummer: p.id===person.id?(p.mitgliedsnummer||''):'', dienstbuchNr: p.id===person.id?(p.dienstbuchNr||''):'', geburtsdatum: p.id===person.id?(p.geburtsdatum||''):'', mitgliedSeit: p.id===person.id?(p.mitgliedSeit||''):'',
+    kmStandard: p.id===person.id?(p.kmStandard??null):null, sparten: p.id===person.id?(p.sparten||[]):[],
     strasse: p.id===person.id?(p.strasse||''):'', plz: p.id===person.id?(p.plz||''):'', ort: p.id===person.id?(p.ort||''):'', email: p.id===person.id?(p.email||''):'', telefon: p.id===person.id?(p.telefon||''):'',
     passwortHash: p.id===person.id ? einfacherHash(startpasswort) : '', mussPasswortAendern: p.id===person.id, angelegtAm: p.angelegtAm||nowIso(),
     geburtstagTM: (p.id===person.id || freigabe(p,'geburtstag')) ? tmText(p.geburtsdatum) : '', freigaben: p.id===person.id ? (p.freigaben||{}) : {hundGeburtstag: freigabe(p,'hundGeburtstag'), geburtstag: freigabe(p,'geburtstag')},
@@ -5497,6 +5534,8 @@ function zugangspaketDaten(person, startpasswort){
     rhEintraege: nurEigene(state.rhEintraege), mantrailingEintraege: nurEigene(state.mantrailingEintraege),
     lehrmaterialOrdner: state.lehrmaterialOrdner, lehrmaterial: state.lehrmaterial.filter(m=>m.typ==='link'),
     orte: state.orte||[],
+    zusatzKurse: state.zusatzKurse||[], personZusatzKurse: (state.personZusatzKurse||[]).filter(z=>z.personId===person.id),
+    fahrerlaubnisKlassen: state.fahrerlaubnisKlassen||[], personFahrerlaubnisse: (state.personFahrerlaubnisse||[]).filter(f=>f.personId===person.id),
   });
   return Object.assign({ exportInfo:{ format:'barry-bestand', paket:'zugang', fuer:person.name, app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||'' } }, paket);
 }
@@ -6735,34 +6774,52 @@ function bindOrganisationOrte(person){
    Die Leitung kann Links ändern oder ausblenden; die Liste geht mit dem Zugangspaket an die Mitglieder.
    ========================================================= */
 const APP_FAMILIE = [
-  {id:'fla', name:'RH-Flächensuchassistent', icon:'🌲', url:'https://mwhog-hue.github.io/Claudes-Fl-Assistenten-/', rolle:'ergaenzt',
-   text:'Taktik, Laufschema, Wetter, Fund und Erste Hilfe für Training, Prüfung und Einsatz. Die Übergabe liest BARRY über „Datei einlesen“ ein.',
+  {id:'fla', name:'RH-Flächensuchassistent', icon:'🌲', url:'https://mwhog-hue.github.io/RH-Flaechenassistenten/', rolle:'ergaenzt',
+   text:'Begleitet Flächensuchen in Training, Prüfung und Einsatz – von Auftrag und Wetter über die Taktik bis zu Fund und Erster Hilfe.',
+   besonderheit:'Skizziert ein Laufschema passend zur Lage und zeichnet den Suchweg per GPS auf; Koordinaten auch im MGRS-Format wie in Gaia GPS.',
    fuerWen:'Für alle Flächensuchteams – im Training, in der Prüfungsvorbereitung und im Einsatz auf dem eigenen Handy.'},
-  {id:'tr', name:'RH-Trümmersuchassistent', icon:'🧱', url:'https://mwhog-hue.github.io/Tr-mmerassistent-/', rolle:'ergaenzt',
-   text:'Das Gegenstück zum Flächensuchassistenten für die Trümmersuche: Auftrag, Planung und Taktik, Suche, Fund und Erste Hilfe sowie Auswertung für Training, Prüfung und Einsatz.',
+  {id:'tr', name:'RH-Trümmersuchassistent', icon:'🧱', url:'https://mwhog-hue.github.io/RH-Truemmerassistent/', rolle:'ergaenzt',
+   text:'Das Gegenstück für die Trümmersuche: Vorbereitung, Suche, Anzeige und Auswertung in Training, Prüfung und Einsatz.',
+   besonderheit:'Leitet aus den Wetterdaten Hinweise zu Thermik und Geruchsausbreitung im Trümmerfeld ab.',
    fuerWen:'Für Teams und Ausbilder/-innen der Sparte Trümmersuche.'},
-  {id:'mt', name:'RH-Mantrailing-Assistent', icon:'👣', url:'https://mwhog-hue.github.io/Claudes-Mantrailing-/', rolle:'ergaenzt',
-   text:'Das Gegenstück zum Flächensuchassistenten für das Mantrailing: Auftrag, Planung und Taktik, Trail, Fund und Erste Hilfe sowie Auswertung für Training, Prüfung und Einsatz.',
+  {id:'mt', name:'RH-Mantrailing-Assistent', icon:'👣', url:'https://mwhog-hue.github.io/Mantrailing-Assistent/', rolle:'ergaenzt',
+   text:'Das Gegenstück für das Mantrailing: Planung, Trail, Fund und Auswertung in Training, Prüfung und Einsatz.',
+   besonderheit:'Virtueller Trainer mit Korridorwarnung und Spurleger-Modus; Trails lassen sich als GPX, KML oder Bild exportieren.',
    fuerWen:'Für Teams und Ausbilder/-innen der Sparte Mantrailing.'},
-  {id:'werkstatt', name:'Werkstatt & Bibliothek für Lehrunterlagen', icon:'📚', url:'https://mwhog-hue.github.io/Werkstatt-und-Bibliothek-f-r-Lehrunterlagen-und-Dokumente/', rolle:'ergaenzt',
-   text:'Lehrunterlagen und Dokumente ordnen, Doppelte finden und aufbereiten.',
+  {id:'werkstatt', name:'Lehrwerkstatt & Bibliothek', icon:'📚', url:'https://mwhog-hue.github.io/Lehrwerkstatt-und-Bibliothek/', rolle:'ergaenzt',
+   text:'Sammelt und ordnet Lehrunterlagen (Word, PDF, PowerPoint) und bereitet sie je Thema neu auf.',
+   besonderheit:'Findet doppelte Unterlagen und schreibt einen fertigen Arbeitsauftrag für ChatGPT oder Claude.',
    fuerWen:'Für Ausbilder/-innen und die Leitung, die Unterlagen pflegen oder Schulungen vorbereiten – für Mitglieder nicht nötig.'},
-  {id:'barry', name:'BARRY online', icon:'🐕', url:'https://mwhog-hue.github.io/Barry-Der-Rettungendekompass-leer/', rolle:'barry',
+  {id:'barry', name:'BARRY online', icon:'🐕', url:'https://mwhog-hue.github.io/Barry-Der-Rettungshundlerkompass-SAR/', rolle:'barry',
    text:'Adresse dieser App zum Installieren auf weiteren Geräten.',
+   besonderheit:'Tauscht Daten verschlüsselt per Datei aus – ganz ohne Server und Cloud.',
    fuerWen:'Wichtig: Auf einem weiteren Gerät startet BARRY leer – es gibt keinen automatischen Datenaustausch zwischen den Geräten. Dort das eigene Zugangspaket (Mitglieder) bzw. die aktuelle Datensicherung (Leitung) über „📂 Datei einlesen“ einspielen; neue Termine und Ausbildungsstände kommen danach wieder per Terminplan und Stand-Update.'},
   {id:'teambegleiter', name:'RH-Team-Begleiter', icon:'🤝', url:'https://mwhog-hue.github.io/RH-Team-Begleiter-/', rolle:'enthalten',
-   text:'Einzelteam-Begleiter (Findewille, Anzeigeaufbau, Module). Die Inhalte sind in BARRY unter Ausbildung & Team enthalten, in der eigenen App aber übersichtlicher und schöner aufbereitet.',
+   text:'Begleitet ein einzelnes Team durch die Ausbildung: Findewille, Anzeigeaufbau und Module 1.1–1.3. In BARRY unter Ausbildung & Team enthalten.',
+   besonderheit:'Eigener Bereich „Fehlerdiagnose“ für typische Probleme im Training.',
    fuerWen:'Lohnt sich für Hundeführer/-innen in der Ausbildung, die zu Hause gezielt am Anzeigeaufbau und an den Modulen 1.1–1.3 arbeiten möchten. Wer vor allem Termine, Nachweise und Tagebücher pflegt, kommt mit BARRY aus.'},
   {id:'pfotenalltag', name:'Pfotenalltag', icon:'🐾', url:'https://mwhog-hue.github.io/Pfotenalltag-/', rolle:'enthalten',
-   text:'Alltagstraining mit über 500 Übungen. Die Inhalte sind in BARRY unter Alltag & Zuhause enthalten, in der eigenen App aber übersichtlicher und schöner aufbereitet.',
+   text:'Alltagstraining für jeden Hund. In BARRY unter Alltag & Zuhause enthalten.',
+   besonderheit:'Über 500 Übungen für den Alltag.',
    fuerWen:'Lohnt sich für alle, die regelmäßig mit ihrem Hund im Alltag üben – auch für Familienmitglieder, Welpen- und Junghundehalter/-innen außerhalb der Staffel.'},
+  {id:'tagebuch_fltr', name:'Trainingstagebuch Fläche/Trümmer', icon:'📓', url:'https://mwhog-hue.github.io/RH-Trainingstagebuch-Fl-Tr/', rolle:'enthalten',
+   text:'Hält das Training in Flächen- und Trümmersuche fest. In BARRY enthalten.',
+   besonderheit:'Übernimmt Trainings direkt aus dem Flächen- und Trümmersuchassistenten – ohne Abtippen.',
+   fuerWen:'Für Teams, die ihr Training lieber in einer schlanken eigenen App auf dem Handy festhalten.'},
+  {id:'tagebuch_mt', name:'Trailtagebuch (Mantrailing)', icon:'📔', url:'https://mwhog-hue.github.io/MT-Trainingstagebuch-fuer-Rettungshundler/', rolle:'enthalten',
+   text:'Hält das Mantrailing-Training fest. In BARRY enthalten.',
+   besonderheit:'Übernimmt Trails direkt aus dem Mantrailing-Assistenten – ohne Abtippen.',
+   fuerWen:'Für Mantrailing-Teams, die ihre Trails in einer eigenen App erfassen.'},
   {id:'einsatzprotokoll', name:'RHS-Einsatzprotokoll', icon:'📋', url:'https://mwhog-hue.github.io/RHS-Einsatzprotokoll-/', rolle:'enthalten',
-   text:'Eigenständiges Einsatzprotokoll – in BARRY unter Einsatz enthalten.',
-   fuerWen:'Für Einsatzleitung und Protokollführung auf einem Zweitgerät oder Tablet ohne BARRY-Zugang, z. B. im Einsatzfahrzeug.'},
+   text:'Dokumentiert Einsätze digital. In BARRY unter Einsatz enthalten.',
+   besonderheit:'Bildet die DRK-Vordrucke „Einsatzbericht Personensuche“ und „Vermissten-Risiko / Bewertung der Suchpriorität“ digital ab.',
+   fuerWen:'Für Einsatzleitung und Protokollführung auf einem Zweitgerät oder Tablet ohne BARRY-Zugang, z. B. im Einsatzfahrzeug.'}
 ];
+const APP_ALTE_ADRESSEN = ['Claudes-Fl-Assistenten-','Tr-mmerassistent-','Claudes-Mantrailing-','Werkstatt-und-Bibliothek-f-r-Lehrunterlagen-und-Dokumente','Barry-Der-Rettungendekompass-leer'];
 function appFamilieListe(){
   const eigene=(state.organisation && state.organisation.appLinks) || {};
-  return APP_FAMILIE.map(a=>({...a, url:(eigene[a.id]&&eigene[a.id].url)||a.url, aus:!!(eigene[a.id]&&eigene[a.id].aus)}));
+  const gueltig = u => u && !APP_ALTE_ADRESSEN.some(x=>u.includes('/'+x));
+  return APP_FAMILIE.map(a=>({...a, url:(eigene[a.id]&&gueltig(eigene[a.id].url)&&eigene[a.id].url)||a.url, aus:!!(eigene[a.id]&&eigene[a.id].aus)}));
 }
 function renderWissenApps(person){
   const leitung=istLeitungOderAdmin(person);
@@ -6770,6 +6827,7 @@ function renderWissenApps(person){
   const karte=a=>`<div class="card card-pad" style="margin-bottom:8px;${a.aus?'opacity:.55':''}">
       <div class="spread"><b>${a.icon} ${esc(a.name)}</b>${a.aus?'<span class="chip muted">ausgeblendet</span>':''}</div>
       <p class="hint" style="margin:4px 0 4px">${esc(a.text)}</p>
+      ${a.besonderheit?`<p class="hint" style="margin:0 0 4px">✨ <b>Besonderheit:</b> ${esc(a.besonderheit)}</p>`:''}
       ${a.fuerWen?`<p class="hint" style="margin:0 0 8px;color:var(--ink)"><b>${a.rolle==='barry'?'':'Für wen? '}</b>${esc(a.fuerWen)}</p>`:''}
       <div class="row" style="gap:6px;flex-wrap:wrap"><a class="btn btn-sm btn-primary" href="${esc(a.url)}" target="_blank" rel="noopener">Öffnen ↗</a>
       <button class="btn btn-sm btn-ghost" data-app-teilen="${a.id}">Link teilen</button>
@@ -7369,7 +7427,7 @@ function renderModalPerson(){
         <div class="hint" id="pf-zp-hint" style="margin-top:6px"></div>
         <button class="btn btn-sm" id="pf-selbstauskunft" type="button" style="margin-top:8px">📋 Selbstauskunft-Datei (Excel) für diese Person</button>
         <button class="btn btn-sm" id="pf-standupdate" type="button" style="margin-top:8px">📥 Stand-Update (eigene Nachweise; Anmeldepasswort bleibt)</button>
-        <div style="margin-top:14px"><strong>Freigaben</strong> <span class="hint">${bestehend.freigabenStand?'Stand '+fmtDatum(bestehend.freigabenStand):'noch keine Angabe – es gelten die Vorgaben'}</span>
+        <div style="margin-top:14px"><strong>Freigaben</strong> <span class="hint">${bestehend.einwilligung&&bestehend.einwilligung.datum?'Einwilligung vom '+fmtDatum(bestehend.einwilligung.datum)+(bestehend.einwilligung.form?' ('+esc(bestehend.einwilligung.form)+')':''):'noch keine Einwilligung erfasst – es gelten die Vorgaben'} · Übersicht aller Mitglieder: Verwaltung → Freigaben &amp; Einwilligungen</span>
           ${FREIGABEN.map(d=>`<label class="row" style="gap:8px;align-items:flex-start;padding:3px 0;cursor:pointer"><input type="checkbox" data-pf-freigabe="${d.k}" ${freigabe(bestehend,d.k)?'checked':''} style="margin-top:3px"> <span class="hint" style="color:var(--ink)">${esc(d.label)}${d.genutzt?'':' <i>(noch nicht genutzt)</i>'}</span></label>`).join('')}
         </div>
       </div>`}
@@ -13080,6 +13138,10 @@ function bindModalHausaufgabe(person){
 
 const HILFE_ROLLEN = [{id:'mitglied',label:'Mitglied'},{id:'ausbilder',label:'Ausbilder/-in'},{id:'leitung',label:'Leitung/Admin'}];
 const HILFE_ARTIKEL = [
+  {id:"neu-2-9-bis-2-17", kategorie:"Erste Schritte", titel:"Neu seit BARRY 2.9 (Oktober 2026)", rollen:["mitglied","ausbilder","leitung"], text:"\n<ul>\n<li><strong>Verschlüsselte Dateien:</strong> Zugangspakete, Stand-Updates, Meldungen und Datensicherungen sind mit Passwort geschützt (siehe eigener Artikel).</li>\n<li><strong>Anmeldung per Fingerabdruck/Gesicht</strong> als freiwillige Option, mit Passwortabfrage bei jeder 10. Anmeldung.</li>\n<li><strong>Freigaben:</strong> Jedes Mitglied entscheidet, was andere in BARRY sehen dürfen (Geburtstag, Wurftag der Hunde, später Kontaktdaten). Die Leitung erfasst die Einwilligungen unter <strong>Verwaltung → Freigaben &amp; Einwilligungen</strong>.</li>\n<li><strong>Geburtstage</strong> auf der Startseite: 7 Tage vorher bis 7 Tage danach.</li>\n<li><strong>Modulprüfungen gelten bis zum Monatsende</strong> (24 Monate), jährliche Nachweise nach der Stufenregel: ab Januar fällig, ab September abgelaufen mit Nachfrist bis 30.11., ab Dezember kritisch.</li>\n<li><strong>Lerncampus-Module</strong> werden als Unterweisungen angerechnet (UVV, Datenschutz, Hygiene, SuWR), <strong>Führerscheine</strong> mit jährlicher Kontrolle unter Verwaltung → Fahrzeuge, <strong>Formulare</strong> für die Polizei unter Verwaltung → Meldungen &amp; Formulare.</li>\n<li><strong>Weitere Apps</strong> unter Wissen &amp; Material mit aktuellen Adressen und Besonderheiten.</li>\n</ul>\n"},
+  {id:"verschluesselte-dateien", kategorie:"Daten sichern & teilen", titel:"Verschlüsselte Dateien: Startpasswort und Dateipasswort", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>BARRY schützt alle Dateien zwischen Leitung und Mitgliedern mit einem Passwort (AES-256). Ohne Passwort ist der Inhalt nicht lesbar – auch nicht in einem Texteditor.</p>\n<p>Es gibt <strong>zwei getrennte Passwörter</strong>:</p>\n<ul>\n<li><strong>Anmeldepasswort:</strong> selbst gewählt, nur zum Öffnen von BARRY auf dem eigenen Gerät. Kann jederzeit geändert werden.</li>\n<li><strong>Dateipasswort = Startpasswort</strong> aus der Zugangsliste der Leitung. Damit sind Zugangspaket, Stand-Updates und die eigenen Meldungen geschützt. Es ändert sich nur, wenn die Leitung ein neues Startpasswort vergibt.</li>\n</ul>\n<p><strong>Für Mitglieder:</strong> Beim Einspielen des Zugangspakets einmal das Startpasswort eingeben – BARRY merkt es sich auf dem Gerät. Stand-Updates öffnen sich danach automatisch, Meldungen an die Leitung werden automatisch verschlüsselt. Nach einem Gerätewechsel das Startpasswort bei der Leitung erfragen.</p>\n<p><strong>Für die Leitung:</strong> Meldungen der Mitglieder öffnet BARRY mit dem Startpasswort aus der Zugangsliste von selbst. Datensicherungen fragen nach einem frei wählbaren Passwort; ein vergessenes Passwort lässt sich nicht wiederherstellen. Die Zugangsliste getrennt und sicher aufbewahren – sie enthält alle Startpasswörter.</p>\n<p>Alte, unverschlüsselte Dateien lassen sich weiterhin einspielen.</p>\n"},
+  {id:"biometrie", kategorie:"Erste Schritte", titel:"Anmeldung per Fingerabdruck oder Gesicht", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>Nach einer Anmeldung mit Passwort bietet BARRY einmal an, künftig die Gerätesperre zu nutzen (Fingerabdruck, Gesicht oder Display-PIN). Ein- und ausschalten geht jederzeit unter <strong>Mein Profil</strong>.</p>\n<ul>\n<li>Gilt nur auf dem Gerät, auf dem es eingerichtet wurde; das Passwort bleibt gültig.</li>\n<li>Bei jeder <strong>10. Anmeldung</strong> fragt BARRY wieder nach dem Passwort, damit es nicht in Vergessenheit gerät.</li>\n<li>Voraussetzung: eingerichtete Displaysperre und BARRY über die Web-Adresse (https) geöffnet. Alle auf dem Handy hinterlegten Fingerabdrücke können BARRY öffnen.</li>\n<li>Das Dateipasswort (Startpasswort) ist davon nicht betroffen.</li>\n</ul>\n"},
+  {id:"freigaben-geburtstage", kategorie:"Verwaltung", titel:"Freigaben, Einwilligungen und Geburtstage", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>Jedes Mitglied entscheidet selbst, was andere Mitglieder in BARRY sehen dürfen: den eigenen Geburtstag (nur Tag und Monat), den Wurftag der eigenen Hunde und – für künftige Funktionen – Telefonnummer, E-Mail und Wohnort.</p>\n<p><strong>Vorgaben ohne Einwilligung:</strong> Geburtstage von Menschen sieht nur die Leitung, Wurftage der Hunde sehen alle, Kontaktdaten niemand.</p>\n<p><strong>So wird die Entscheidung erfasst:</strong> über das Blatt „Freigaben“ der Excel-Selbstauskunft, über die unterschriebene PDF-Selbstauskunft oder mündlich. Die Leitung trägt alles unter <strong>Verwaltung → Freigaben &amp; Einwilligungen</strong> ein, mit Datum, Form und Ablageort. Die Freigaben erreichen die Mitglieder mit dem nächsten Zugangspaket.</p>\n<p><strong>Geburtstage</strong> erscheinen auf der Startseite von 7 Tagen vorher bis 7 Tage danach. Die Leitung sieht alle mit Alter, Mitglieder nur die freigegebenen Geburtstage und die Hunde.</p>\n"},
   {id:"anmelden", kategorie:"Erste Schritte", titel:"Anmelden und erstes Passwort", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Beim allerersten \u00d6ffnen von BARRY tippt man oben seinen eigenen Namen ein \u2013 schon nach den ersten Buchstaben erscheinen passende Vorschl\u00e4ge zum Antippen. Wer von der Leitung einen <strong>Benutzernamen</strong> erhalten hat, kann stattdessen diesen k\u00fcrzeren Namen eingeben. Dann das\nvon der Staffelleitung mitgeteilte Passwort eingeben. BARRY verlangt dann sofort, ein <strong>eigenes,\nselbst gew\u00e4hltes Passwort</strong> festzulegen \u2013 das urspr\u00fcngliche Passwort ist danach nicht mehr g\u00fcltig.</p>\n<p>Wer sein Passwort vergessen hat, wendet sich an die Staffelleitung oder den Admin: Diese k\u00f6nnen unter\n<strong>Verwaltung \u2192 Personen</strong> ein neues Startpasswort vergeben.</p>\n"},
   {id:"mein-profil", kategorie:"Erste Schritte", titel:"Mein Profil: eigenes Passwort, Sparten, Kilometer", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Ein Klick auf den eigenen Namen unten links in der Seitenleiste \u00f6ffnet <strong>Mein Profil</strong>.\nDas kann jede Person f\u00fcr sich selbst nutzen, unabh\u00e4ngig von der Rolle:</p>\n<ul>\n<li><strong>Eigenes Passwort \u00e4ndern</strong> \u2013 zweimal das neue Passwort eintippen, speichern.</li>\n<li><strong>Meine Sparte(n)</strong> ausw\u00e4hlen (Fl\u00e4che, Tr\u00fcmmer, Mantrailing). Das bestimmt, welche\nSchnellzugriffe auf der Startseite zuerst angezeigt werden.</li>\n<li><strong>Standard-Kilometer</strong> zum \u00dcbungsort hinterlegen, damit dieser Wert beim Dienstnachweis\nautomatisch vorgeschlagen wird.</li>\n</ul>\n"},
   {id:"rollen", kategorie:"Rollen & Rechte", titel:"Rollen\u00fcbersicht: Wer darf was?", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Die genaue Tabelle steht oben auf dieser Seite fest angepinnt. Kurz zusammengefasst:</p>\n<ul>\n<li><strong>Mitglied:</strong> eigene Trainings f\u00fcr das eigene Team eintragen, Termine ansehen und\nzu-/absagen, Hausaufgaben des eigenen Teams erledigen, Wissen &amp; Material nachlesen.</li>\n<li><strong>Ausbilder, Ausbilder-Anw\u00e4rter, Ausbilder-Helfer:</strong> zus\u00e4tzlich Trainings f\u00fcr\n<em>jedes</em> Team eintragen, Pr\u00fcfstatus setzen, Termine anlegen, Hausaufgaben an mehrere/alle Teams\nverteilen, sowie Hunde, Qualifikationen, Anwesenheit und Orte in der Verwaltung pflegen. Alle drei\nAusbilder-Rollen haben fachlich exakt dieselben Rechte \u2013 nur die Bezeichnung unterscheidet sich.</li>\n<li><strong>Staffelleitung, Bereitschaftsleitung, Admin:</strong> zus\u00e4tzlich Personen, Rollen &amp;\nRechte, Datensicherung, den Staffelnamen und den kompletten Einsatzbereich (reale Eins\u00e4tze).</li>\n<li><strong>Individuelle Zusatzrechte:</strong> Die Leitung kann einzelnen Personen unter\n<strong>Verwaltung \u2192 Rollen &amp; Rechte</strong> gezielt das Recht \u201eKalender verwalten\" oder\n\u201eAusbildung verwalten\" geben, auch ohne dass diese Person offiziell Ausbilder/-in ist.</li>\n</ul>\n"},
