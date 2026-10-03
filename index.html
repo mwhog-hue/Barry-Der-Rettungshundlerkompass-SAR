@@ -3225,7 +3225,7 @@ function renderMeineFahrzeugeEinweisungen(person){
 }
 
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.18';
+const BARRY_APP_VERSION = '2.19';
 const BARRY_APP_STAND = '03.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -5500,6 +5500,33 @@ function modulQualiUebertragen(personId, qualifikationId, zielHund){
   return hund;
 }
 /* Zugangspaket: reduzierter Bestand für das Gerät eines einzelnen Mitglieds – keine Kontaktdaten, keine Qualifikationen, keine internen Notizen anderer. */
+
+/* ---------- Datenumfang nach Rolle (ab BARRY 2.19) ----------
+   Mitglied: nur eigene Daten. Ausbilder/-in: zusätzlich alle Hunde, Nachweise, Prüfungen, Trainings und Planung.
+   Leitung (Staffelleitung, Bereitschaftsleitung, Admin): der vollständige Bestand wie auf dem Gerät der Staffelleitung.
+   Gilt für Zugangspakete und Stand-Updates; ein Stand-Update ändert das Anmeldepasswort nie. */
+function paketUmfang(p){ return istLeitungOderAdmin(p) ? 'leitung' : hatAusbilderRecht(p) ? 'ausbilder' : 'mitglied'; }
+const AUSBILDER_SAMMLUNGEN = ['hunde','qualifikationen','personQualifikationen','zusatzKurse','personZusatzKurse','pruefungsstatus','findewilleProfile','hausaufgaben','trainingskarten','trainingseintraege','alltagseintraege','rhEintraege','mantrailingEintraege','kurswuensche','termine','geloeschteTermine','ruckmeldungen','orte','fahrzeuge','fahrzeugEinweisungen','lehrmaterialOrdner','lehrmaterial'];
+function rollenDaten(umfang){
+  const kopie = v => JSON.parse(JSON.stringify(v));
+  if(umfang==='leitung'){ const o={}; Object.keys(state).forEach(k=>{ if(k!=='meta') o[k]=kopie(state[k]); }); return o; }
+  if(umfang==='ausbilder'){ const o={}; AUSBILDER_SAMMLUNGEN.forEach(k=>{ if(state[k]!==undefined) o[k]=kopie(state[k]); }); return o; }
+  return null;
+}
+/* Rollendaten in den Bestand übernehmen; eigene Anmeldung und Geräteeinstellungen bleiben unberührt */
+function rollenDatenUebernehmen(daten, umfang, eigeneId){
+  const alt = state.personen.find(x=>x.id===eigeneId); const eigene = alt ? Object.assign({}, alt) : null;
+  Object.entries(daten||{}).forEach(([k,v])=>{
+    if(k==='personen' && umfang==='ausbilder'){
+      v.forEach(np=>{ const vorh=state.personen.find(x=>x.id===np.id); if(!vorh) state.personen.push(np); else if(np.id!==eigeneId) Object.assign(vorh, {name:np.name, benutzername:np.benutzername, rollen:np.rollen, status:np.status, geburtstagTM:np.geburtstagTM, freigaben:np.freigaben}); });
+      state.personen = state.personen.filter(x=> x.id===eigeneId || v.some(np=>np.id===x.id));
+    } else state[k]=v;
+  });
+  if(eigene){ const me=state.personen.find(x=>x.id===eigeneId);
+    if(me){ me.passwortHash=eigene.passwortHash; me.mussPasswortAendern=false; if(eigene.bereicheAusgeblendet) me.bereicheAusgeblendet=eigene.bereicheAusgeblendet; if(eigene.bereicheGewaehlt) me.bereicheGewaehlt=eigene.bereicheGewaehlt; }
+    else state.personen.push(eigene); }
+}
+
 function zugangspaketDaten(person, startpasswort){
   const eigeneHunde = state.hunde.filter(h=>h.status!=='inaktiv' && hundGefuehrtVon(h, person.id));
   const eigeneHundIds = new Set(eigeneHunde.map(h=>h.id));
@@ -5537,7 +5564,12 @@ function zugangspaketDaten(person, startpasswort){
     zusatzKurse: state.zusatzKurse||[], personZusatzKurse: (state.personZusatzKurse||[]).filter(z=>z.personId===person.id),
     fahrerlaubnisKlassen: state.fahrerlaubnisKlassen||[], personFahrerlaubnisse: (state.personFahrerlaubnisse||[]).filter(f=>f.personId===person.id),
   });
-  return Object.assign({ exportInfo:{ format:'barry-bestand', paket:'zugang', fuer:person.name, app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||'' } }, paket);
+  const umfang = paketUmfang(person);
+  if(umfang!=='mitglied'){
+    Object.assign(paket, rollenDaten(umfang));
+    if(umfang==='leitung') paket.personen = paket.personen.map(p=> p.id===person.id ? Object.assign({}, p, {passwortHash: einfacherHash(startpasswort), mussPasswortAendern:true}) : p);
+  }
+  return Object.assign({ exportInfo:{ format:'barry-bestand', paket:'zugang', umfang, fuer:person.name, app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||'' } }, paket);
 }
 async function zugangspaketErstellen(person, startpasswort){
   const exportDaten = zugangspaketDaten(person, startpasswort);
@@ -6245,7 +6277,9 @@ function bindMeinStand(person){
 }
 /* ---------- Stand-Update: nur eigene Nachweise + Katalog, ohne Passwort ---------- */
 function standUpdateDaten(p){
-  return {exportInfo:{format:'barry-mein-stand', app:'BARRY', appVersion:BARRY_APP_VERSION, fuer:p.name, personId:p.id, exportiertAm:nowIso()},
+  const umfang = paketUmfang(p);
+  return {exportInfo:{format:'barry-mein-stand', app:'BARRY', appVersion:BARRY_APP_VERSION, fuer:p.name, personId:p.id, umfang, exportiertAm:nowIso()},
+    rollenDaten: rollenDaten(umfang),
     qualifikationen: state.qualifikationen, personQualifikationen: state.personQualifikationen.filter(pq=>pq.personId===p.id),
     fahrzeuge: state.fahrzeuge||[], fahrzeugEinweisungen: (state.fahrzeugEinweisungen||[]).filter(e=>e.personId===p.id),
     kurswuensche: (state.kurswuensche||[]).filter(w=>w.personId===p.id), pruefungsstatus: state.pruefungsstatus.filter(s=>state.hunde.some(h=>h.id===s.hundId && h.status!=='inaktiv' && hundGefuehrtVon(h,p.id))),
@@ -6291,8 +6325,10 @@ async function standUpdateEinlesen(file){
       (d.plaketten||[]).forEach(x=>{ const h=state.hunde.find(h=>h.id===x.hundId); if(h){ h.plaketten=x.plaketten; h.sparten=x.sparten; } });
       if(Array.isArray(d.fahrzeuge)) state.fahrzeuge=d.fahrzeuge;
       if(Array.isArray(d.fahrzeugEinweisungen)) state.fahrzeugEinweisungen=(state.fahrzeugEinweisungen||[]).filter(e=>e.personId!==pid).concat(d.fahrzeugEinweisungen);
+      const umfang=d.exportInfo.umfang||'mitglied';
+      if(umfang!=='mitglied' && d.rollenDaten && ich && ich.id===pid) rollenDatenUebernehmen(d.rollenDaten, umfang, pid);
       state.meta.standUpdateAm=d.exportInfo.exportiertAm; speichereState();
-      zeigeToast('Ausbildungsstand aktualisiert.'); render();
+      zeigeToast(umfang==='leitung' ? 'Vollständiger Bestand der Staffelleitung übernommen – Ihr Anmeldepasswort bleibt.' : umfang==='ausbilder' ? 'Ausbildungsdaten aller Teams übernommen – Ihr Anmeldepasswort bleibt.' : 'Ausbildungsstand aktualisiert.'); render();
     }catch(err){ alert('Stand-Update konnte nicht eingelesen werden: '+err.message); }
   })();
 }
@@ -13139,7 +13175,7 @@ function bindModalHausaufgabe(person){
 const HILFE_ROLLEN = [{id:'mitglied',label:'Mitglied'},{id:'ausbilder',label:'Ausbilder/-in'},{id:'leitung',label:'Leitung/Admin'}];
 const HILFE_ARTIKEL = [
   {id:"neu-2-9-bis-2-17", kategorie:"Erste Schritte", titel:"Neu seit BARRY 2.9 (Oktober 2026)", rollen:["mitglied","ausbilder","leitung"], text:"\n<ul>\n<li><strong>Verschlüsselte Dateien:</strong> Zugangspakete, Stand-Updates, Meldungen und Datensicherungen sind mit Passwort geschützt (siehe eigener Artikel).</li>\n<li><strong>Anmeldung per Fingerabdruck/Gesicht</strong> als freiwillige Option, mit Passwortabfrage bei jeder 10. Anmeldung.</li>\n<li><strong>Freigaben:</strong> Jedes Mitglied entscheidet, was andere in BARRY sehen dürfen (Geburtstag, Wurftag der Hunde, später Kontaktdaten). Die Leitung erfasst die Einwilligungen unter <strong>Verwaltung → Freigaben &amp; Einwilligungen</strong>.</li>\n<li><strong>Geburtstage</strong> auf der Startseite: 7 Tage vorher bis 7 Tage danach.</li>\n<li><strong>Modulprüfungen gelten bis zum Monatsende</strong> (24 Monate), jährliche Nachweise nach der Stufenregel: ab Januar fällig, ab September abgelaufen mit Nachfrist bis 30.11., ab Dezember kritisch.</li>\n<li><strong>Lerncampus-Module</strong> werden als Unterweisungen angerechnet (UVV, Datenschutz, Hygiene, SuWR), <strong>Führerscheine</strong> mit jährlicher Kontrolle unter Verwaltung → Fahrzeuge, <strong>Formulare</strong> für die Polizei unter Verwaltung → Meldungen &amp; Formulare.</li>\n<li><strong>Weitere Apps</strong> unter Wissen &amp; Material mit aktuellen Adressen und Besonderheiten.</li>\n</ul>\n"},
-  {id:"verschluesselte-dateien", kategorie:"Daten sichern & teilen", titel:"Verschlüsselte Dateien: Startpasswort und Dateipasswort", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>BARRY schützt alle Dateien zwischen Leitung und Mitgliedern mit einem Passwort (AES-256). Ohne Passwort ist der Inhalt nicht lesbar – auch nicht in einem Texteditor.</p>\n<p>Es gibt <strong>zwei getrennte Passwörter</strong>:</p>\n<ul>\n<li><strong>Anmeldepasswort:</strong> selbst gewählt, nur zum Öffnen von BARRY auf dem eigenen Gerät. Kann jederzeit geändert werden.</li>\n<li><strong>Dateipasswort = Startpasswort</strong> aus der Zugangsliste der Leitung. Damit sind Zugangspaket, Stand-Updates und die eigenen Meldungen geschützt. Es ändert sich nur, wenn die Leitung ein neues Startpasswort vergibt.</li>\n</ul>\n<p><strong>Für Mitglieder:</strong> Beim Einspielen des Zugangspakets einmal das Startpasswort eingeben – BARRY merkt es sich auf dem Gerät. Stand-Updates öffnen sich danach automatisch, Meldungen an die Leitung werden automatisch verschlüsselt. Nach einem Gerätewechsel das Startpasswort bei der Leitung erfragen.</p>\n<p><strong>Für die Leitung:</strong> Meldungen der Mitglieder öffnet BARRY mit dem Startpasswort aus der Zugangsliste von selbst. Datensicherungen fragen nach einem frei wählbaren Passwort; ein vergessenes Passwort lässt sich nicht wiederherstellen. Die Zugangsliste getrennt und sicher aufbewahren – sie enthält alle Startpasswörter.</p>\n<p>Alte, unverschlüsselte Dateien lassen sich weiterhin einspielen.</p>\n"},
+  {id:"verschluesselte-dateien", kategorie:"Daten sichern & teilen", titel:"Verschlüsselte Dateien: Startpasswort und Dateipasswort", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>BARRY schützt alle Dateien zwischen Leitung und Mitgliedern mit einem Passwort (AES-256). Ohne Passwort ist der Inhalt nicht lesbar – auch nicht in einem Texteditor.</p>\n<p>Es gibt <strong>zwei getrennte Passwörter</strong>:</p>\n<ul>\n<li><strong>Anmeldepasswort:</strong> selbst gewählt, nur zum Öffnen von BARRY auf dem eigenen Gerät. Kann jederzeit geändert werden.</li>\n<li><strong>Dateipasswort = Startpasswort</strong> aus der Zugangsliste der Leitung. Damit sind Zugangspaket, Stand-Updates und die eigenen Meldungen geschützt. Es ändert sich nur, wenn die Leitung ein neues Startpasswort vergibt.</li>\n</ul>\n<p><strong>Für Mitglieder:</strong> Beim Einspielen des Zugangspakets einmal das Startpasswort eingeben – BARRY merkt es sich auf dem Gerät. Stand-Updates öffnen sich danach automatisch, Meldungen an die Leitung werden automatisch verschlüsselt. Nach einem Gerätewechsel das Startpasswort bei der Leitung erfragen.</p>\n<p><strong>Für die Leitung:</strong> Meldungen der Mitglieder öffnet BARRY mit dem Startpasswort aus der Zugangsliste von selbst. Datensicherungen fragen nach einem frei wählbaren Passwort; ein vergessenes Passwort lässt sich nicht wiederherstellen. Die Zugangsliste getrennt und sicher aufbewahren – sie enthält alle Startpasswörter.</p>\n<p><strong>Umfang nach Rolle:</strong> Mitglieder erhalten nur eigene Daten. Ausbilder/-innen bekommen zusätzlich alle Hunde, Nachweise, Prüfungen und Trainings, Leitungspersonen den vollständigen Bestand. Ein Stand-Update bringt diese Daten auf den neuesten Stand, ohne das Anmeldepasswort zu ändern. Ein Zugangspaket ist nur beim ersten Mal oder bei vergessenem Passwort nötig.</p>\n<p>Alte, unverschlüsselte Dateien lassen sich weiterhin einspielen.</p>\n"},
   {id:"biometrie", kategorie:"Erste Schritte", titel:"Anmeldung per Fingerabdruck oder Gesicht", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>Nach einer Anmeldung mit Passwort bietet BARRY einmal an, künftig die Gerätesperre zu nutzen (Fingerabdruck, Gesicht oder Display-PIN). Ein- und ausschalten geht jederzeit unter <strong>Mein Profil</strong>.</p>\n<ul>\n<li>Gilt nur auf dem Gerät, auf dem es eingerichtet wurde; das Passwort bleibt gültig.</li>\n<li>Bei jeder <strong>10. Anmeldung</strong> fragt BARRY wieder nach dem Passwort, damit es nicht in Vergessenheit gerät.</li>\n<li>Voraussetzung: eingerichtete Displaysperre und BARRY über die Web-Adresse (https) geöffnet. Alle auf dem Handy hinterlegten Fingerabdrücke können BARRY öffnen.</li>\n<li>Das Dateipasswort (Startpasswort) ist davon nicht betroffen.</li>\n</ul>\n"},
   {id:"freigaben-geburtstage", kategorie:"Verwaltung", titel:"Freigaben, Einwilligungen und Geburtstage", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>Jedes Mitglied entscheidet selbst, was andere Mitglieder in BARRY sehen dürfen: den eigenen Geburtstag (nur Tag und Monat), den Wurftag der eigenen Hunde und – für künftige Funktionen – Telefonnummer, E-Mail und Wohnort.</p>\n<p><strong>Vorgaben ohne Einwilligung:</strong> Geburtstage von Menschen sieht nur die Leitung, Wurftage der Hunde sehen alle, Kontaktdaten niemand.</p>\n<p><strong>So wird die Entscheidung erfasst:</strong> über das Blatt „Freigaben“ der Excel-Selbstauskunft, über die unterschriebene PDF-Selbstauskunft oder mündlich. Die Leitung trägt alles unter <strong>Verwaltung → Freigaben &amp; Einwilligungen</strong> ein, mit Datum, Form und Ablageort. Die Freigaben erreichen die Mitglieder mit dem nächsten Zugangspaket.</p>\n<p><strong>Geburtstage</strong> erscheinen auf der Startseite von 7 Tagen vorher bis 7 Tage danach. Die Leitung sieht alle mit Alter, Mitglieder nur die freigegebenen Geburtstage und die Hunde.</p>\n"},
   {id:"anmelden", kategorie:"Erste Schritte", titel:"Anmelden und erstes Passwort", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Beim allerersten \u00d6ffnen von BARRY tippt man oben seinen eigenen Namen ein \u2013 schon nach den ersten Buchstaben erscheinen passende Vorschl\u00e4ge zum Antippen. Wer von der Leitung einen <strong>Benutzernamen</strong> erhalten hat, kann stattdessen diesen k\u00fcrzeren Namen eingeben. Dann das\nvon der Staffelleitung mitgeteilte Passwort eingeben. BARRY verlangt dann sofort, ein <strong>eigenes,\nselbst gew\u00e4hltes Passwort</strong> festzulegen \u2013 das urspr\u00fcngliche Passwort ist danach nicht mehr g\u00fcltig.</p>\n<p>Wer sein Passwort vergessen hat, wendet sich an die Staffelleitung oder den Admin: Diese k\u00f6nnen unter\n<strong>Verwaltung \u2192 Personen</strong> ein neues Startpasswort vergeben.</p>\n"},
