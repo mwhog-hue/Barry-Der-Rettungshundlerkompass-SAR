@@ -3225,7 +3225,7 @@ function renderMeineFahrzeugeEinweisungen(person){
 }
 
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.19';
+const BARRY_APP_VERSION = '2.22';
 const BARRY_APP_STAND = '03.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -3425,7 +3425,9 @@ function renderLogin(){
   const aktive = state.personen.filter(p=>p.status!=='inaktiv');
   return `
   <div class="login-wrap"><div class="login-card card card-pad">
-    <div class="brand"><h1>${esc(APP_NAME)}</h1><small>${esc(state.organisation.name||APP_CLAIM)} – Anmeldung · Version ${BARRY_APP_VERSION}</small></div>
+    <div class="brand"><h1>${esc(APP_NAME)}</h1>    <small>${esc(state.organisation.name||APP_CLAIM)} – Anmeldung · Version ${BARRY_APP_VERSION}</small>
+    ${(()=>{ try{ const installiert = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent); const web=/^https?:$/.test(location.protocol);
+      if(web && !installiert && istErststartOhneDaten()) return `<p class="hint" style="margin:8px 0 12px;padding:8px 10px;background:#fff8e1;border-radius:8px">📲 <b>Tipp vor dem Einspielen:</b> BARRY zuerst auf den Startbildschirm legen${ios?' (Safari: Teilen → „Zum Home-Bildschirm“)':' (Chrome: ⋮ → „App installieren“)'} und das Zugangspaket dann <b>in der installierten App</b> einspielen. ${ios?'Auf dem iPhone haben Safari und die installierte App getrennte Speicher – sonst müssen Anmeldung und Passwort dort wiederholt werden.':'Sonst kann es sein, dass Anmeldung und Passwort in der App wiederholt werden müssen.'}</p>`; }catch(e){} return ''; })()}</div>
     <div class="field"><label>Name oder Benutzername</label>
       <input id="in-person" list="in-person-liste" autocomplete="off" placeholder="Namen eintippen …" value="${esc(loginEingabe)}">
       <datalist id="in-person-liste">${aktive.map(p=>`<option value="${esc(p.name)}">${p.benutzername?`Benutzername: ${esc(p.benutzername)}`:''}</option>`).join('')}</datalist>
@@ -4214,18 +4216,29 @@ function renderTabFreigaben(){
       <td style="padding:4px"><select data-ew-person="${p.id}" data-ew-feld="form"><option value="">–</option>${EINWILLIGUNG_FORMEN.map(f=>`<option ${e.form===f?'selected':''}>${esc(f)}</option>`).join('')}</select></td>
       <td style="padding:4px"><input data-ew-person="${p.id}" data-ew-feld="ablage" value="${esc(e.ablage||'')}" placeholder="z. B. Ordner Führerscheine" style="min-width:170px"></td>
     </tr>`; }).join('');
+  const karten = personen.map(p=>{ const e = p.einwilligung||{};
+    return `<details style="border-top:1px solid var(--line);padding:8px 0"><summary style="cursor:pointer"><strong>${esc(p.name)}</strong> <span class="hint">${e.datum?'· Einwilligung vom '+fmtDatum(e.datum):'· keine Einwilligung erfasst'}</span></summary>
+      <div style="padding:6px 0 0 4px">
+        ${FREIGABEN.map(d=>`<label class="row" style="gap:8px;align-items:flex-start;padding:4px 0;cursor:pointer"><input type="checkbox" data-fg-person="${p.id}" data-fg-k="${d.k}" ${freigabe(p,d.k)?'checked':''} style="margin-top:3px"> <span style="font-size:.9rem">${esc(FREIGABE_KURZ[d.k]||d.k)}${d.genutzt?'':' <span class="hint">(noch nicht genutzt)</span>'}</span></label>`).join('')}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"><label class="hint">Einwilligung vom<br><input type="date" data-ew-person="${p.id}" data-ew-feld="datum" value="${esc(e.datum||'')}" style="width:100%"></label>
+        <label class="hint">Form<br><select data-ew-person="${p.id}" data-ew-feld="form" style="width:100%"><option value="">–</option>${EINWILLIGUNG_FORMEN.map(f=>`<option ${e.form===f?'selected':''}>${esc(f)}</option>`).join('')}</select></label></div>
+        <label class="hint">Ablage<br><input data-ew-person="${p.id}" data-ew-feld="ablage" value="${esc(e.ablage||'')}" placeholder="z. B. Ordner Führerscheine" style="width:100%"></label>
+      </div></details>`; }).join('');
   return `<div class="card card-pad">
     <h3 style="margin-top:0">Freigaben &amp; Einwilligungen</h3>
     <p class="hint">Hier tragen Sie ein, was jedes Mitglied anderen Mitgliedern in BARRY zeigen möchte – nach der unterschriebenen Selbstauskunft, der Excel-Datei oder einer Meldung. Ohne Einwilligung gelten die Vorgaben: Geburtstag nur für die Leitung sichtbar, Wurftage der Hunde für alle, Kontaktdaten nicht sichtbar. Änderungen werden sofort gespeichert und erreichen die Mitglieder mit dem nächsten Zugangspaket.</p>
     <p class="hint"><b>${ohne.length} von ${personen.length}</b> Mitgliedern ohne erfasste Einwilligung${ohne.length&&ohne.length<=12?': '+ohne.map(p=>esc(p.name)).join(', '):''}.</p>
-    <div style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.9rem">
+    <style>.fg-karten{display:none}@media (max-width:760px){.fg-tabelle{display:none}.fg-karten{display:block}}</style>
+    <div class="fg-tabelle" style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.9rem">
       <thead><tr><th style="text-align:left;padding:6px 6px 6px 0">Name</th>${kopf}<th style="text-align:left">Einwilligung vom</th><th style="text-align:left">Form</th><th style="text-align:left">Ablage</th></tr></thead>
       <tbody>${zeilen}</tbody></table></div>
+    <div class="fg-karten">${karten}</div>
   </div>`;
 }
 function bindTabFreigaben(){
   document.querySelectorAll('[data-fg-person]').forEach(cb=>{ cb.onchange = ()=>{ const p = state.personen.find(x=>x.id===cb.dataset.fgPerson); if(!p) return;
-    p.freigaben = Object.assign({}, p.freigaben||{}, {[cb.dataset.fgK]: cb.checked}); p.freigabenStand = nowIso(); speichereState(); zeigeToast('Freigabe für '+p.name+' gespeichert.'); }; });
+    p.freigaben = Object.assign({}, p.freigaben||{}, {[cb.dataset.fgK]: cb.checked}); p.freigabenStand = nowIso(); speichereState(); zeigeToast('Freigabe für '+p.name+' gespeichert.');
+    document.querySelectorAll(`[data-fg-person="${p.id}"][data-fg-k="${cb.dataset.fgK}"]`).forEach(x=>{ x.checked = cb.checked; }); }; });
   document.querySelectorAll('[data-ew-person]').forEach(el=>{ el.onchange = ()=>{ const p = state.personen.find(x=>x.id===el.dataset.ewPerson); if(!p) return;
     p.einwilligung = Object.assign({}, p.einwilligung||{}, {[el.dataset.ewFeld]: el.value.trim()}); speichereState(); zeigeToast('Einwilligung für '+p.name+' gespeichert.'); }; });
 }
@@ -4811,21 +4824,25 @@ function renderTabFristen(){
   const { abgelaufen, baldAblaufend, fehlendePflicht, pflichtQualis, rhfLuecken, rhfPflichtAnzahl, hundeKurzDavor, jubilaeen, heuteJahr } = fristenAuswertung();
 
   const zeile = (label, rows) => rows.map(r=>label(r)).join('') || `<tr><td colspan="4" class="hint">Keine Einträge.</td></tr>`;
+  const stufenPunkt = r => r.stufe==='kritisch' ? '🔴' : r.stufe==='nachfrist' ? '🟠' : r.stufe==='faellig' ? '🟡' : '⛔';
+  const stufenText = r => r.stufe==='kritisch' ? 'kritisch' : r.stufe==='nachfrist' ? 'zählt noch bis '+fmtDatum(jahresfristDaten(r.pq.datum).nachfristBis) : r.stufe==='faellig' ? 'Wiederholung fällig' : '';
+  /* Je Person ein Block mit allen Einträgen – statt einer Zeile pro Eintrag */
+  const proPerson = (rows, eintrag) => { if(!rows.length) return '<p class="hint">Keine Einträge.</p>';
+    const gruppen = new Map(); rows.forEach(r=>{ if(!gruppen.has(r.p.id)) gruppen.set(r.p.id, {p:r.p, rows:[]}); gruppen.get(r.p.id).rows.push(r); });
+    return [...gruppen.values()].sort((a,b)=>a.p.name.localeCompare(b.p.name,'de')).map(g=>`<div style="border-top:1px solid var(--line);padding:8px 0"><div><strong>${esc(g.p.name)}</strong> <span class="hint">(${g.rows.length})</span></div><ul style="margin:4px 0 0;padding-left:18px">${g.rows.map(eintrag).join('')}</ul></div>`).join(''); };
 
   return `
     <div class="stack">
       <p class="hint">Übersicht für Ausbilder/-in und Staffelleitung: abgelaufene/bald ablaufende Personen-Qualifikationen, fehlende Pflichtqualifikationen und Hund/Team-Module, die kurz vor dem Abschluss stehen. Fristen beruhen auf den bei „Qualifikationen" hinterlegten Gültig-bis-Daten — dort selbst eintragen oder pflegen. Jährliche Nachweise werden kalenderjährlich geprüft: ab 01.01. des Folgejahres fällig (gelb), ab 01.09. abgelaufen (orange, zählt noch für die Einsatzfähigkeit), ab 01.12. kritisch (rot).</p>
 
       <div class="card card-pad">
-        <h3>⛔ Abgelaufen (${abgelaufen.length})</h3>
-        <table><thead><tr><th>Person</th><th>Qualifikation</th><th>Abgelaufen seit</th><th>Am</th></tr></thead>
-        <tbody>${zeile(r=>`<tr><td>${esc(r.p.name)}</td><td>${esc(r.q.label)}${r.stufe==='kritisch'?' <span class="chip">🔴 kritisch</span>':r.stufe==='nachfrist'?' <span class="chip muted">🟠 zählt noch bis '+fmtDatum(jahresfristDaten(r.pq.datum).nachfristBis)+'</span>':r.stufe==='faellig'?' <span class="chip muted">🟡 Wiederholung fällig</span>':''}</td><td>${Math.abs(r.tage)} Tage</td><td>${fmtDatum(r.pq.gueltigBis)}</td></tr>`, abgelaufen)}</tbody></table>
+        <h3>⛔ Abgelaufen (${abgelaufen.length} bei ${new Set(abgelaufen.map(r=>r.p.id)).size} Personen)</h3>
+        ${proPerson(abgelaufen, r=>`<li>${stufenPunkt(r)} ${esc(r.q.label)} <span class="hint">– seit ${Math.abs(r.tage)} Tagen (${fmtDatum(r.pq.gueltigBis)})${stufenText(r)?' · '+esc(stufenText(r)):''}</span></li>`)}
       </div>
 
       <div class="card card-pad">
-        <h3>⚠️ Läuft bald ab (nächste ${FRISTEN_BALD_TAGE} Tage) (${baldAblaufend.length})</h3>
-        <table><thead><tr><th>Person</th><th>Qualifikation</th><th>Noch</th><th>Am</th></tr></thead>
-        <tbody>${zeile(r=>`<tr><td>${esc(r.p.name)}</td><td>${esc(r.q.label)}${r.stufe==='kritisch'?' <span class="chip">🔴 kritisch</span>':r.stufe==='nachfrist'?' <span class="chip muted">🟠 zählt noch bis '+fmtDatum(jahresfristDaten(r.pq.datum).nachfristBis)+'</span>':r.stufe==='faellig'?' <span class="chip muted">🟡 Wiederholung fällig</span>':''}</td><td>${r.tage<0?'abgelaufen':r.tage+' Tage'}</td><td>${fmtDatum(r.pq.gueltigBis)}</td></tr>`, baldAblaufend)}</tbody></table>
+        <h3>⚠️ Läuft bald ab (nächste ${FRISTEN_BALD_TAGE} Tage) (${baldAblaufend.length} bei ${new Set(baldAblaufend.map(r=>r.p.id)).size} Personen)</h3>
+        ${proPerson(baldAblaufend, r=>`<li>${r.stufe?stufenPunkt(r):'⚠️'} ${esc(r.q.label)} <span class="hint">– ${r.tage<0?'abgelaufen':'noch '+r.tage+' Tage'} (${fmtDatum(r.pq.gueltigBis)})${stufenText(r)?' · '+esc(stufenText(r)):''}</span></li>`)}
       </div>
 
       <div class="card card-pad">
@@ -4837,8 +4854,7 @@ function renderTabFristen(){
       <div class="card card-pad">
         <div class="spread"><h3>❌ Pflichtqualifikation fehlt komplett (${fehlendePflicht.length})</h3></div>
         <p class="hint">${pflichtQualis.length===0?'Noch keine Qualifikation im Katalog als „Pflicht" markiert (bearbeitbar unter „Qualifikationen").':''}</p>
-        <table><thead><tr><th>Person</th><th>Qualifikation</th></tr></thead>
-        <tbody>${zeile(r=>`<tr><td>${esc(r.p.name)}</td><td>${esc(r.q.label)}</td></tr>`, fehlendePflicht)}</tbody></table>
+        ${proPerson(fehlendePflicht, r=>`<li>❌ ${esc(r.q.label)}</li>`)}
       </div>
 
       <div class="card card-pad">
@@ -5639,9 +5655,9 @@ async function alleZugangspaketeHerunterladen(){
   const neu = fehlendeStartpasswoerterVergeben();
   const personen = zugangsberechtigtePersonen().filter(p=>p.startPasswort);
   const dateien = [];
-  zeigeToast(`${personen.length} Zugangspakete werden verschlüsselt – das kann auf dem Handy etwa eine Minute dauern …`);
-  try{ for(const p of personen) dateien.push({name: zugangsDateiname(p), text: await barryVerschluesseln(JSON.stringify(zugangspaketDaten(p, p.startPasswort)), p.startPasswort, {inhalt:'Zugangspaket', art:'zugang', personId:p.id})}); }
-  catch(e){ alert('Zugangspakete nicht erstellt: '+e.message); return; }
+  try{ let i=0; for(const p of personen){ i++; fortschrittAnzeigen(`🔒 Zugangspaket ${i} von ${personen.length}: ${p.name}`); await naechsterFrame(); dateien.push({name: zugangsDateiname(p), text: await barryVerschluesseln(JSON.stringify(zugangspaketDaten(p, p.startPasswort)), p.startPasswort, {inhalt:'Zugangspaket', art:'zugang', personId:p.id})}); } }
+  catch(e){ fortschrittAnzeigen(null); alert('Zugangspakete nicht erstellt: '+e.message); return; }
+  fortschrittAnzeigen(null);
   personen.forEach(p=>{ if(!p.zugangErstelltAm) p.zugangErstelltAm = nowIso(); }); speichereState();
   const blob = zipErstellen(dateien);
   const url = URL.createObjectURL(blob); const a=document.createElement('a');
@@ -6278,7 +6294,9 @@ function bindMeinStand(person){
 /* ---------- Stand-Update: nur eigene Nachweise + Katalog, ohne Passwort ---------- */
 function standUpdateDaten(p){
   const umfang = paketUmfang(p);
+  const eigene = {}; ['name','benutzername','mitgliedsnummer','dienstbuchNr','geburtsdatum','mitgliedSeit','strasse','plz','ort','email','telefon','rollen','zusatzrechte','status','kmStandard','sparten','freigaben','einwilligung','freigabenStand'].forEach(k=>{ if(p[k]!==undefined) eigene[k]=p[k]; });
   return {exportInfo:{format:'barry-mein-stand', app:'BARRY', appVersion:BARRY_APP_VERSION, fuer:p.name, personId:p.id, umfang, exportiertAm:nowIso()},
+    eigenePerson: eigene,
     rollenDaten: rollenDaten(umfang),
     qualifikationen: state.qualifikationen, personQualifikationen: state.personQualifikationen.filter(pq=>pq.personId===p.id),
     fahrzeuge: state.fahrzeuge||[], fahrzeugEinweisungen: (state.fahrzeugEinweisungen||[]).filter(e=>e.personId===p.id),
@@ -6294,9 +6312,9 @@ async function standUpdateHerunterladen(p){
 }
 async function alleStandUpdatesHerunterladen(){
   const alle=zugangsberechtigtePersonen(); const personen=alle.filter(p=>p.startPasswort); const ohne=alle.filter(p=>!p.startPasswort);
-  zeigeToast(`${personen.length} Stand-Updates werden verschlüsselt – das kann auf dem Handy etwa eine Minute dauern …`);
-  const dateien=[]; try{ for(const p of personen) dateien.push({name:standUpdateDateiname(p), text: await barryVerschluesseln(JSON.stringify(standUpdateDaten(p)), p.startPasswort, {inhalt:'Stand-Update', art:'standupdate', personId:p.id})}); }
-  catch(e){ alert('Stand-Updates nicht erstellt: '+e.message); return; }
+  const dateien=[]; try{ let i=0; for(const p of personen){ i++; fortschrittAnzeigen(`🔒 Stand-Update ${i} von ${personen.length}: ${p.name}`); await naechsterFrame(); dateien.push({name:standUpdateDateiname(p), text: await barryVerschluesseln(JSON.stringify(standUpdateDaten(p)), p.startPasswort, {inhalt:'Stand-Update', art:'standupdate', personId:p.id})}); } }
+  catch(e){ fortschrittAnzeigen(null); alert('Stand-Updates nicht erstellt: '+e.message); return; }
+  fortschrittAnzeigen(null);
   if(ohne.length) alert(`Ohne Startpasswort und daher nicht enthalten: ${ohne.map(p=>p.name).join(', ')}. Für diese Personen bitte zuerst ein Zugangspaket erstellen.`);
   const blob=zipErstellen(dateien);
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`BARRY_Stand-Updates_${new Date().toISOString().slice(0,10)}.zip`;
@@ -6327,6 +6345,8 @@ async function standUpdateEinlesen(file){
       if(Array.isArray(d.fahrzeugEinweisungen)) state.fahrzeugEinweisungen=(state.fahrzeugEinweisungen||[]).filter(e=>e.personId!==pid).concat(d.fahrzeugEinweisungen);
       const umfang=d.exportInfo.umfang||'mitglied';
       if(umfang!=='mitglied' && d.rollenDaten && ich && ich.id===pid) rollenDatenUebernehmen(d.rollenDaten, umfang, pid);
+      // Eigene Stammdaten und Rollen von der Leitung übernehmen – Anmeldepasswort und Geräteeinstellungen bleiben
+      if(d.eigenePerson){ const me=state.personen.find(x=>x.id===pid); if(me) Object.assign(me, d.eigenePerson); }
       state.meta.standUpdateAm=d.exportInfo.exportiertAm; speichereState();
       zeigeToast(umfang==='leitung' ? 'Vollständiger Bestand der Staffelleitung übernommen – Ihr Anmeldepasswort bleibt.' : umfang==='ausbilder' ? 'Ausbildungsdaten aller Teams übernommen – Ihr Anmeldepasswort bleibt.' : 'Ausbildungsstand aktualisiert.'); render();
     }catch(err){ alert('Stand-Update konnte nicht eingelesen werden: '+err.message); }
@@ -7067,6 +7087,14 @@ async function barryDateiLesen(file, hinweis, gemerktesPasswort){
   }
   return null;
 }
+/* Kleine Fortschrittsanzeige unten am Bildschirm (null = ausblenden) */
+function fortschrittAnzeigen(text){
+  let el = document.getElementById('barry-fortschritt');
+  if(!text){ if(el) el.remove(); return; }
+  if(!el){ el = document.createElement('div'); el.id='barry-fortschritt'; el.style.cssText='position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:12px;font:600 .9rem system-ui,sans-serif;z-index:99998;box-shadow:0 6px 20px rgba(0,0,0,.3);max-width:90vw;text-align:center'; document.body.appendChild(el); }
+  el.textContent = text;
+}
+const naechsterFrame = () => new Promise(r=>setTimeout(r, 30));
 function textHerunterladen(text, name, typ){
   const url = URL.createObjectURL(new Blob([text], {type:typ||'application/json'})); const a = document.createElement('a');
   a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
@@ -13326,6 +13354,9 @@ render();
           if(!neu) return;
           neu.addEventListener('statechange', ()=>{
             if(neu.state==='installed' && navigator.serviceWorker.controller){
+              // Während Anmeldung, Erstanmeldung, Import oder in einem offenen Dialog nie neu laden – sonst müssen Eingaben wiederholt werden.
+              const mittendrin = !session || loginSchrittNeuesPasswort || modal || document.getElementById('pwd-1');
+              if(mittendrin){ zeigeToast('Neue BARRY-Version wird beim nächsten Öffnen aktiv.'); return; }
               if(confirm('Eine neue BARRY-Version ist verfügbar. Jetzt neu laden? (Noch nicht gespeicherte Eingaben in offenen Formularen gehen dabei verloren.)')) location.reload();
               else zeigeToast('Neue Version wird beim nächsten Öffnen aktiv.');
             }
