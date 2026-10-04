@@ -3240,8 +3240,8 @@ function renderMeineFahrzeugeEinweisungen(person){
 
 /* Trainingsorte der Staffel (Treffpunkte, Stand 04.10.2026). Feste IDs, damit Termine, Entfernungen und
    Austauschdateien auf allen Geräten zusammenpassen. Wird einmalig je Vorlagen-Stand eingespielt. */
-const TRAININGSORTE_STAFFEL = [{"id": "ort-tp-albshausen-foersterteich", "name": "Albshausen Försterteich", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 37304 71702", "lat": "51.195509", "lon": "9.533875"}, {"id": "ort-tp-albshausen-muellers-ruh", "name": "Albshausen Müllers Ruh", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 37765 72370", "lat": "51.201485", "lon": "9.540542"}, {"id": "ort-tp-alter-hundeplatz", "name": "Alter Hundeplatz", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 36919 87473", "lat": "51.337344", "lon": "9.529994"}, {"id": "ort-tp-bad-arolsen-sued", "name": "Bad Arolsen Süd", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 02477 90354", "lat": "51.364441", "lon": "9.03558"}, {"id": "ort-tp-besse-deutschlands-mitte", "name": "Besse Deutschlands Mitte", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 25262 74571", "lat": "51.221966", "lon": "9.361743"}, {"id": "ort-tp-deponie-grossenritte", "name": "Deponie Großenritte", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 25280 77179", "lat": "51.245416", "lon": "9.362185"}, {"id": "ort-tp-elan-kassel", "name": "ELAN Kassel", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 35592 81686", "lat": "51.285392", "lon": "9.510367"}, {"id": "ort-tp-emmeluth", "name": "Emmeluth", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 35497 79868", "lat": "51.269051", "lon": "9.508824"}, {"id": "ort-tp-falkenstein", "name": "Falkenstein", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 21284 78786", "lat": "51.26003", "lon": "9.305031"}, {"id": "ort-tp-falkenstein-sand", "name": "Falkenstein Sand", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 19834 78255", "lat": "51.255307", "lon": "9.284221"}, {"id": "ort-tp-hundeplatz-niestetal", "name": "Hundeplatz Niestetal", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 40226 86819", "lat": "51.331238", "lon": "9.577405"}, {"id": "ort-tp-kesselhaken-immenhausen", "name": "Kesselhaken Immenhausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 35460 98167", "lat": "51.43359", "lon": "9.510118"}, {"id": "ort-tp-landesfeuerwehrschule-kassel", "name": "Landesfeuerwehrschule Kassel", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 29787 83099", "lat": "51.298431", "lon": "9.427254"}, {"id": "ort-tp-marbachsgraben", "name": "Marbachsgraben", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 30994 83929", "lat": "51.305831", "lon": "9.444642"}, {"id": "ort-tp-neudorf", "name": "Neudorf", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U MC 94873 01114", "lat": "51.461176", "lon": "8.9262"}, {"id": "ort-tp-parkplatz-bilsteinblick", "name": "Parkplatz Bilsteinblick", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 24334 76114", "lat": "51.235881", "lon": "9.348559"}, {"id": "ort-tp-parkplatz-gestecke", "name": "Parkplatz Gestecke", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 24366 73546", "lat": "51.212788", "lon": "9.348843"}, {"id": "ort-tp-parkplatz-kleebergstrasse-holzhausen", "name": "Parkplatz Kleebergstraße Holzhausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 37237 97634", "lat": "51.428684", "lon": "9.535624"}, {"id": "ort-tp-parkplatz-lungenfachklinik-immenhausen", "name": "Parkplatz Lungenfachklinik Immenhausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 33116 96986", "lat": "51.423113", "lon": "9.476288"}, {"id": "ort-tp-transkal-grebenstein", "name": "Transkal Grebenstein", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 26308 97361", "lat": "51.426842", "lon": "9.378403"}, {"id": "ort-tp-volkhardinghausen", "name": "Volkhardinghausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 04024 85186", "lat": "51.317962", "lon": "9.057742"}, {"id": "ort-tp-volkhardinghausen-aws", "name": "Volkhardinghausen AWS", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 02593 85841", "lat": "51.32386", "lon": "9.037213"}];
-const ORTE_VORLAGE_STAND = 'rhs-kassel-2026-10-04';
+const TRAININGSORTE_STAFFEL = [{"id": "ort-tp-albshausen-foersterteich", "name": "Albshausen Försterteich", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 37304 71702", "lat": "51.195509", "lon": "9.533875"}, {"id": "ort-tp-albshausen-muellers-ruh", "name": "Albshausen Müllers Ruh", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 37765 72370", "lat": "51.201485", "lon": "9.540542"}, {"id": "ort-tp-alter-hundeplatz", "name": "Alter Hundeplatz", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 36919 87473", "lat": "51.337344", "lon": "9.529994"}, {"id": "ort-tp-bad-arolsen-sued", "name": "Bad Arolsen Süd", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 02477 90354", "lat": "51.364441", "lon": "9.03558"}, {"id": "ort-tp-besse-deutschlands-mitte", "name": "Besse Deutschlands Mitte", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 25262 74571", "lat": "51.221966", "lon": "9.361743"}, {"id": "ort-drk-ahnatal", "name": "DRK Ahnatal", "art": "Schulungsort", "adresse": "Am Rhain 10, Ahnatal", "hinweis": "Bereitschaftsabende (BA) dienstags", "lat": "", "lon": ""}, {"id": "ort-tp-deponie-grossenritte", "name": "Deponie Großenritte", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 25280 77179", "lat": "51.245416", "lon": "9.362185"}, {"id": "ort-tp-elan-kassel", "name": "ELAN Kassel", "art": "Trainingsgelände", "adresse": "Richard-Roosen-Straße 8, Kassel", "hinweis": "Ausbildungsabende (RHS allgemein) und Bereitschaftsabende mittwochs · Treffpunkt · MGRS 32U NB 35592 81686", "lat": "51.285392", "lon": "9.510367"}, {"id": "ort-tp-emmeluth", "name": "Emmeluth", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 35497 79868", "lat": "51.269051", "lon": "9.508824"}, {"id": "ort-tp-falkenstein", "name": "Falkenstein", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 21284 78786", "lat": "51.26003", "lon": "9.305031"}, {"id": "ort-tp-falkenstein-sand", "name": "Falkenstein Sand", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 19834 78255", "lat": "51.255307", "lon": "9.284221"}, {"id": "ort-tp-hundeplatz-niestetal", "name": "Hundeplatz Niestetal", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 40226 86819", "lat": "51.331238", "lon": "9.577405"}, {"id": "ort-tp-kesselhaken-immenhausen", "name": "Kesselhaken Immenhausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 35460 98167", "lat": "51.43359", "lon": "9.510118"}, {"id": "ort-tp-landesfeuerwehrschule-kassel", "name": "Landesfeuerwehrschule Kassel", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 29787 83099", "lat": "51.298431", "lon": "9.427254"}, {"id": "ort-tp-marbachsgraben", "name": "Marbachsgraben", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 30994 83929", "lat": "51.305831", "lon": "9.444642"}, {"id": "ort-tp-neudorf", "name": "Neudorf", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U MC 94873 01114", "lat": "51.461176", "lon": "8.9262"}, {"id": "ort-tp-parkplatz-bilsteinblick", "name": "Parkplatz Bilsteinblick", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 24334 76114", "lat": "51.235881", "lon": "9.348559"}, {"id": "ort-tp-parkplatz-gestecke", "name": "Parkplatz Gestecke", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 24366 73546", "lat": "51.212788", "lon": "9.348843"}, {"id": "ort-tp-parkplatz-kleebergstrasse-holzhausen", "name": "Parkplatz Kleebergstraße Holzhausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 37237 97634", "lat": "51.428684", "lon": "9.535624"}, {"id": "ort-tp-parkplatz-lungenfachklinik-immenhausen", "name": "Parkplatz Lungenfachklinik Immenhausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 33116 96986", "lat": "51.423113", "lon": "9.476288"}, {"id": "ort-tp-transkal-grebenstein", "name": "Transkal Grebenstein", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 26308 97361", "lat": "51.426842", "lon": "9.378403"}, {"id": "ort-tp-volkhardinghausen", "name": "Volkhardinghausen", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 04024 85186", "lat": "51.317962", "lon": "9.057742"}, {"id": "ort-tp-volkhardinghausen-aws", "name": "Volkhardinghausen AWS", "art": "Trainingsgelände", "adresse": "", "hinweis": "Treffpunkt · MGRS 32U NB 02593 85841", "lat": "51.32386", "lon": "9.037213"}];
+const ORTE_VORLAGE_STAND = 'rhs-kassel-2026-10-04b';
 function ortNameNorm(n){ return String(n||'').toLowerCase().replace(/^\s*tp[\s_:.-]+/,'').replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,' ').trim(); }
 function ortNameBereinigen(n){ let x=String(n||'').replace(/^\s*TP[\s_:.-]+/i,'').replace(/[_\s]+/g,' ').trim(); return x ? x.charAt(0).toUpperCase()+x.slice(1) : ''; }
 function ortIdUmschreiben(s, alt, neu){
@@ -3256,13 +3256,13 @@ function orteVorlageEinspielen(s){
   let n=0;
   TRAININGSORTE_STAFFEL.forEach(v=>{
     const o=s.orte.find(x=>x.id===v.id) || s.orte.find(x=>ortNameNorm(x.name)===ortNameNorm(v.name));
-    if(o){ if(o.id!==v.id){ ortIdUmschreiben(s,o.id,v.id); o.id=v.id; } if(!o.lat||!o.lon){ o.lat=v.lat; o.lon=v.lon; } if(!o.hinweis) o.hinweis=v.hinweis; if(!o.art) o.art=v.art; }
+    if(o){ if(o.id!==v.id){ ortIdUmschreiben(s,o.id,v.id); o.id=v.id; } if((!o.lat||!o.lon) && v.lat && v.lon){ o.lat=v.lat; o.lon=v.lon; } if(!o.adresse && v.adresse) o.adresse=v.adresse; if(!o.hinweis || (v.hinweis.endsWith(o.hinweis) && v.hinweis!==o.hinweis)) o.hinweis=v.hinweis; if(!o.art) o.art=v.art; }
     else { s.orte.push(Object.assign({}, v, {geometrie:null, erstelltVon:'vorlage'})); n++; }
   });
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.27';
+const BARRY_APP_VERSION = '2.28';
 const BARRY_APP_STAND = '04.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -5068,7 +5068,7 @@ function bindTabOrte(){
       const r=orteUebernehmen(gefunden); speichereState(); zeigeToast(`${r.neu} Ort(e) neu angelegt, ${r.aktual} aktualisiert.`); render(); };
   }
   const vBtn=document.getElementById('orte-vorlage-btn');
-  if(vBtn) vBtn.onclick=()=>{ if(!confirm('Fehlende Staffel-Trainingsorte (Treffpunkte, Stand 04.10.2026) ergänzen? Vorhandene Orte bleiben erhalten, nur fehlende Koordinaten werden nachgetragen.')) return;
+  if(vBtn) vBtn.onclick=()=>{ if(!confirm('Fehlende Staffel-Trainingsorte (Treffpunkte, ELAN Kassel, DRK Ahnatal; Stand 04.10.2026) ergänzen? Vorhandene Orte bleiben erhalten, nur fehlende Koordinaten werden nachgetragen.')) return;
     state.meta.orteVorlage=''; const n=orteVorlageEinspielen(state); speichereState(); zeigeToast(n?`${n} Trainingsort(e) ergänzt.`:'Alle Staffel-Trainingsorte sind bereits vorhanden.'); render(); };
   const coordsInput = document.getElementById('ort-coords');
   if(coordsInput) coordsInput.oninput = ()=>{
@@ -6775,7 +6775,7 @@ async function datensicherungJetzt(){
   zeigeToast(erg.geschuetzt ? 'Geschützte Datensicherung erstellt – Passwort getrennt aufbewahren.' : 'Datensicherung erstellt (ohne Passwort) – bitte an einem sicheren Ort ablegen.');
 }
 /* ---------- Eigene Kontaktdaten (Mitglied) ---------- */
-const KONTAKT_FELDER = [['strasse','Straße, Hausnummer'],['plz','PLZ'],['ort','Ort'],['email','E-Mail'],['telefon','Telefon']];
+const KONTAKT_FELDER = [['strasse','Straße, Hausnummer'],['plz','PLZ'],['ort','Ort'],['email','E-Mail'],['telefon','Telefon'],['kfzKennzeichen','KFZ-Kennzeichen (für den Dienstnachweis)']];
 function kontaktOffen(person){ return !!(person.kontaktGeaendertAm && (!person.kontaktGemeldetAm || person.kontaktGemeldetAm < person.kontaktGeaendertAm)); }
 function renderMeineKontaktdaten(person){
   return `<details class="card card-pad" style="margin-bottom:12px">
@@ -7606,6 +7606,8 @@ function renderModalPerson(){
         </div>
         <div class="field"><label>Mitgliedsnummer</label><input id="pf-mnr" value="${esc(p.mitgliedsnummer)}"></div>
         <div class="field"><label>Dienstbuch-Nr.</label><input id="pf-dnr" value="${esc(p.dienstbuchNr)}"></div>
+        <div class="field"><label>Dienststellung (Dienstnachweis)</label><input id="pf-dienststellung" value="${esc(p.dienststellung||'')}" placeholder="z. B. Gruppenführerin, Ausbilderin"></div>
+        <div class="field"><label>KFZ-Kennzeichen (Dienstnachweis)</label><input id="pf-kfz" value="${esc(p.kfzKennzeichen||'')}"></div>
         <div class="field"><label>Geburtsdatum</label><input id="pf-geb" type="date" value="${esc(p.geburtsdatum||'')}"></div>
         <div class="field"><label>Mitglied im DRK seit</label><input id="pf-mitglied-seit" type="date" value="${esc(p.mitgliedSeit||'')}">
           <div class="hint">Für die Jubiläums-Übersicht (5/10/15/…/40 Jahre) unter Verwaltung → Fristen & Lücken.</div>
@@ -7751,6 +7753,7 @@ function bindModalPerson(){
     const daten = {
       name, benutzername, mitgliedsnummer:document.getElementById('pf-mnr').value.trim(),
       dienstbuchNr:document.getElementById('pf-dnr').value.trim(),
+      dienststellung:document.getElementById('pf-dienststellung').value.trim(), kfzKennzeichen:document.getElementById('pf-kfz').value.trim(),
       geburtsdatum:document.getElementById('pf-geb').value,
       mitgliedSeit:document.getElementById('pf-mitglied-seit').value,
       strasse:document.getElementById('pf-strasse').value.trim(),
@@ -8402,6 +8405,100 @@ function buildServiceRecordXlsx({year,member={},unit='',rows=[]}){
  const xml=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><cols>${widths.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${sd}</sheetData><pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="0"/></worksheet>`;
  return buildWorkbook('Dienstnachweis '+year,xml,`$A$1:$H$${t+4}`);
 }
+/* Dienstnachweis als Mappe: Deckblatt „Gesamtstunden“ + je Monat ein Blatt (Aufbau wie die bisherige DRK-Excel-Vorlage) */
+const DN_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="4"><numFmt numFmtId="164" formatCode="dd.mm.yyyy"/><numFmt numFmtId="165" formatCode="hh:mm"/><numFmt numFmtId="166" formatCode="0.00"/><numFmt numFmtId="167" formatCode="#,##0.0"/></numFmts>
+<fonts count="6"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="16"/><name val="Arial"/></font><font><b/><sz val="12"/><color rgb="FFE60005"/><name val="Arial"/></font><font><b/><sz val="10"/><name val="Arial"/></font><font><i/><sz val="8"/><color rgb="FF666666"/><name val="Arial"/></font><font><b/><sz val="12"/><name val="Arial"/></font></fonts>
+<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF2F2F2"/></patternFill></fill></fills>
+<borders count="3"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FF808080"/></left><right style="thin"><color rgb="FF808080"/></right><top style="thin"><color rgb="FF808080"/></top><bottom style="thin"><color rgb="FF808080"/></bottom><diagonal/></border><border><left/><right/><top/><bottom style="thin"><color rgb="FF000000"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="19">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment horizontal="right"/></xf>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="2" xfId="0" applyBorder="1"/>
+<xf numFmtId="0" fontId="3" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="166" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="167" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="167" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="right" vertical="center"/></xf>
+<xf numFmtId="0" fontId="3" fillId="4" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="166" fontId="3" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="167" fontId="3" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"/>
+<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1" indent="1"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="2" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left"/></xf>
+</cellXfs>
+<cellStyles count="1"><cellStyle name="Standard" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+function buildDienstnachweisMappe({year, member={}, einheit={}, rows=[]}){
+ const MON=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+ const serial=d=>{const [y,m,t]=d.split('-').map(Number);return (Date.UTC(y,m-1,t)-Date.UTC(1899,11,30))/86400000};
+ const zeit=s=>{if(!s)return '';const [h,m]=s.split(':').map(Number);return (h*60+m)/1440};
+ const r2=n=>Math.round((n||0)*100)/100;
+ const cell=(ref,v,s,f)=>{ if(f!=null) return `<c r="${ref}" s="${s||0}"><f>${encXml(f)}</f>${typeof v==='number'?`<v>${v}</v>`:''}</c>`;
+   if(v==null||v==='') return `<c r="${ref}" s="${s||0}"/>`;
+   if(typeof v==='number') return `<c r="${ref}" s="${s||0}"><v>${v}</v></c>`;
+   return `<c r="${ref}" s="${s||0}" t="inlineStr"><is><t xml:space="preserve">${encXml(v)}</t></is></c>`; };
+ const blatt=(zeilen,merges,cols,opts={})=>{ const rowsXml=Object.keys(zeilen).map(Number).sort((a,b)=>a-b).map(r=>`<row r="${r}"${zeilen[r].ht?` ht="${zeilen[r].ht}" customHeight="1"`:''}>${zeilen[r].c.join('')}</row>`).join('');
+   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"${opts.showGrid===false?' showGridLines="0"':''}/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${rowsXml}</sheetData>${merges.length?`<mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>`:''}<printOptions horizontalCentered="1"/><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${opts.quer?'landscape':'portrait'}" fitToWidth="1" fitToHeight="0"/>${opts.fuss?`<headerFooter><oddFooter>${encXml(opts.fuss)}</oddFooter></headerFooter>`:''}</worksheet>`; };
+ const nameTeile=String(member.name||'').trim().split(/\s+/); const nachname=nameTeile.length>1?nameTeile.slice(-1)[0]:nameTeile[0]||''; const vorname=nameTeile.length>1?nameTeile.slice(0,-1).join(' '):'';
+ const blaetter=[], monSumme=[];
+ MON.forEach((mn,mi)=>{
+  const z={}, merges=[]; const add=(r,ref,v,s,f)=>{(z[r]=z[r]||{c:[]}).c.push(cell(ref,v,s,f))};
+  add(1,'A1','Dienstnachweis '+mn+' '+year,1); add(1,'H1','Deutsches Rotes Kreuz',2); z[1].ht=24;
+  add(3,'A3','Name, Vorname:',3); add(3,'C3',[nachname,vorname].filter(Boolean).join(', '),0);
+  if(einheit.einsatzeinheit||einheit.ortsvereinigung) add(3,'G3',[einheit.ortsvereinigung,einheit.einsatzeinheit].filter(Boolean).join(' · '),0);
+  merges.push('A3:B3','C3:F3');
+  ['Tag','von','bis','Std.','Art','Km','Bezeichnung','Ort'].forEach((h,i)=>add(5,colName(i)+'5',h,5)); z[5].ht=20;
+  const liste=rows.filter(r=>r.date && +r.date.slice(5,7)===mi+1).sort((a,b)=>(a.date+(a.start||'')).localeCompare(b.date+(b.start||'')));
+  let r=6;
+  if(!liste.length){ ['A','B','C','D','E','F','G','H'].forEach(c=>add(r,c+r,c==='G'?'keine Dienste in diesem Monat':'',c==='G'?16:6)); r++; }
+  liste.forEach(x=>{ add(r,'A'+r,serial(x.date),7); add(r,'B'+r,zeit(x.start),8); add(r,'C'+r,zeit(x.end),8); add(r,'D'+r,x.hours??'',9);
+    add(r,'E'+r,x.type||'',16); add(r,'F'+r,x.km??'',x.km==null?11:10); add(r,'G'+r,x.title||'',16); add(r,'H'+r,x.place||'',16); r++; });
+  const ende=r-1, sr=r+1;
+  const sh=r2(liste.reduce((a,x)=>a+(x.hours||0),0)), sk=r2(liste.reduce((a,x)=>a+(x.km||0),0));
+  add(sr,'A'+sr,'Summe '+mn,12); add(sr,'B'+sr,'',12); add(sr,'C'+sr,'',12); add(sr,'D'+sr,sh,13,`SUM(D6:D${ende})`); add(sr,'E'+sr,'Stunden',12); add(sr,'F'+sr,sk,14,`SUM(F6:F${ende})`); add(sr,'G'+sr,'Km (Hin- und Rückfahrt)',12); add(sr,'H'+sr,'',12);
+  merges.push(`A${sr}:C${sr}`);
+  if(liste.some(x=>x.km==null)){ add(sr+2,'A'+(sr+2),'Gelb hinterlegte Km-Felder: Fahrstrecke noch nicht bekannt – bitte nachtragen.',15); merges.push(`A${sr+2}:H${sr+2}`); }
+  monSumme.push({mn, h:sh, k:sk, ref:sr});
+  blaetter.push({name:mn, xml:blatt(z,merges,[11,7,7,7,24,8,40,26],{quer:true, fuss:'&L'+(member.name||'')+'&CDienstnachweis '+year+' – '+mn+'&RSeite &P'}), druck:`$A$1:$H$${sr+2}`});
+ });
+ // Deckblatt
+ const z={}, merges=[]; const add=(r,ref,v,s,f)=>{(z[r]=z[r]||{c:[]}).c.push(cell(ref,v,s,f))};
+ add(1,'A1','Deutsches Rotes Kreuz',17); z[1].ht=20;
+ if(einheit.kreisverband) add(2,'A2','Kreisverband '+einheit.kreisverband,0);
+ const L=[['Name:',nachname,'Ortsvereinigung:',einheit.ortsvereinigung||''],['Vorname:',vorname,'Einsatzeinheit:',einheit.einsatzeinheit||''],
+  ['PLZ-Ort:',[member.plz,member.ort].filter(Boolean).join(' '),'Dienstbuch Nr.:',member.dienstbuchNr||''],['Straße / Nr.:',member.strasse||'','KFZ-Kennzeichen:',member.kfzKennzeichen||''],
+  ['Kreisverband:',einheit.kreisverband||'','Dienststellung:',member.dienststellung||''],['Mitgliedsnummer:',member.mitgliedsnummer||'','','']];
+ L.forEach((l,i)=>{const r=4+i; add(r,'A'+r,l[0],3); add(r,'B'+r,l[1],4); add(r,'C'+r,'',4); if(l[2]){ add(r,'D'+r,l[2],3); add(r,'E'+r,l[3],4);} merges.push(`B${r}:C${r}`); z[r].ht=18; });
+ add(12,'A12','Dienstnachweis '+year,1); z[12].ht=26;
+ add(14,'A14','Monat',5); add(14,'B14','',5); add(14,'C14','',5); add(14,'D14','Stunden',5); add(14,'E14','Kilometer',5); merges.push('A14:C14');
+ monSumme.forEach((m,i)=>{const r=15+i; add(r,'A'+r,m.mn,6); add(r,'B'+r,'',6); add(r,'C'+r,'',6); add(r,'D'+r,m.h,9,`'${m.mn}'!D${m.ref}`); add(r,'E'+r,m.k,10,`'${m.mn}'!F${m.ref}`); merges.push(`A${r}:C${r}`);});
+ const gh=r2(monSumme.reduce((a,m)=>a+m.h,0)), gk=r2(monSumme.reduce((a,m)=>a+m.k,0));
+ add(28,'A28','Gesamt',12); add(28,'B28','',12); add(28,'C28','',12); add(28,'D28',gh,13,'SUM(D15:D26)'); add(28,'E28',gk,14,'SUM(E15:E26)'); merges.push('A28:C28');
+ add(29,'A29','Kilometer = Hin- und Rückfahrt zum Dienstort. Erstellt mit BARRY am '+new Date().toLocaleDateString('de-DE')+'.',15); merges.push('A29:E29');
+ add(32,'A32',member.ort||'',4); add(32,'B32','',18); add(32,'D32','',4); add(32,'E32','',4); merges.push('D32:E32');
+ add(33,'A33','Ort',15); add(33,'B33','Datum',15); add(33,'D33','Unterschrift Mitglied',15); merges.push('D33:E33');
+ add(36,'A36','',4); add(36,'B36','',4); add(36,'D36','',4); add(36,'E36','',4); merges.push('D36:E36');
+ add(37,'A37','Ort',15); add(37,'B37','Datum',15); add(37,'D37','Unterschrift Bereitschaftsleitung',15); merges.push('D37:E37');
+ blaetter.unshift({name:'Gesamtstunden', xml:blatt(z,merges,[18,16,6,18,30],{showGrid:false}), druck:'$A$1:$E$37'});
+ const sheets=blaetter.map((b,i)=>`<sheet name="${encXml(b.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('');
+ const names=blaetter.map((b,i)=>`<definedName name="_xlnm.Print_Area" localSheetId="${i}">'${encXml(b.name)}'!${b.druck}</definedName>`).join('');
+ return zip([
+  {name:'[Content_Types].xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${blaetter.map((b,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`},
+  {name:'_rels/.rels',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+  {name:'xl/workbook.xml',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheets}</sheets><definedNames>${names}</definedNames><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`},
+  {name:'xl/_rels/workbook.xml.rels',data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${blaetter.map((b,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${blaetter.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+  {name:'xl/styles.xml',data:DN_STYLES},
+  ...blaetter.map((b,i)=>({name:`xl/worksheets/sheet${i+1}.xml`,data:b.xml}))]);
+}
+K.buildDienstnachweisMappe=buildDienstnachweisMappe;
 K.buildPlanXlsx=buildPlanXlsx;K.buildServiceRecordXlsx=buildServiceRecordXlsx;
 
 /* Browser: Datei herunterladen */
@@ -9273,6 +9370,16 @@ function renderTabAnwesenheit(){
     </div>
     <div class="card table-scroll"><table><thead><tr><th>Person</th><th>Anwesend</th><th>Entschuldigt</th><th>Unentschuldigt</th><th>Staffeltermine</th><th>Stunden</th><th>Km gesamt</th><th></th></tr></thead><tbody>${zeilen}</tbody></table></div>
     <div class="card card-pad" style="margin-top:14px">
+      <h3>Angaben für das Deckblatt</h3>
+      <p class="hint">Erscheinen auf dem Deckblatt „Gesamtstunden“ jedes Dienstnachweises. Persönliche Angaben (Dienstbuch-Nr., KFZ-Kennzeichen, Dienststellung) stehen bei der jeweiligen Person.</p>
+      <div class="grid-2">
+        <div class="field"><label>Kreisverband</label><input id="dn-kv" value="${esc((state.organisation.dienstnachweis||{}).kreisverband||'')}" placeholder="z. B. Region Kassel"></div>
+        <div class="field"><label>Ortsvereinigung</label><input id="dn-ov" value="${esc((state.organisation.dienstnachweis||{}).ortsvereinigung||'')}" placeholder="z. B. Kassel"></div>
+        <div class="field"><label>Einsatzeinheit</label><input id="dn-ee" value="${esc((state.organisation.dienstnachweis||{}).einsatzeinheit||'')}" placeholder="z. B. RHS"></div>
+      </div>
+      <button class="btn btn-sm" id="dn-angaben-ok">Speichern</button>
+    </div>
+    <div class="card card-pad" style="margin-top:14px">
       <h3>⏱️ Helferstunden aus HiOrg einlesen</h3>
       <p class="hint">HiOrg-Export „Helferstunden“ (.xls/.xlsx) oder eine CSV-Datei einer Person. BARRY ordnet jede Zeile einem vorhandenen Staffeltermin zu (gleicher Tag, Beginn bis 1 Stunde abweichend) oder legt einen persönlichen Termin an, schlägt das Trainings- bzw. Einsatzgebiet vor und übernimmt die HiOrg-Stunden in den Dienstnachweis. Vor dem Übernehmen siehst du jede Zeile in einer Vorschau. Erneutes Einlesen aktualisiert, statt doppelt anzulegen.</p>
       <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
@@ -9293,7 +9400,18 @@ function dienstStunden(t, a){
 }
 const ORT_STOPPWORTE = new Set(['parkplatz','kassel','sued','mitte','deutschlands','bad','training']);
 const ORT_KUERZEL = { landesfeuerwehrschule:['lfws','hlfs'] };
-function ortVorschlagAusText(text){
+const DN_GENERISCH = new Set(['rhs','rh','training','traiing','theorie','praxis','unterricht','tagestraining','besprechung','besprechnung','organisatorisches','und','bereitschaftsabend','ausbildungsabend','ausbildung']);
+function ortRegelVorschlag(text, datum){
+  const roh = String(text||''); const n = ortNameNorm(roh); const wt = datum ? new Date(datum+'T12:00').getDay() : -1;
+  const ort = id=>state.orte.find(o=>o.id===id);
+  if(/^\s*ba\s*:/i.test(roh) && ort('ort-drk-ahnatal')) return {ortId:'ort-drk-ahnatal', stufe:'Regel: BA dienstags → DRK Ahnatal'};
+  if(/bereitschaftsabend/i.test(roh) && wt===3 && ort('ort-tp-elan-kassel')) return {ortId:'ort-tp-elan-kassel', stufe:'Regel: Bereitschaftsabend mittwochs → ELAN'};
+  const rest = n.split(' ').filter(w=>w && !DN_GENERISCH.has(w));
+  if(/\brhs?\b/.test(n) && !rest.length && ort('ort-tp-elan-kassel')) return {ortId:'ort-tp-elan-kassel', stufe:'Regel: RHS allgemein → ELAN'};
+  return null;
+}
+function ortVorschlagAusText(text, datum){
+  const regel = ortRegelVorschlag(text, datum); if(regel) return regel;
   const t = ' '+ortNameNorm(text)+' ';
   const kand = [];
   state.orte.forEach(o=>{
@@ -9374,7 +9492,7 @@ async function hiorgStundenVorschau(datei, personId){
     const schluessel = hiorgSchluessel(person.id, z);
     const vorhanden = state.anwesenheiten.find(a=>a.hiorgSchluessel===schluessel);
     const termin = vorhanden ? state.termine.find(t=>t.id===vorhanden.terminId) : hiorgTerminFinden(z);
-    const ortQuelle = termin && termin.ortId ? {ortId:termin.ortId, stufe:'aus Termin'} : ortVorschlagAusText([z.titel, z.ortText].join(' '));
+    const ortQuelle = termin && termin.ortId ? {ortId:termin.ortId, stufe:'aus Termin'} : (ortRegelVorschlag(z.titel, z.datum) || ortVorschlagAusText([z.titel, z.ortText].join(' '), z.datum));
     const ortId = (vorhanden && vorhanden.ortId) || ortQuelle.ortId;
     const zukunft = z.datum > heuteIso;
     return Object.assign({}, z, {schluessel, vorhanden:!!vorhanden, terminId: termin?termin.id:'', terminTitel: termin?termin.titel:'', terminIstStaff: !!(termin && (termin.sichtbarkeit||'staff')==='staff'),
@@ -9389,7 +9507,7 @@ function renderModalHiorgImport(){
   const fmtStd = x=>x==null?'–':String(x).replace('.',',');
   const gewaehlt = v.zeilen.filter(z=>z.an);
   const summe = Math.round(gewaehlt.reduce((s,z)=>s+(z.stunden||0),0)*100)/100;
-  const stufenText = {erkannt:'erkannt', vermutet:'vermutet – bitte prüfen', mehrdeutig:'mehrdeutig', 'aus Termin':'aus Termin', gespeichert:'bereits zugeordnet'};
+  const stufenText = {gewählt:'von Hand gewählt', erkannt:'erkannt', vermutet:'vermutet – bitte prüfen', mehrdeutig:'mehrdeutig', 'aus Termin':'aus Termin', gespeichert:'bereits zugeordnet'};
   return `<div class="modal-back"><div class="modal" style="max-width:900px">
     <div class="modal-head"><h3>Helferstunden übernehmen – ${esc(v.personName)}</h3><button class="btn btn-ghost btn-sm" id="m-schliessen">✕</button></div>
     <div class="modal-body" style="max-height:65vh;overflow-y:auto">
@@ -9450,12 +9568,13 @@ function exportiereDienstnachweis(personId, jahr){
       hours = diffMs>0 ? Math.round((diffMs/3600000)*4)/4 : null;
     }
     if(a.stunden!=null) hours = a.stunden;
-    return { date: t?t.beginn.slice(0,10):'', start, end, hours, type: a.hiorgTyp || (t?terminKategorieLabel(t.kategorie):''), km: kmFuerDienst(p, t, a).km, title: t?t.titel:'', place: t?t.ort:'' };
+    const ortObj = state.orte.find(o=>o.id===(a.ortId || (t&&t.ortId)));
+    return { date: t?t.beginn.slice(0,10):'', start, end, hours, type: a.hiorgTyp || (t?terminKategorieLabel(t.kategorie):''), km: kmFuerDienst(p, t, a).km, title: t?t.titel:'', place: ortObj ? ortObj.name : (t?t.ort:'') };
   }).sort((a,b)=> a.date.localeCompare(b.date));
-  const bin = RHSKit.buildServiceRecordXlsx({
+  const bin = RHSKit.buildDienstnachweisMappe({
     year: jahr,
-    member: { name:p.name, mitgliedsnummer:p.mitgliedsnummer, dienstbuchNr:p.dienstbuchNr, strasse:p.strasse, plz:p.plz },
-    unit: state.organisation.name||'',
+    member: { name:p.name, mitgliedsnummer:p.mitgliedsnummer, dienstbuchNr:p.dienstbuchNr, strasse:p.strasse, plz:p.plz, ort:p.ort, kfzKennzeichen:p.kfzKennzeichen||'', dienststellung:p.dienststellung||'' },
+    einheit: state.organisation.dienstnachweis||{},
     rows,
   });
   RHSKit.download(`Dienstnachweis_${p.name}_${jahr}.xlsx`, bin, RHSKit.XLSX_MIME);
@@ -9463,6 +9582,8 @@ function exportiereDienstnachweis(personId, jahr){
 }
 function bindTabAnwesenheit(){
   document.getElementById('af-jahr').onchange = e=>{ anwesenheitJahrFilter = parseInt(e.target.value,10); render(); };
+  const dnOk=document.getElementById('dn-angaben-ok');
+  if(dnOk) dnOk.onclick=()=>{ state.organisation.dienstnachweis={kreisverband:document.getElementById('dn-kv').value.trim(), ortsvereinigung:document.getElementById('dn-ov').value.trim(), einsatzeinheit:document.getElementById('dn-ee').value.trim()}; speichereState(); zeigeToast('Angaben gespeichert.'); };
   const hw=document.getElementById('hi-waehlen'), hd=document.getElementById('hi-datei');
   if(hw && hd){ hw.onclick=()=>hd.click(); hd.onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
     try{ await hiorgStundenVorschau(f, document.getElementById('hi-person').value); }catch(err){ alert('Datei konnte nicht gelesen werden: '+err.message); } }; }
