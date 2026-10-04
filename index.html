@@ -3262,7 +3262,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.28';
+const BARRY_APP_VERSION = '2.31';
 const BARRY_APP_STAND = '04.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -3374,6 +3374,45 @@ function seedState(){
 // Gespeichert im sessionStorage: gilt nur in diesem Tab/Fenster und endet beim Schließen bzw. mit „Abmelden“.
 const SITZUNG_KEY = STORAGE_KEY + '-sitzung';
 function sitzungLaden(){ try{ const x = JSON.parse(sessionStorage.getItem(SITZUNG_KEY)||'null'); return (x && x.personId) ? x : null; }catch(e){ return null; } }
+/* 2.31 Variante C: auf diesem Gerät angemeldet bleiben (localStorage, 30 Tage) */
+const DAUER_KEY = STORAGE_KEY + '-angemeldet'; const ANGEMELDET_TAGE = 30;
+let loginAngemeldetBleiben = true;
+function dauerSitzungLaden(){ try{ const x=JSON.parse(localStorage.getItem(DAUER_KEY)||'null'); if(!x||!x.personId) return null; if(Date.now()-(x.seit||0) > ANGEMELDET_TAGE*864e5) return null; return x; }catch(e){ return null; } }
+function dauerSitzungSetzen(p, seit){ try{ localStorage.setItem(DAUER_KEY, JSON.stringify({personId:p.id, hash:p.passwortHash||'', seit:seit||Date.now()})); }catch(e){} }
+function dauerSitzungLoeschen(){ try{ localStorage.removeItem(DAUER_KEY); }catch(e){} }
+/* 2.31 Variante C: geschützte Bereiche – erneute Passworteingabe, Sperre nach 15 Minuten ohne Bedienung */
+const SCHUTZ_MINUTEN = 15; const SCHUTZ_KEY = STORAGE_KEY + '-entsperrt';
+let schutzLetzteAktivitaet = (()=>{ try{ return Number(sessionStorage.getItem(SCHUTZ_KEY))||0; }catch(e){ return 0; } })();
+let schutzAnsichtOffen = false;
+function schutzEntsperrt(){ return !!schutzLetzteAktivitaet && (Date.now()-schutzLetzteAktivitaet) < SCHUTZ_MINUTEN*60000; }
+function schutzMerken(){ try{ sessionStorage.setItem(SCHUTZ_KEY, String(schutzLetzteAktivitaet)); }catch(e){} }
+function schutzEntsperren(){ schutzLetzteAktivitaet = Date.now(); schutzMerken(); }
+function schutzAktivitaet(){ if(schutzEntsperrt()){ schutzLetzteAktivitaet = Date.now(); schutzMerken(); } }
+function schutzSperren(){ schutzLetzteAktivitaet = 0; try{ sessionStorage.removeItem(SCHUTZ_KEY); }catch(e){} }
+document.addEventListener('pointerdown', schutzAktivitaet, true);
+document.addEventListener('keydown', schutzAktivitaet, true);
+setInterval(()=>{ if(schutzAnsichtOffen && !schutzEntsperrt() && !modal){ schutzSperren(); render(); } }, 20000);
+/* 2.31 Namen außerhalb des geschützten Bereichs nur als „Vorname N.“ anzeigen (reiner Anzeigeschutz) */
+function kurzName(name){ const t=String(name||'').trim().split(/\s+/).filter(Boolean); if(t.length<2) return String(name||'').trim(); return t.slice(0,-1).join(' ')+' '+t[t.length-1].charAt(0)+'.'; }
+function namenKuerzenImDom(root){
+  if(!root) return;
+  const paare=[];
+  (state.personen||[]).forEach(p=>{ const n=String(p.name||'').trim(); const t=n.split(/\s+/).filter(Boolean); if(t.length<2) return; const k=kurzName(n);
+    paare.push([n,k]); paare.push([t[t.length-1]+', '+t.slice(0,-1).join(' '), k]); });
+  if(!paare.length) return;
+  paare.sort((a,b)=>b[0].length-a[0].length);
+  const karte=new Map(paare);
+  const re=new RegExp(paare.map(x=>x[0].replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|'),'g');
+  const treffer=[];
+  const w=document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {acceptNode:n=>{ const el=n.parentElement; if(!el || el.closest('textarea,script,style,[contenteditable="true"],[data-vollname]')) return NodeFilter.FILTER_REJECT; re.lastIndex=0; return re.test(n.nodeValue)?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_SKIP; }});
+  while(w.nextNode()) treffer.push(w.currentNode);
+  treffer.forEach(n=>{ n.nodeValue = n.nodeValue.replace(re, m=>karte.get(m)||m); });
+}
+function vollNamenSichtbar(){
+  if(route.bereich!=='verwaltung') return false;
+  const t = VERWALTUNG_TABS.find(x=>x.id===route.unter);
+  return !!(t && t.schutz && schutzEntsperrt());
+}
 function sitzungMerken(){ try{ if(session) sessionStorage.setItem(SITZUNG_KEY, JSON.stringify({personId:session.personId, route})); else sessionStorage.removeItem(SITZUNG_KEY); }catch(e){} }
 // Nach Import/Wiederherstellung angemeldet bleiben, wenn dieselbe Person (gleiche Kennung, aktiv, unverändertes Passwort) im neuen Bestand vorhanden ist
 function sitzungVorherMerken(){ const p = aktuellePerson(); return p ? { id:p.id, passwortHash:p.passwortHash||'' } : null; }
@@ -3386,6 +3425,8 @@ function sitzungUebernehmen(vorher){
 }
 const gemerkteSitzung = sitzungLaden();
 let session = gemerkteSitzung ? { personId: gemerkteSitzung.personId } : null; // { personId }
+if(!session){ const d=dauerSitzungLaden(); const p=d && (state.personen||[]).find(x=>x.id===d.personId);
+  if(p && p.status!=='inaktiv' && !p.mussPasswortAendern && (p.passwortHash||'')===d.hash) session={personId:p.id}; else if(d) dauerSitzungLoeschen(); }
 function aktuellePerson(){
   return session ? state.personen.find(p=>p.id===session.personId) : null;
 }
@@ -3441,6 +3482,9 @@ function findePersonFuerLogin(eingabe){
   const perName = aktive.filter(p=>p.name.toLowerCase()===t);
   if(perName.length===1) return {person:perName[0], mehrdeutig:false};
   if(perName.length>1) return {person:null, mehrdeutig:true};
+  const perKurz = aktive.filter(p=>kurzName(p.name).toLowerCase()===t);
+  if(perKurz.length===1) return {person:perKurz[0], mehrdeutig:false};
+  if(perKurz.length>1) return {person:null, mehrdeutig:true};
   return {person:null, mehrdeutig:false};
 }
 // Erststart: nur der vorläufige Zugang „Admin“ existiert, noch keine Daten auf diesem Gerät.
@@ -3469,9 +3513,10 @@ function renderLogin(){
       if(web && !installiert && istErststartOhneDaten()) return `<p class="hint" style="margin:8px 0 12px;padding:8px 10px;background:#fff8e1;border-radius:8px">📲 <b>Tipp vor dem Einspielen:</b> BARRY zuerst auf den Startbildschirm legen${ios?' (Safari: Teilen → „Zum Home-Bildschirm“)':' (Chrome: ⋮ → „App installieren“)'} und das Zugangspaket dann <b>in der installierten App</b> einspielen. ${ios?'Auf dem iPhone haben Safari und die installierte App getrennte Speicher – sonst müssen Anmeldung und Passwort dort wiederholt werden.':'Sonst kann es sein, dass Anmeldung und Passwort in der App wiederholt werden müssen.'}</p>`; }catch(e){} return ''; })()}</div>
     <div class="field"><label>Name oder Benutzername</label>
       <input id="in-person" list="in-person-liste" autocomplete="off" enterkeyhint="next" placeholder="Namen eintippen …" value="${esc(loginEingabe)}">
-      <datalist id="in-person-liste">${aktive.map(p=>`<option value="${esc(p.name)}">${p.benutzername?`Benutzername: ${esc(p.benutzername)}`:''}</option>`).join('')}</datalist>
+      <datalist id="in-person-liste">${aktive.map(p=>`<option value="${esc(kurzName(p.name))}">${p.benutzername?`Benutzername: ${esc(p.benutzername)}`:''}</option>`).join('')}</datalist>
     </div>
     <div class="field"><label>Passwort</label><input type="password" id="in-pw" autofocus enterkeyhint="go" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <label class="row" style="gap:8px;align-items:flex-start;margin:-4px 0 12px;cursor:pointer"><input type="checkbox" id="in-angemeldet" ${loginAngemeldetBleiben?'checked':''} style="margin-top:3px;width:auto"><span class="hint" style="margin:0;color:var(--ink)">Auf diesem Gerät angemeldet bleiben (${ANGEMELDET_TAGE} Tage) – nicht auf fremden oder geteilten Geräten</span></label>
     <button class="btn btn-primary" id="btn-anmelden" style="width:100%;margin-bottom:10px">Anmelden</button>
     ${loginHinweis?`<div class="card card-pad" style="background:var(--soft);border:none;margin-bottom:12px"><p class="hint" style="margin:0">${esc(loginHinweis)}</p></div>`:''}
     ${loginFehler?`<p class="hint" style="color:var(--accent-ink)">${esc(loginFehler)}</p>`:''}
@@ -3598,7 +3643,7 @@ function bindLogin(){
       p.passwortHash = einfacherHash(pw1);
       p.mussPasswortAendern = false;
       speichereState();
-      session = { personId:p.id };
+      session = { personId:p.id }; if(loginAngemeldetBleiben) dauerSitzungSetzen(p); else dauerSitzungLoeschen();
       try{ localStorage.setItem('barry-last-login', p.benutzername || p.name); }catch(e){}
       loginSchrittNeuesPasswort = null; loginFehler='';
       render();
@@ -3625,8 +3670,10 @@ function bindLogin(){
     alert('Alle Daten wurden gelöscht. BARRY startet jetzt neu wie beim ersten Öffnen (Erstzugang: Admin / admin).');
     location.reload();
   };
+  const angCb = document.getElementById('in-angemeldet'); if(angCb) angCb.onchange = ()=>{ loginAngemeldetBleiben = angCb.checked; };
   document.getElementById('btn-anmelden').onclick = ()=>{
     const pw = document.getElementById('in-pw').value;
+    if(angCb) loginAngemeldetBleiben = angCb.checked;
     const {person:p, mehrdeutig} = findePersonFuerLogin(loginEingabe);
     if(mehrdeutig){
       loginFehler = 'Dieser Name kommt mehrfach vor – bitte den Benutzernamen verwenden (bei der Leitung erfragen).'; render(); return;
@@ -3639,7 +3686,7 @@ function bindLogin(){
     p.bereicheGewaehlt = true; speichereState();
     if(p.mussPasswortAendern){ loginSchrittNeuesPasswort = p.id; render(); return; }
     bioZaehlen(p.id, true);
-    session = { personId:p.id };
+    session = { personId:p.id }; if(loginAngemeldetBleiben) dauerSitzungSetzen(p); else dauerSitzungLoeschen();
     try{ localStorage.setItem('barry-last-login', p.benutzername || p.name); }catch(e){}
     render();
     bioAnbieten(p);
@@ -3663,6 +3710,7 @@ function bindLogin(){
    ========================================================= */
 function render(){
   const app = document.getElementById('app');
+  schutzAnsichtOffen = false;
   sitzungMerken();
   if(!session){ app.innerHTML = renderLogin(); bindLogin(); return; }
   const person = aktuellePerson();
@@ -3702,7 +3750,7 @@ function render(){
     </div>
   `;
   document.getElementById('btn-burger').onclick = ()=>{ sidebarOffen=!sidebarOffen; render(); };
-  document.getElementById('btn-abmelden').onclick = ()=>{ session=null; route={bereich:'start',unter:null,id:null}; render(); };
+  document.getElementById('btn-abmelden').onclick = ()=>{ session=null; dauerSitzungLoeschen(); schutzSperren(); route={bereich:'start',unter:null,id:null}; render(); };
   const meinProfilBtn = document.getElementById('btn-mein-profil');
   if(meinProfilBtn) meinProfilBtn.onclick = ()=>{ modal = {type:'meinProfil'}; render(); };
   document.querySelectorAll('[data-goto]').forEach(el=>{
@@ -3710,6 +3758,8 @@ function render(){
   });
 
   renderBereich(person);
+  { const d=dauerSitzungLaden(); if(d && d.personId===person.id && d.hash!==(person.passwortHash||'')) dauerSitzungSetzen(person, d.seit); }
+  if(!vollNamenSichtbar()) namenKuerzenImDom(app);
   sprungAusfuehren();
 }
 
@@ -4163,20 +4213,43 @@ function bindFormularMeldungBereich(){
 function renderTabMeldungen(){ return `<h2>Meldungen &amp; Formulare</h2>${renderFormularMeldungBereich()}`; }
 function bindTabMeldungen(){ bindFormularMeldungBereich(); }
 
-const VERWALTUNG_TABS = [
-  {id:'personen', label:'Personen', nur:'leitungAdmin'},
-  {id:'austausch', label:'Mitglieder & Austausch', nur:'leitungAdmin'},
-  {id:'freigaben', label:'Freigaben & Einwilligungen', nur:'leitungAdmin'},
-  {id:'hunde', label:'Hunde', nur:null},
-  {id:'qualifikationen', label:'Qualifikationen', nur:null},
-  {id:'fristen', label:'Fristen & Lücken', nur:null},
-  {id:'anwesenheit', label:'Anwesenheit', nur:null},
-  {id:'orte', label:'Orte & Gebiete', nur:null},
-  {id:'fahrzeuge', label:'Fahrzeuge', nur:null},
-  {id:'rechte', label:'Rollen & Rechte', nur:'leitungAdmin'},
-  {id:'meldungen', label:'Meldungen & Formulare', nur:'leitungAdmin'},
-  {id:'datensicherung', label:'Datensicherung', nur:'leitungAdmin'},
+const VERWALTUNG_GRUPPEN = [
+  {id:'datenschutz', label:'🔒 Personen, Dienstnachweise & Datenschutz'},
+  {id:'betrieb', label:'Dienstbetrieb & Meldungen'},
+  {id:'stammdaten', label:'Stammdaten'},
 ];
+const VERWALTUNG_TABS = [
+  {id:'personen', label:'Personen', nur:'leitungAdmin', gruppe:'datenschutz', schutz:true},
+  {id:'austausch', label:'Mitglieder & Austausch', nur:'leitungAdmin', gruppe:'datenschutz', schutz:true},
+  {id:'freigaben', label:'Freigaben & Einwilligungen', nur:'leitungAdmin', gruppe:'datenschutz', schutz:true},
+  {id:'qualifikationen', label:'Qualifikationen', nur:null, gruppe:'datenschutz', schutz:true},
+  {id:'fristen', label:'Fristen & Lücken', nur:null, gruppe:'datenschutz', schutz:true},
+  {id:'anwesenheit', label:'Anwesenheit & Dienstnachweise', nur:null, gruppe:'datenschutz', schutz:true},
+  {id:'rechte', label:'Rollen & Rechte', nur:'leitungAdmin', gruppe:'datenschutz', schutz:true},
+  {id:'datensicherung', label:'Datensicherung', nur:'leitungAdmin', gruppe:'datenschutz', schutz:true},
+  {id:'meldungen', label:'Meldungen & Formulare', nur:'leitungAdmin', gruppe:'betrieb'},
+  {id:'orte', label:'Orte & Gebiete', nur:null, gruppe:'stammdaten'},
+  {id:'fahrzeuge', label:'Fahrzeuge', nur:null, gruppe:'stammdaten'},
+  {id:'hunde', label:'Hunde', nur:null, gruppe:'stammdaten'},
+];
+function verwaltungTabGesperrt(tab){ const t=VERWALTUNG_TABS.find(x=>x.id===tab); return !!(t && t.schutz && !schutzEntsperrt()); }
+function renderSchutzAbfrage(tab){
+  const t=VERWALTUNG_TABS.find(x=>x.id===tab)||{label:''};
+  return `<div class="card card-pad" style="max-width:480px">
+    <h3 style="margin-top:0">🔒 ${esc(t.label)}</h3>
+    <p class="hint">Dieser Bereich enthält personenbezogene Daten. Bitte das eigene Passwort bestätigen. Danach bleibt der geschützte Bereich entsperrt, bis ${SCHUTZ_MINUTEN} Minuten lang nichts bedient wurde.</p>
+    <div class="field"><label>Passwort</label><input type="password" id="schutz-pw" autocomplete="current-password" enterkeyhint="go" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <p class="hint" id="schutz-fehler" style="color:var(--accent-ink);min-height:1em"></p>
+    <button class="btn btn-primary" id="schutz-ok">Entsperren</button>
+  </div>`;
+}
+function bindSchutzAbfrage(person){
+  const pw=document.getElementById('schutz-pw'), ok=document.getElementById('schutz-ok'); if(!ok) return;
+  const pruefen=()=>{ if(person.passwortHash && person.passwortHash===einfacherHash(pw.value)){ schutzEntsperren(); render(); }
+    else { document.getElementById('schutz-fehler').textContent='Das Passwort stimmt nicht.'; pw.value=''; pw.focus(); } };
+  ok.onclick=pruefen; pw.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); pruefen(); } };
+  setTimeout(()=>{ try{ pw.focus(); }catch(e){} }, 50);
+}
 function darfVerwaltungTabSehen(tab, person){
   if(tab.nur==='leitungAdmin') return istLeitungOderAdmin(person);
   return true; // 'ausbilderPlus'-Bereich ist bereits vorgefiltert (siehe darfBereichSehen)
@@ -4196,6 +4269,7 @@ function renderVerwaltung(person){
   const sichtbareTabs = VERWALTUNG_TABS.filter(t=>darfVerwaltungTabSehen(t,person));
   let tab = route.unter || (istLeitungOderAdmin(person)?'personen':'hunde');
   if(!sichtbareTabs.some(t=>t.id===tab)) tab = sichtbareTabs[0]?.id || 'hunde';
+  route.unter = tab;
   return `
     <div class="eyebrow" style="--dot:var(--t-verwaltung)">Verwaltung</div>
     <h1>Verwaltung</h1>
@@ -4209,10 +4283,13 @@ function renderVerwaltung(person){
       <button class="btn btn-sm" id="org-speichern" style="margin-top:10px">Speichern</button>
     </div>`:''}
     ${!istLeitungOderAdmin(person)?`<p class="hint">Als Ausbilder/-in siehst du hier die Bereiche, die für den laufenden Betrieb wichtig sind. Personen, Rollen/Rechte und Datensicherung bleiben Staffelleitung/Admin vorbehalten.</p>`:''}
-    <div class="row" style="margin:14px 0 20px;border-bottom:1px solid var(--line);padding-bottom:2px">
-      ${sichtbareTabs.map(t=>`<button class="btn ${tab===t.id?'btn-primary':'btn-ghost'}" data-vtab="${t.id}">${esc(t.label)}</button>`).join('')}
+    <div style="margin:14px 0 20px;border-bottom:1px solid var(--line);padding-bottom:10px">
+      ${VERWALTUNG_GRUPPEN.map(g=>{ const ts=sichtbareTabs.filter(t=>t.gruppe===g.id); if(!ts.length) return '';
+        return `<div style="margin:8px 0 2px"><div class="hint" style="margin:0 0 4px;font-weight:600;color:var(--ink)">${esc(g.label)}</div>
+          <div class="row" style="gap:6px;flex-wrap:wrap">${ts.map(t=>`<button class="btn btn-sm ${tab===t.id?'btn-primary':'btn-ghost'}" data-vtab="${t.id}">${esc(t.label)}</button>`).join('')}</div></div>`; }).join('')}
+      ${sichtbareTabs.some(t=>t.schutz) && schutzEntsperrt()?`<p class="hint" style="margin:8px 0 0">🔓 Geschützter Bereich entsperrt – Sperre nach ${SCHUTZ_MINUTEN} Minuten ohne Bedienung. <button class="link" id="schutz-sperren">Jetzt sperren</button></p>`:''}
     </div>
-    <div id="verwaltung-inner">${renderVerwaltungTab(tab, person)}</div>
+    <div id="verwaltung-inner">${verwaltungTabGesperrt(tab) ? renderSchutzAbfrage(tab) : renderVerwaltungTab(tab, person)}</div>
     ${modal ? renderModal(person) : ''}
   `;
 }
@@ -4246,7 +4323,10 @@ function bindVerwaltung(person){
   document.querySelectorAll('[data-vtab]').forEach(b=>{
     b.onclick = ()=>{ route.unter = b.dataset.vtab; render(); };
   });
-  bindVerwaltungTab(tab, person);
+  const sp=document.getElementById('schutz-sperren'); if(sp) sp.onclick=()=>{ schutzSperren(); render(); };
+  const tObj=VERWALTUNG_TABS.find(x=>x.id===tab);
+  schutzAnsichtOffen = !!(tObj && tObj.schutz && !verwaltungTabGesperrt(tab));
+  if(verwaltungTabGesperrt(tab)) bindSchutzAbfrage(person); else bindVerwaltungTab(tab, person);
   if(modal) bindModal(person);
 }
 function bindVerwaltungTab(tab, person){
@@ -6917,7 +6997,9 @@ function ortFuerTermin(t){
   if(t.ortId){ const o=state.orte.find(x=>x.id===t.ortId); if(o) return o; }
   const namen=state.orte.map(o=>o.name);
   for(const txt of [t.ort, t.titel]){ if(!txt) continue; const m=RHSKit.matchPlace(txt, namen); if(m && m.score>=80) return state.orte.find(o=>o.name===m.name); }
-  return null;
+  const datum=(t.beginn||'').slice(0,10);
+  const v = ortRegelVorschlag(t.titel, datum) || ortVorschlagAusText([t.titel, t.ort].filter(Boolean).join(' '), datum);
+  return v && v.ortId ? (state.orte.find(o=>o.id===v.ortId)||null) : null;
 }
 function meineEntfernung(person, ortId){ const e=(person.ortEntfernungen||{})[ortId]; return e && e.km!=null ? e : null; }
 function kmFuerDienst(p, t, a){
@@ -8435,6 +8517,7 @@ const DN_STYLES=`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xf numFmtId="164" fontId="0" fillId="0" borderId="2" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left"/></xf>
 </cellXfs>
 <cellStyles count="1"><cellStyle name="Standard" xfId="0" builtinId="0"/></cellStyles>
+<dxfs count="2"><dxf><fill><patternFill patternType="solid"><bgColor rgb="FFFFF2CC"/></patternFill></fill></dxf><dxf><font><color rgb="FFC00000"/></font></dxf></dxfs>
 </styleSheet>`;
 function buildDienstnachweisMappe({year, member={}, einheit={}, rows=[]}){
  const MON=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
@@ -8446,28 +8529,38 @@ function buildDienstnachweisMappe({year, member={}, einheit={}, rows=[]}){
    if(typeof v==='number') return `<c r="${ref}" s="${s||0}"><v>${v}</v></c>`;
    return `<c r="${ref}" s="${s||0}" t="inlineStr"><is><t xml:space="preserve">${encXml(v)}</t></is></c>`; };
  const blatt=(zeilen,merges,cols,opts={})=>{ const rowsXml=Object.keys(zeilen).map(Number).sort((a,b)=>a-b).map(r=>`<row r="${r}"${zeilen[r].ht?` ht="${zeilen[r].ht}" customHeight="1"`:''}>${zeilen[r].c.join('')}</row>`).join('');
-   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"${opts.showGrid===false?' showGridLines="0"':''}/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${rowsXml}</sheetData>${merges.length?`<mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>`:''}<printOptions horizontalCentered="1"/><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${opts.quer?'landscape':'portrait'}" fitToWidth="1" fitToHeight="0"/>${opts.fuss?`<headerFooter><oddFooter>${encXml(opts.fuss)}</oddFooter></headerFooter>`:''}</worksheet>`; };
+   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><sheetViews><sheetView workbookViewId="0"${opts.showGrid===false?' showGridLines="0"':''}/></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols>${cols.map((w,i)=>`<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${rowsXml}</sheetData>${merges.length?`<mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>`:''}${opts.cf||''}<printOptions horizontalCentered="1"/><pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${opts.quer?'landscape':'portrait'}" fitToWidth="1" fitToHeight="0"/>${opts.fuss?`<headerFooter><oddFooter>${encXml(opts.fuss)}</oddFooter></headerFooter>`:''}</worksheet>`; };
  const nameTeile=String(member.name||'').trim().split(/\s+/); const nachname=nameTeile.length>1?nameTeile.slice(-1)[0]:nameTeile[0]||''; const vorname=nameTeile.length>1?nameTeile.slice(0,-1).join(' '):'';
  const blaetter=[], monSumme=[];
  MON.forEach((mn,mi)=>{
   const z={}, merges=[]; const add=(r,ref,v,s,f)=>{(z[r]=z[r]||{c:[]}).c.push(cell(ref,v,s,f))};
-  add(1,'A1','Dienstnachweis '+mn+' '+year,1); add(1,'H1','Deutsches Rotes Kreuz',2); z[1].ht=24;
+  add(1,'A1','Dienstnachweis '+mn+' '+year,1); add(1,'I1','Deutsches Rotes Kreuz',2); z[1].ht=24;
   add(3,'A3','Name, Vorname:',3); add(3,'C3',[nachname,vorname].filter(Boolean).join(', '),0);
   if(einheit.einsatzeinheit||einheit.ortsvereinigung) add(3,'G3',[einheit.ortsvereinigung,einheit.einsatzeinheit].filter(Boolean).join(' · '),0);
   merges.push('A3:B3','C3:F3');
-  ['Tag','von','bis','Std.','Art','Km','Bezeichnung','Ort'].forEach((h,i)=>add(5,colName(i)+'5',h,5)); z[5].ht=20;
+  ['Tag','von','bis','Std.','Art','Km','Bezeichnung','Ort','Hinweis'].forEach((h,i)=>add(5,colName(i)+'5',h,5)); z[5].ht=20;
   const liste=rows.filter(r=>r.date && +r.date.slice(5,7)===mi+1).sort((a,b)=>(a.date+(a.start||'')).localeCompare(b.date+(b.start||'')));
   let r=6;
-  if(!liste.length){ ['A','B','C','D','E','F','G','H'].forEach(c=>add(r,c+r,c==='G'?'keine Dienste in diesem Monat':'',c==='G'?16:6)); r++; }
-  liste.forEach(x=>{ add(r,'A'+r,serial(x.date),7); add(r,'B'+r,zeit(x.start),8); add(r,'C'+r,zeit(x.end),8); add(r,'D'+r,x.hours??'',9);
-    add(r,'E'+r,x.type||'',16); add(r,'F'+r,x.km??'',x.km==null?11:10); add(r,'G'+r,x.title||'',16); add(r,'H'+r,x.place||'',16); r++; });
+  if(!liste.length){ ['A','B','C','D','E','F','G','H','I'].forEach(c=>add(r,c+r,c==='G'?'keine Dienste in diesem Monat':'',c==='G'?16:6)); r++; }
+  const minuten=t=>{ if(!t) return null; const [h,m]=t.split(':').map(Number); return h*60+m; };
+  const spanne=x=>{ const a=minuten(x.start), b=minuten(x.end); if(a==null) return [0,1440]; return [a, b==null?a+60:(b<=a?b+1440:b)]; };
+  liste.forEach((x,i)=>{
+    const hinweise=[];
+    if(x.unbestaetigt) hinweise.push('in HiOrg noch unbestätigt');
+    const [a1,b1]=spanne(x);
+    if(liste.some((y,j)=>j!==i && y.date===x.date && (()=>{ const [a2,b2]=spanne(y); return a1<b2 && a2<b1; })())) hinweise.push('zeitgleich mit weiterem Eintrag – bitte prüfen (ggf. Zeile löschen)');
+
+    add(r,'A'+r,serial(x.date),7); add(r,'B'+r,zeit(x.start),8); add(r,'C'+r,zeit(x.end),8); add(r,'D'+r,x.hours??'',9);
+    add(r,'E'+r,x.type||'',16); add(r,'F'+r,x.km??'',10); add(r,'G'+r,x.title||'',16); add(r,'H'+r,x.place||'',16); const fest=hinweise.join(' · ').replace(/"/g,"'");
+    add(r,'I'+r,'',16,`"${fest}"&IF(LEN(TRIM(F${r}))=0,"${fest?' · ':''}Km eintragen (Hin- und Rückfahrt)","")`); r++; });
   const ende=r-1, sr=r+1;
   const sh=r2(liste.reduce((a,x)=>a+(x.hours||0),0)), sk=r2(liste.reduce((a,x)=>a+(x.km||0),0));
-  add(sr,'A'+sr,'Summe '+mn,12); add(sr,'B'+sr,'',12); add(sr,'C'+sr,'',12); add(sr,'D'+sr,sh,13,`SUM(D6:D${ende})`); add(sr,'E'+sr,'Stunden',12); add(sr,'F'+sr,sk,14,`SUM(F6:F${ende})`); add(sr,'G'+sr,'Km (Hin- und Rückfahrt)',12); add(sr,'H'+sr,'',12);
+  add(sr,'A'+sr,'Summe '+mn,12); add(sr,'B'+sr,'',12); add(sr,'C'+sr,'',12); add(sr,'D'+sr,sh,13,`SUM(D6:D${ende})`); add(sr,'E'+sr,'Stunden',12); add(sr,'F'+sr,sk,14,`SUM(F6:F${ende})`); add(sr,'G'+sr,'Km (Hin- und Rückfahrt)',12); add(sr,'H'+sr,'',12); add(sr,'I'+sr,'',12);
   merges.push(`A${sr}:C${sr}`);
-  if(liste.some(x=>x.km==null)){ add(sr+2,'A'+(sr+2),'Gelb hinterlegte Km-Felder: Fahrstrecke noch nicht bekannt – bitte nachtragen.',15); merges.push(`A${sr+2}:H${sr+2}`); }
+  add(sr+2,'A'+(sr+2),'Gelb = Km fehlt. Die Markierung verschwindet automatisch, sobald ein Wert eingetragen ist. Summen rechnen selbst neu. Überzählige Zeilen können gelöscht werden. Die Spalte „Hinweis“ dient nur der Nacharbeit und kann geleert werden.',15); merges.push(`A${sr+2}:I${sr+2}`); z[sr+2].ht=26;
+  const cf = liste.length ? `<conditionalFormatting sqref="F6:F${ende}"><cfRule type="expression" dxfId="0" priority="1"><formula>LEN(TRIM(F6))=0</formula></cfRule></conditionalFormatting>` : '';
   monSumme.push({mn, h:sh, k:sk, ref:sr});
-  blaetter.push({name:mn, xml:blatt(z,merges,[11,7,7,7,24,8,40,26],{quer:true, fuss:'&L'+(member.name||'')+'&CDienstnachweis '+year+' – '+mn+'&RSeite &P'}), druck:`$A$1:$H$${sr+2}`});
+  blaetter.push({name:mn, xml:blatt(z,merges,[11,7,7,7,24,8,40,26,30],{quer:true, cf, fuss:'&L'+(member.name||'')+'&CDienstnachweis '+year+' – '+mn+'&RSeite &P'}), druck:`$A$1:$I$${sr+2}`});
  });
  // Deckblatt
  const z={}, merges=[]; const add=(r,ref,v,s,f)=>{(z[r]=z[r]||{c:[]}).c.push(cell(ref,v,s,f))};
@@ -8520,7 +8613,67 @@ const ORG_TABS = [
   {id:'teilnahme', label:'Teilnahme'},
   {id:'planung', label:'Planung & Themenbörse'},
   {id:'orte', label:'📍 Trainingsorte'},
+  {id:'dienstnachweis', label:'🧾 Mein Dienstnachweis'},
+  {id:'formulare', label:'📄 Formulare & Vordrucke'},
 ];
+let meinDnJahr = new Date().getFullYear();
+function renderOrganisationDienstnachweis(person){
+  const jahre=[...new Set([new Date().getFullYear(), new Date().getFullYear()-1, ...state.termine.map(t=>Number((t.beginn||'').slice(0,4))).filter(Boolean)])].sort((a,b)=>b-a);
+  const meine=state.anwesenheiten.filter(a=>a.personId===person.id && a.status==='anwesend').map(a=>({a, t:state.termine.find(t=>t.id===a.terminId)})).filter(x=>x.t && (x.t.beginn||'').startsWith(String(meinDnJahr)));
+  const MON=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  let sh=0, sk=0, offen=0;
+  const proMonat=MON.map((m,i)=>{ const l=meine.filter(x=>+x.t.beginn.slice(5,7)===i+1); const h=l.reduce((s,x)=>s+(dienstStunden(x.t,x.a)||0),0);
+    const kmL=l.map(x=>kmFuerDienst(person,x.t,x.a).km); const k=kmL.reduce((s,v)=>s+(v||0),0); const o=kmL.filter(v=>v==null).length; sh+=h; sk+=k; offen+=o; return {m, n:l.length, h, k, o}; });
+  const f=x=>(Math.round(x*100)/100).toLocaleString('de-DE');
+  const dn=state.organisation.dienstnachweis||{};
+  return `<div class="card card-pad" style="margin-bottom:14px">
+    <div class="spread" style="flex-wrap:wrap;gap:8px"><h3 style="margin:0">🧾 Mein Dienstnachweis</h3>
+      <select id="mdn-jahr" style="width:auto">${jahre.map(j=>`<option ${j===meinDnJahr?'selected':''}>${j}</option>`).join('')}</select></div>
+    <p class="hint">${meine.length} Einträge · <b>${f(sh)} Stunden</b> · <b>${f(sk)} km</b> (Hin- und Rückfahrt)${offen?` · ${offen} Einträge ohne Km (im Excel gelb markiert)`:''}</p>
+    <div class="table-scroll"><table style="font-size:.88rem"><thead><tr><th>Monat</th><th>Einträge</th><th>Stunden</th><th>Km</th></tr></thead><tbody>
+      ${proMonat.filter(x=>x.n).map(x=>`<tr><td>${x.m}</td><td>${x.n}</td><td>${f(x.h)}</td><td>${f(x.k)}${x.o?` <span class="chip muted">${x.o} offen</span>`:''}</td></tr>`).join('') || '<tr><td colspan="4" class="hint">Für dieses Jahr liegen noch keine Einträge vor. Am einfachsten liest du deine HiOrg-Helferstunden ein.</td></tr>'}
+    </tbody></table></div>
+    <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px">
+      <button class="btn btn-primary btn-sm" id="mdn-export">Dienstnachweis ${meinDnJahr} als Excel</button>
+      <input type="file" id="mdn-hiorg" accept=".xls,.xlsx,.csv" style="display:none"><button class="btn btn-sm" id="mdn-hiorg-btn">⏱️ Meine HiOrg-Helferstunden einlesen</button>
+    </div>
+    <p class="hint" style="margin-top:10px">Grundlage sind deine Anwesenheiten und die eingelesenen HiOrg-Helferstunden. Km = Hin- und Rückfahrt aus deinen Entfernungen unter 📍 Trainingsorte. Im Excel kannst du alles nacharbeiten; gelbe Felder werden nach dem Eintragen automatisch weiß, Summen rechnen selbst.
+    Deckblatt: ${dn.kreisverband||dn.ortsvereinigung||dn.einsatzeinheit?`Kreisverband ${esc(dn.kreisverband||'–')}, Ortsvereinigung ${esc(dn.ortsvereinigung||'–')}, Einsatzeinheit ${esc(dn.einsatzeinheit||'–')} (von der Staffelleitung)`:'Angaben der Einheit fehlen noch – sie kommen mit dem nächsten Terminplan der Staffelleitung'}. KFZ-Kennzeichen trägst du unter 🎓 Mein Stand → Meine Kontaktdaten ein.</p>
+  </div>`;
+}
+function bindOrganisationDienstnachweis(person){
+  const j=document.getElementById('mdn-jahr'); if(j) j.onchange=()=>{ meinDnJahr=+j.value; render(); };
+  const ex=document.getElementById('mdn-export'); if(ex) ex.onclick=()=>exportiereDienstnachweis(person.id, meinDnJahr);
+  const hb=document.getElementById('mdn-hiorg-btn'), hd=document.getElementById('mdn-hiorg');
+  if(hb && hd){ hb.onclick=()=>hd.click(); hd.onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
+    try{ await hiorgStundenVorschau(f, person.id, true); }catch(err){ alert('Datei konnte nicht gelesen werden: '+err.message); } }; }
+}
+function renderOrganisationFormulare(person){
+  const leitung=istLeitungOderAdmin(person);
+  const vordrucke=(state.lehrmaterial||[]).filter(m=>m.ordner==='Formulare & Vordrucke' || m.kategorie==='formular').sort((a,b)=>String(a.titel).localeCompare(String(b.titel),'de'));
+  const zeile=(icon,titel,text,knopf)=>`<div class="spread" style="gap:10px;padding:8px 0;border-top:1px dashed var(--line);align-items:flex-start"><div><b>${icon} ${titel}</b><div class="hint">${text}</div></div><div>${knopf}</div></div>`;
+  return `<div class="card card-pad" style="margin-bottom:14px">
+      <h3 style="margin-top:0">Für mich</h3>
+      ${zeile('🧾','Mein Dienstnachweis (Excel)','Deckblatt und Monatsblätter mit Stunden und Km – zum Nacharbeiten und Abgeben.','<button class="btn btn-sm" data-otab="dienstnachweis">Öffnen</button>')}
+      ${!leitung?zeile('📤','Meine Angaben an die Leitung','Nachweise, Kontaktdaten, Entfernungen und Zusagen mit Km als Datei senden.','<button class="btn btn-sm" id="fv-melden">Senden</button>'):''}
+    </div>
+    <div class="card card-pad" style="margin-bottom:14px">
+      <h3 style="margin-top:0">Vordrucke</h3>
+      ${vordrucke.length ? vordrucke.map(m=>renderLehrmaterialEintrag(m,false)).join('') : `<p class="hint">Noch keine Vordrucke hinterlegt.${leitung?' Ablage unter Wissen & Material → Lehrmaterial im Ordner „Formulare & Vordrucke“ (oder Art „Formular/Vordruck“) – sie erscheinen dann automatisch hier.':''}</p>`}
+    </div>
+    ${leitung?`<div class="card card-pad" style="margin-bottom:14px">
+      <h3 style="margin-top:0">Für die Staffelleitung</h3>
+      ${zeile('📄','Datenerfassung RHS – Flächenspürhunde','Polizei-Formular (Word) automatisch ausfüllen.','<button class="btn btn-sm" data-goto-verwaltung="meldungen">Öffnen</button>')}
+      ${zeile('🔒','Dienstnachweise aller Mitglieder','Anwesenheit, HiOrg-Import je Person, Angaben für das Deckblatt.','<button class="btn btn-sm" data-goto-verwaltung="anwesenheit">Öffnen</button>')}
+      ${zeile('🔒','Selbstauskunft & Zugänge','Selbstauskunft (Excel) erstellen und einlesen, Startpasswörter, Zugangspakete.','<button class="btn btn-sm" data-goto-verwaltung="personen">Öffnen</button>')}
+      ${zeile('🔒','Meldungen der Mitglieder einlesen','Nachweise, Kontaktdaten, Entfernungen und Zusagen übernehmen.','<button class="btn btn-sm" data-goto-verwaltung="austausch">Öffnen</button>')}
+      <p class="hint" style="margin:8px 0 0">🔒 = geschützter Bereich, BARRY fragt dort das Passwort erneut ab.</p>
+    </div>`:''}`;
+}
+function bindOrganisationFormulare(person){
+  const m=document.getElementById('fv-melden'); if(m) m.onclick=()=>meldungSenden(person);
+  document.querySelectorAll('[data-goto-verwaltung]').forEach(el=>{ el.onclick=()=>{ route={bereich:'verwaltung', unter:el.dataset.gotoVerwaltung, id:null}; render(); window.scrollTo(0,0); }; });
+}
 let orgTab = 'kalender';
 function renderOrganisation(person){
   return `
@@ -8529,7 +8682,7 @@ function renderOrganisation(person){
     <div class="row" style="margin:14px 0 20px;border-bottom:1px solid var(--line);padding-bottom:2px">
       ${ORG_TABS.map(t=>`<button class="btn ${orgTab===t.id?'btn-primary':'btn-ghost'}" data-otab="${t.id}">${esc(t.label)}</button>`).join('')}
     </div>
-    ${orgTab==='kalender' ? renderOrganisationKalender(person) : orgTab==='teilnahme' ? renderOrganisationTeilnahme(person) : orgTab==='orte' ? renderOrganisationOrte(person) : renderOrganisationPlanung(person)}
+    ${orgTab==='dienstnachweis' ? renderOrganisationDienstnachweis(person) : orgTab==='formulare' ? renderOrganisationFormulare(person) : orgTab==='kalender' ? renderOrganisationKalender(person) : orgTab==='teilnahme' ? renderOrganisationTeilnahme(person) : orgTab==='orte' ? renderOrganisationOrte(person) : renderOrganisationPlanung(person)}
     ${modal ? renderModal() : ''}
   `;
 }
@@ -8730,6 +8883,8 @@ function bindOrganisation(person){
   if(orgTab==='teilnahme') bindOrganisationTeilnahme(person);
   if(orgTab==='planung') bindOrganisationPlanung(person);
   if(orgTab==='orte') bindOrganisationOrte(person);
+  if(orgTab==='dienstnachweis') bindOrganisationDienstnachweis(person);
+  if(orgTab==='formulare') bindOrganisationFormulare(person);
   if(modal) bindModal(person);
 }
 
@@ -8744,7 +8899,7 @@ function terminplanExportieren(){
   const grenze = Date.now() - 400*86400000; // Löschvermerke gut ein Jahr mitgeben
   const geloescht = (state.geloeschteTermine||[]).filter(g=>new Date(g.geloeschtAm).getTime() >= grenze);
   const daten = { exportInfo:{ format:'barry-termine', app:'BARRY', appVersion:BARRY_APP_VERSION, exportiertAm:nowIso(), organisation: state.organisation.name||'', anzahlTermine: termine.length, anzahlGeloescht: geloescht.length },
-    termine, geloeschteTermine: geloescht, kmSatz: state.organisation.kmSatz??null, orte: (state.orte||[]).map(o=>({id:o.id, name:o.name, art:o.art||'', adresse:o.adresse||'', lat:o.lat||'', lon:o.lon||'', hinweis:o.hinweis||''})) };
+    termine, geloeschteTermine: geloescht, kmSatz: state.organisation.kmSatz??null, dienstnachweisAngaben: state.organisation.dienstnachweis||null, orte: (state.orte||[]).map(o=>({id:o.id, name:o.name, art:o.art||'', adresse:o.adresse||'', lat:o.lat||'', lon:o.lon||'', hinweis:o.hinweis||''})) };
   const blob = new Blob([JSON.stringify(daten)], {type:'application/json'});
   const url = URL.createObjectURL(blob); const a = document.createElement('a');
   a.href = url; a.download = `BARRY_Terminplan_${new Date().toISOString().slice(0,10)}.json`;
@@ -8780,10 +8935,11 @@ function terminplanAnalysieren(daten){
     if(treffer) loeschen.push({lok:treffer, g});
   });
   const orteAenderung=(daten.orte||[]).filter(o=>{ const v=state.orte.find(x=>x.id===o.id) || state.orte.find(x=>ortNameNorm(x.name)===ortNameNorm(o.name)); return !v || ['name','art','adresse','lat','lon','hinweis'].some(k=>String(v[k]||'')!==String(o[k]||'')); });
-   return {neu, aktualisiert, unveraendert, uebersprungen, loeschen, geloeschteListe: daten.geloeschteTermine||[], info: daten.exportInfo, orte: daten.orte||[], orteAenderung, kmSatz: daten.kmSatz};
+   return {neu, aktualisiert, unveraendert, uebersprungen, loeschen, geloeschteListe: daten.geloeschteTermine||[], info: daten.exportInfo, orte: daten.orte||[], orteAenderung, kmSatz: daten.kmSatz, dienstnachweisAngaben: daten.dienstnachweisAngaben||null};
 }
 function terminplanUebernehmen(a){
   if(a.kmSatz!==undefined && a.kmSatz!==null) state.organisation.kmSatz = a.kmSatz;
+  if(a.dienstnachweisAngaben && typeof a.dienstnachweisAngaben==='object') state.organisation.dienstnachweis = Object.assign({}, a.dienstnachweisAngaben);
   if(a.kmSatz!=null && !isNaN(a.kmSatz)) state.organisation.kmSatz = a.kmSatz;
   (a.orte||[]).forEach(o=>{ const vorh=state.orte.find(x=>x.id===o.id) || state.orte.find(x=>ortNameNorm(x.name)===ortNameNorm(o.name)); if(vorh){ if(o.id && vorh.id!==o.id){ ortIdUmschreiben(state, vorh.id, o.id); vorh.id=o.id; } Object.assign(vorh, {name:o.name, art:o.art, adresse:o.adresse, lat:o.lat, lon:o.lon, hinweis:o.hinweis}); } else state.orte.push({...o, geometrie:null}); });
   a.neu.forEach(t=>state.termine.push(Object.assign({}, t)));
@@ -9400,7 +9556,7 @@ function dienstStunden(t, a){
 }
 const ORT_STOPPWORTE = new Set(['parkplatz','kassel','sued','mitte','deutschlands','bad','training']);
 const ORT_KUERZEL = { landesfeuerwehrschule:['lfws','hlfs'] };
-const DN_GENERISCH = new Set(['rhs','rh','training','traiing','theorie','praxis','unterricht','tagestraining','besprechung','besprechnung','organisatorisches','und','bereitschaftsabend','ausbildungsabend','ausbildung']);
+const DN_GENERISCH = new Set(['rhs','rh','training','allgem','allg','allgemein','allgemeines','allgemeine','traiing','theorie','praxis','unterricht','tagestraining','besprechung','besprechnung','organisatorisches','und','bereitschaftsabend','ausbildungsabend','ausbildung']);
 function ortRegelVorschlag(text, datum){
   const roh = String(text||''); const n = ortNameNorm(roh); const wt = datum ? new Date(datum+'T12:00').getDay() : -1;
   const ort = id=>state.orte.find(o=>o.id===id);
@@ -9467,16 +9623,22 @@ function hiorgZeilenLesen(sheets){
   return {name:'', zeilen:[]};
 }
 function hiorgSchluessel(personId, z){ return 'hiorg|'+personId+'|'+z.datum+'|'+(z.von||'')+'|'+ortNameNorm(z.titel); }
+function dnSchlagworte(text){ return ortNameNorm(text).split(' ').filter(w=>w.length>=4 && !DN_GENERISCH.has(w)); }
+function hiorgPasstZuTermin(z, t){
+  const a = dnSchlagworte(z.titel), b = dnSchlagworte(t.titel+' '+(t.ort||''));
+  if(!a.length) return true;                       // HiOrg-Titel allgemein („RHS Training“) → passt zu jedem Staffeltermin
+  return a.some(w=>b.includes(w));                  // sonst mindestens ein gemeinsames Stichwort
+}
 function hiorgTerminFinden(z){
   if(!z.von) return null;
   const minuten = s=>{ const [h,m]=s.split(':').map(Number); return h*60+m; };
   let best=null;
   state.termine.filter(t=>(t.sichtbarkeit||'staff')==='staff' && !t.ganztags && t.beginn && t.beginn.slice(0,10)===z.datum).forEach(t=>{
-    const d = Math.abs(minuten(t.beginn.slice(11,16)) - minuten(z.von)); if(d<=60 && (!best || d<best.d)) best={t,d}; });
+    const d = Math.abs(minuten(t.beginn.slice(11,16)) - minuten(z.von)); if(d<=60 && hiorgPasstZuTermin(z,t) && (!best || d<best.d)) best={t,d}; });
   return best ? best.t : null;
 }
 let hiorgVorschau = null;
-async function hiorgStundenVorschau(datei, personId){
+async function hiorgStundenVorschau(datei, personId, festePerson){
   const buf = await datei.arrayBuffer(); let sheets;
   const name = datei.name.toLowerCase();
   if(name.endsWith('.csv')){ const text = new TextDecoder('utf-8').decode(buf); const tr = text.includes(';')?';':','; sheets=[{name:'CSV', rows:text.split(/\r?\n/).map(l=>l.split(tr).map(x=>x.replace(/^"|"$/g,'').trim()))}]; }
@@ -9486,12 +9648,13 @@ async function hiorgStundenVorschau(datei, personId){
   if(!erg.zeilen.length) throw new Error('Keine Zeilen mit Datum gefunden. Ist das der HiOrg-Export „Helferstunden“?');
   let person = state.personen.find(p=>p.id===personId);
   const namensTreffer = erg.name && state.personen.find(p=>p.status!=='inaktiv' && p.name && ortNameNorm(p.name)===ortNameNorm(erg.name));
-  if(namensTreffer && namensTreffer.id!==personId && confirm(`Die Datei gehört laut Kopfzeile zu „${erg.name}“. Für diese Person einlesen?`)) person = namensTreffer;
+  if(!festePerson && namensTreffer && namensTreffer.id!==personId && confirm(`Die Datei gehört laut Kopfzeile zu „${erg.name}“. Für diese Person einlesen?`)) person = namensTreffer;
   const heute = new Date(); const heuteIso = heute.getFullYear()+'-'+String(heute.getMonth()+1).padStart(2,'0')+'-'+String(heute.getDate()).padStart(2,'0');
   const zeilen = erg.zeilen.map(z=>{
     const schluessel = hiorgSchluessel(person.id, z);
     const vorhanden = state.anwesenheiten.find(a=>a.hiorgSchluessel===schluessel);
-    const termin = vorhanden ? state.termine.find(t=>t.id===vorhanden.terminId) : hiorgTerminFinden(z);
+    const bisher = vorhanden ? state.termine.find(t=>t.id===vorhanden.terminId) : null;
+    const termin = (bisher && bisher.quelle==='hiorg') ? bisher : hiorgTerminFinden(z);
     const ortQuelle = termin && termin.ortId ? {ortId:termin.ortId, stufe:'aus Termin'} : (ortRegelVorschlag(z.titel, z.datum) || ortVorschlagAusText([z.titel, z.ortText].join(' '), z.datum));
     const ortId = (vorhanden && vorhanden.ortId) || ortQuelle.ortId;
     const zukunft = z.datum > heuteIso;
@@ -9533,14 +9696,18 @@ function bindModalHiorgImport(){
   document.querySelectorAll('[data-hz]').forEach(cb=>cb.onchange=()=>{ merken(); hiorgVorschau.zeilen[+cb.dataset.hz].an=cb.checked; render(); });
   document.querySelectorAll('[data-ho]').forEach(s=>s.onchange=merken);
   document.getElementById('m-hiorg-ok').onclick=()=>{ merken(); const r=hiorgUebernehmen(hiorgVorschau); speichereState(); hiorgVorschau=null; schliesseModal();
-    zeigeToast(`${r.neuTermine} persönliche Termine angelegt, ${r.zuStaff} Staffeltermin(en) zugeordnet, ${r.aktualisiert} aktualisiert.`); };
+    zeigeToast(`${r.neuTermine} persönliche Termine angelegt, ${r.zuStaff} Staffeltermin(en) zugeordnet, ${r.aktualisiert} aktualisiert${r.umgehaengt?`, ${r.umgehaengt} Fehlzuordnung(en) korrigiert`:''}.`); };
 }
 function hiorgUebernehmen(v){
   const r={neuTermine:0, zuStaff:0, aktualisiert:0};
   v.zeilen.filter(z=>z.an).forEach(z=>{
     const ort = z.ortId ? state.orte.find(o=>o.id===z.ortId) : null;
-    const felder = {status:'anwesend', stunden:z.stunden, hiorgSchluessel:z.schluessel, hiorgTyp:z.typ||'', hiorgUnbestaetigt:!!z.unbestaetigt, ortId:z.ortId||'', hiorgAm:nowIso()};
+    const felder = {status:'anwesend', stunden:z.stunden, hiorgSchluessel:z.schluessel, hiorgTyp:z.typ||'', hiorgTitel:z.titel||'', hiorgUnbestaetigt:!!z.unbestaetigt, ortId:z.ortId||'', hiorgAm:nowIso()};
     let a = state.anwesenheiten.find(x=>x.hiorgSchluessel===z.schluessel);
+    if(a){ const alt=state.termine.find(x=>x.id===a.terminId);
+      if(alt && alt.quelle!=='hiorg' && alt.id!==(z.terminId||'')){ // bisher falschem Staffeltermin zugeordnet → lösen
+        state.anwesenheiten = state.anwesenheiten.filter(x=>x!==a); a=null; r.umgehaengt=(r.umgehaengt||0)+1; }
+    }
     if(a){ Object.assign(a, felder); const t=state.termine.find(x=>x.id===a.terminId); if(t && t.quelle==='hiorg'){ t.ortId=z.ortId||''; t.ort=ort?ort.name:(t.ort||''); } r.aktualisiert++; return; }
     let t = z.terminId ? state.termine.find(x=>x.id===z.terminId) : null;
     if(!t){
@@ -9568,8 +9735,8 @@ function exportiereDienstnachweis(personId, jahr){
       hours = diffMs>0 ? Math.round((diffMs/3600000)*4)/4 : null;
     }
     if(a.stunden!=null) hours = a.stunden;
-    const ortObj = state.orte.find(o=>o.id===(a.ortId || (t&&t.ortId)));
-    return { date: t?t.beginn.slice(0,10):'', start, end, hours, type: a.hiorgTyp || (t?terminKategorieLabel(t.kategorie):''), km: kmFuerDienst(p, t, a).km, title: t?t.titel:'', place: ortObj ? ortObj.name : (t?t.ort:'') };
+    const ortObj = state.orte.find(o=>o.id===(a.ortId || (t&&t.ortId))) || (t ? ortFuerTermin(t) : null);
+    return { date: t?t.beginn.slice(0,10):'', start, end, hours, type: a.hiorgTyp || (t?terminKategorieLabel(t.kategorie):''), km: kmFuerDienst(p, t, a).km, unbestaetigt: !!a.hiorgUnbestaetigt, title: a.hiorgTitel || (t?t.titel:''), place: ortObj ? ortObj.name : (t?t.ort:'') };
   }).sort((a,b)=> a.date.localeCompare(b.date));
   const bin = RHSKit.buildDienstnachweisMappe({
     year: jahr,
