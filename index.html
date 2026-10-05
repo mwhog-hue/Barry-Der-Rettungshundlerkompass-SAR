@@ -2650,7 +2650,7 @@ const QUALIFIKATIONEN_KATALOG_VORSCHLAG = [
   { code:'rh_pruef', label:'Modulprüfung 2 – Suchprüfung (RH-Prüf)', kategorie:K_PR, ue:4, pflichtRHF:true, intervallMonate:24, hinweis:'Laut Dienstanweisung alle 24 Monate. Teamprüfung je Sparte: Hund, Sparte und Plakettennummer werden mit erfasst und beim Hund als Plakette eingetragen.', aliase:['RH-Prüf – Rettungshundeprüfung (Suchprüfung)','Suchprüfung','Rettungshundeprüfung','RH-Prüf','Modul 2','Modulprüfung 2'] },
   { code:'tf', label:'TF – Truppführer:in (online)', kategorie:K_PR, ue:3, pflichtRHF:true },
   { code:'hlw', label:'HLW und AED – Reanimationstraining (jährlich)', kategorie:K_PR, pflichtRHF:true, intervallMonate:12, hinweis:'Praktisches HLW- und AED-Training, jährlich (Staffel-Merkblatt, Fristenübersicht).', aliase:['HLW und AED (Auffrischung)','Reanimationstraining','HLW/AED'] },
-  { code:'san_fb', label:'Sanitätsfortbildung (16 UE in 2 Jahren)', kategorie:K_PR, pflichtRHF:true, intervallMonate:24, hinweis:'Nachweis über mindestens 16 UE in 2 Jahren (häufig aufgeteilt auf 2 × 8 UE pro Jahr); ersetzt bei Sanitätern die Erste-Hilfe-Wiederholung. '+QUALI_HINWEIS_KBL, aliase:['San-Fortbildung','Fortbildung Sanität','Sanitätsfortbildung','16 UE Sanität'] },
+  { code:'san_fb', label:'Sanitätsfortbildung (16 UE in 2 Jahren)', kategorie:K_PR, pflichtRHF:true, intervallMonate:24, hinweis:'Je Zweijahreszeitraum ab Ende des Sanitätslehrgangs 16 UE; der Lehrgang enthält die 16 UE des ersten Zeitraums. Jede Teilnahme mit ihren UE eintragen – ohne Angabe setzt BARRY 8 UE je Ganztag an. Nachweis über mindestens 16 UE in 2 Jahren (häufig aufgeteilt auf 2 × 8 UE pro Jahr); ersetzt bei Sanitätern die Erste-Hilfe-Wiederholung. '+QUALI_HINWEIS_KBL, aliase:['San-Fortbildung','Fortbildung Sanität','Sanitätsfortbildung','16 UE Sanität'] },
   { code:'uvv_jaehrlich', label:'UVV-Unterweisung allgemein (jährlich)', kategorie:K_PR, pflichtRHF:true, intervallMonate:12, hinweis:'Jährlich für alle Einsatzkräfte. Wird bei der Modulprüfung 2 nicht abgeprüft, ist aber regelmäßig nachzuweisen.', aliase:['UVV-Unterweisung (jährlich)','UVV-Unterweisung','UVV allgemein'] },
   { code:'ds_jaehrlich', label:'Datenschutzunterweisung (jährlich)', kategorie:K_PR, pflichtRHF:true, intervallMonate:12, hinweis:'Jährliche Belehrung zum Umgang mit personenbezogenen Daten (z. B. Patientendaten) – für alle Einsatzkräfte. Der einmalige Grundkurs ist „DS – Datenschutz (online)“.', aliase:['Datenschutzunterweisung','Datenschutzbelehrung'] },
   { code:'hygiene', label:'Hygieneunterweisung (jährlich)', kategorie:K_PR, pflichtRHF:true, intervallMonate:12, hinweis:'Jährlich. Wird bei der Modulprüfung 2 nicht abgeprüft, ist aber regelmäßig nachzuweisen.', aliase:['Hygieneunterweisung'] },
@@ -2666,8 +2666,13 @@ const QUALIFIKATIONEN_KATALOG_VORSCHLAG = [
   { code:'mt_polizei', label:'Mantrailing – Prüfung Polizei Hessen (einmalig nach DRK-Prüfung)', kategorie:K_EMP },
   // 5b) Ausbilder:innen & Lehrkräfte der Rettungshundearbeit
   { code:'eug', label:'EUG – Erwachsenengerechte Unterrichtsgestaltung', kategorie:K_AUS, aliase:['Erwachsenengerechte Unterrichtsgestaltung'] },
-  { code:'ausb_fl', label:'Rettungshunde-Ausbilderschein Fläche', kategorie:K_AUS, aliase:['Ausbilderschein Fläche','RH-Ausbilderschein Fläche'] },
-  { code:'ausb_tr', label:'Rettungshunde-Ausbilderschein Trümmer', kategorie:K_AUS, aliase:['Ausbilderschein Trümmer','RH-Ausbilderschein Trümmer'] },
+  { code:'ausb_fl', label:'Rettungshunde-Ausbilderschein Fläche', kategorie:K_AUS, intervallMonate:36, aliase:['Ausbilderschein Fläche','RH-Ausbilderschein Fläche'], hinweis:'Lehrberechtigung, auf drei Jahre befristet (AO RH Ziff. 2.3.1). Verlängerung um jeweils drei Jahre bei aktiver Mitwirkung in der Rettungshundeausbildung und 16 UE Ausbilderfortbildung innerhalb der drei Jahre (Ziff. 2.2.4, 2.3.2). Bei Verlängerung neuen Nachweis mit dem Verlängerungsdatum eintragen.' },
+  { code:'ausb_tr', label:'Rettungshunde-Ausbilderschein Trümmer', kategorie:K_AUS, intervallMonate:36, aliase:['Ausbilderschein Trümmer','RH-Ausbilderschein Trümmer'], hinweis:'Lehrberechtigung, auf drei Jahre befristet (AO RH Ziff. 2.3.1). Verlängerung um jeweils drei Jahre bei aktiver Mitwirkung in der Rettungshundeausbildung und 16 UE Ausbilderfortbildung innerhalb der drei Jahre (Ziff. 2.2.4, 2.3.2). Bei Verlängerung neuen Nachweis mit dem Verlängerungsdatum eintragen.' },
+  { code:'ausb_fb', label:'Ausbilderfortbildung Rettungshundearbeit (16 UE in 3 Jahren)', kategorie:K_AUS, aliase:['Ausbilderfortbildung','Fortbildung Ausbilder Rettungshunde'], hinweis:'Fortbildung des DRK-Landesverbandes für Ausbilder/-innen mit gültiger Lehrberechtigung (AO RH Ziff. 2.2). Jede Teilnahme mit ihren UE eintragen; BARRY zählt die UE innerhalb der laufenden Lehrberechtigung zusammen. 1 UE = 45 Minuten.' },
+  { code:'bewerter', label:'Bewerter:in Modul Verhalten und Grundfertigkeiten (Ernennung, 3 Jahre)', kategorie:K_AUS, intervallMonate:36, aliase:['Bewerter','Bewerterin','Bewerterseminar'], hinweis:'Ernennung nach Bewerterseminar (16 UE), auf drei Jahre befristet; Verlängerung bei aktiver Mitwirkung und 8 UE Bewerterfortbildung (AO RH Ziff. 3.1–3.3). Voraussetzung u. a. mindestens drei Jahre Ausbildertätigkeit.' },
+  { code:'bewerter_fb', label:'Bewerterfortbildung (8 UE in 3 Jahren)', kategorie:K_AUS, aliase:['Bewerterfortbildung'], hinweis:'Fortbildung des DRK-Landesverbandes (AO RH Ziff. 3.2). Teilnahmen mit UE eintragen; BARRY zählt die UE innerhalb der laufenden Ernennung.' },
+  { code:'pruefer', label:'Prüfer:in in der Rettungshundearbeit (Ernennung, 3 Jahre)', kategorie:K_AUS, intervallMonate:36, aliase:['Prüfer Rettungshundearbeit','Prüferin Rettungshundearbeit'], hinweis:'Ernennung durch die Bundesbereitschaftsleitung je Prüfungssparte, auf drei Jahre befristet. Verlängerung bei aktiver Mitwirkung, 8 UE Prüferfortbildung und Tätigkeit als Prüfer: innerhalb von zwei Kalenderjahren mindestens 20 Teams selbst prüfen oder an mindestens drei verschiedenen Prüfungs- bzw. Modulveranstaltungen teilnehmen (AO RH Ziff. 4.3, 4.4.1).' },
+  { code:'pruefer_fb', label:'Prüferfortbildung (8 UE in 3 Jahren)', kategorie:K_AUS, aliase:['Prüferfortbildung'], hinweis:'Fortbildung des DRK-Bundesverbandes (AO RH Ziff. 4.3.4). Teilnahmen mit UE eintragen; BARRY zählt die UE innerhalb der laufenden Ernennung.' },
   // 6) Führung
   { code:'rkas', label:'RKAS – Rotkreuz-Aufbauseminar', kategorie:K_FUE, ue:16 },
   { code:'teukm', label:'TEuKM – Teamentwicklung und Konfliktmanagement', kategorie:K_FUE, ue:16 },
@@ -2751,7 +2756,8 @@ const QUALIFIKATIONEN_KATALOG_VORSCHLAG = [
   { code:'lc_pruef', label:'DRK-Lerncampus – Prüfungen', kategorie:K_LC, hinweis:LC_HINWEIS, aliase:['DRK-Lerncampus - Prüfungen','Lerncampus - Prüfungen','Lerncampus – Prüfungen'] },
   { code:'lc_sonst', label:'DRK-Lerncampus – Sonstige Module', kategorie:K_LC, hinweis:LC_HINWEIS, aliase:['DRK-Lerncampus - Sonstige Module','Lerncampus - Sonstige Module','Lerncampus – Sonstige Module'] },
 ].map(q=>({ intervallMonate:null, hinweis:'', pflicht:false, pflichtRHF:false, empfohlen:false, ue:null, aliase:[], ...q }));
-const QUALI_KATALOG_VERSION = 15;   // 15: RKE-Online-Teil als eigener Eintrag (03.10.2026)
+const QUALI_KATALOG_VERSION = 16;   // 16: Lehrberechtigung/Bewerter/Prüfer befristet, UE-Fortbildungskonten (AO RH 2024)
+// 15: RKE-Online-Teil als eigener Eintrag (03.10.2026)
 // Vorbelegte Ordner (entsprechen der bestehenden Ordnerstruktur der Staffel); jederzeit umbenenn-, lösch- und erweiterbar.
 const LEHRMATERIAL_STANDARD_ORDNER = ['Flächensuche','Mantrailing','Trümmerkunde','Kynologie','Geruch und Geruchsverteilung','Orientierung und Kartenkunde','EH Hund','UVV, Sicherheit im Einsatz, Transport','Funk','PSNV','Wasserrettung, Wassersuche','Organisation','Rechtliches und Grundlagen','Geschichte und Entwicklung','Hospitationen','Formulare & Vordrucke'];
 /* Jährliche Nachweise (Intervall 12 Monate) – Festlegung 02.10.2026: Prüfung kalenderjährlich mit fließendem Übergang.
@@ -2777,6 +2783,102 @@ function ablaufDatumFuer(datum, q){
   if(MONATSENDE_CODES.includes(q.code)){ const e = new Date(Date.UTC(d.getFullYear(), d.getMonth()+1, 0)); return e.toISOString().slice(0,10); }
   return d.toISOString().slice(0,10);
 }
+/* ---------- UE-Fortbildungskonten (BARRY 2.43) ----------
+   rollierend: Summe der UE in den letzten N Monaten (Sanitätsfortbildung, Staffelregel 16 UE in 2 Jahren).
+   bezug: Summe der UE innerhalb der laufenden Lehrberechtigung bzw. Ernennung (AO RH 2024). 1 UE = 45 Minuten.
+   Einträge ohne UE-Angabe gelten als vollständiger Nachweis (rückwärtskompatibel). */
+const UE_KONTEN = {
+  san_fb:     { soll:16, monate:24, modus:'zeitraum', anker:['slg'], titel:'Sanitätsfortbildung', zweck:'Erhalt der Sanitätsausbildung', quelle:'Staffelregel 05.10.2026: je Zweijahreszeitraum ab Ende des Sanitätslehrgangs 16 UE; der Lehrgang enthält die 16 UE des ersten Zeitraums', auchCodes:{slg:16}, warnMonate:12 },
+  ausb_fb:    { soll:16, monate:36, modus:'bezug', bezug:['ausb_fl','ausb_tr'], titel:'Ausbilderfortbildung', bezugTitel:'Lehrberechtigung', zweck:'Verlängerung der Lehrberechtigung', quelle:'AO RH Ziff. 2.2.4, 2.3.2' },
+  bewerter_fb:{ soll:8,  monate:36, modus:'bezug', bezug:['bewerter'], titel:'Bewerterfortbildung', bezugTitel:'Ernennung als Bewerter/-in', zweck:'Verlängerung der Ernennung', quelle:'AO RH Ziff. 3.2.4, 3.3' },
+  pruefer_fb: { soll:8,  monate:36, modus:'bezug', bezug:['pruefer'], titel:'Prüferfortbildung', bezugTitel:'Ernennung als Prüfer/-in', zweck:'Verlängerung der Prüfberechtigung', quelle:'AO RH Ziff. 4.3.4, 4.4.1' }
+};
+function ueZahl(x){ const n=Number(String(x??'').replace(',','.')); return isFinite(n)?n:0; }
+function ueVonNachweis(pq, regel){
+  if(pq.ue!==undefined && pq.ue!==null && pq.ue!=='') return {ue:ueZahl(pq.ue), art:'ue'};
+  if(pq.stunden){ const h=ueZahl(pq.stunden); if(h) return {ue:Math.round(h/0.75*2)/2, art:'stunden'}; }
+  // Staffelregel 05.10.2026: ohne Angabe gilt eine Ganztagsfortbildung als 8 UE (mehrtägig: 8 UE je Tag, höchstens 3 Tage) – durch Eintragen der UE überschreibbar
+  let tage=1; if(pq.datumBis && pq.datumBis>pq.datum){ const d=Math.round((new Date(pq.datumBis)-new Date(pq.datum))/86400000)+1; if(d>=1 && d<=3) tage=d; }
+  return {ue:UE_GANZTAG*tage, art:'pauschal'};
+}
+const UE_GANZTAG = 8;
+/* UE eines Nachweises nachträglich setzen (Leitung/Ausbilder; leer = Standardwert 8 UE je Ganztag) */
+function ueSetzen(pqId, wert){
+  const pq=state.personQualifikationen.find(x=>x.id===pqId); if(!pq) return;
+  const v=String(wert||'').trim().replace('.',','); if(v) pq.ue=v; else delete pq.ue;
+  speichereState(); zeigeToast(v?'UE gespeichert.':'UE entfernt – es gilt der Standardwert von 8 UE je Ganztag.'); render();
+}
+function plusMonate(datum, m){ const d=new Date(datum); if(isNaN(d)) return null; d.setMonth(d.getMonth()+m); return d.toISOString().slice(0,10); }
+function ueKontoStatus(personId, code, heute){
+  const regel=UE_KONTEN[code]; if(!regel) return null; heute=heute||new Date().toISOString().slice(0,10);
+  const q=state.qualifikationen.find(x=>x.code===code); if(!q) return null;
+  const auch=regel.auchCodes||{}; const auchIds=Object.fromEntries(state.qualifikationen.filter(x=>auch[x.code]).map(x=>[x.id, auch[x.code]]));
+  const eintraege=state.personQualifikationen.filter(pq=>pq.personId===personId && pq.datum && pq.anrechnung!=='san_fb_offen' && (pq.qualifikationId===q.id || pq.anrechnung===code || auchIds[pq.qualifikationId]))
+    .map(pq=>{ if(auchIds[pq.qualifikationId]) return {pq:Object.assign({}, pq, {datum:pq.datumBis||pq.datum}), ue:auchIds[pq.qualifikationId], art:'lehrgang'}; return Object.assign({pq}, ueVonNachweis(pq, regel)); })
+    .sort((a,b)=>String(b.pq.datum).localeCompare(String(a.pq.datum)));
+  if(regel.modus==='zeitraum'){
+    // Anker = Ende des Sanitätslehrgangs; ohne Lehrgang der früheste Fortbildungsnachweis
+    const ankerIds=state.qualifikationen.filter(x=>(regel.anker||[]).includes(x.code)).map(x=>x.id);
+    const ankerPq=state.personQualifikationen.filter(pq=>pq.personId===personId && ankerIds.includes(pq.qualifikationId) && pq.datum).map(pq=>pq.datumBis||pq.datum).sort()[0];
+    const anker = ankerPq || (eintraege.length ? eintraege[eintraege.length-1].pq.datum : null);
+    if(!anker) return null;
+    const perioden=[]; let k=0, start=anker;
+    while(start<=heute && k<60){ const ende=plusMonate(anker, regel.monate*(k+1)); perioden.push({k, von:start, bis:ende}); start=ende; k++; }
+    const sum=(von,bis)=>eintraege.filter(e=>e.pq.datum>=von && e.pq.datum<bis).reduce((a,e)=>a+e.ue,0)
+      + eintraege.filter(e=>e.art==='lehrgang' && e.pq.datum===von && von===anker && bis>von && !(e.pq.datum>=von && e.pq.datum<bis)).reduce((a,e)=>a+e.ue,0);
+    const akt=perioden[perioden.length-1]; const vor=perioden.length>1?perioden[perioden.length-2]:null;
+    const istAkt=sum(akt.von, akt.bis), istVor=vor?sum(vor.von, vor.bis):null;
+    const gueltig = !vor || istVor>=regel.soll;
+    const offen = istAkt < regel.soll;
+    // Gültig bis: Ende des laufenden Zeitraums; ist er schon erfüllt, Ende des folgenden
+    const bis = gueltig ? (offen ? akt.bis : plusMonate(akt.bis, regel.monate)) : (vor ? vor.bis : akt.bis);
+    const warn = gueltig && offen && akt.bis <= plusMonate(heute, regel.warnMonate||12);
+    return {code, regel, ist:istAkt, soll:regel.soll, fehlt:Math.max(0, regel.soll-istAkt), erfuellt:gueltig, gueltig, offen, warn, bis, stichtag:akt.bis, von:akt.von, anker, vorher: vor?{von:vor.von, bis:vor.bis, ist:istVor}:null,
+      eintraege:eintraege.filter(e=>e.pq.datum>=akt.von && e.pq.datum<akt.bis), alle:eintraege};
+  }
+  if(regel.modus==='rollierend'){
+    if(!eintraege.length) return null;
+    let summe=0, bis=null; for(const e of eintraege){ summe+=e.ue; if(summe>=regel.soll){ bis=plusMonate(e.pq.datum, regel.monate); break; } }
+    const von=plusMonate(heute, -regel.monate); const ist=eintraege.filter(e=>e.pq.datum>=von && e.pq.datum<=heute).reduce((a,e)=>a+e.ue,0);
+    return {code, regel, ist, soll:regel.soll, erfuellt: !!(bis && bis>=heute), bis, von, eintraege};
+  }
+  const bq=state.qualifikationen.filter(x=>(regel.bezug||[]).includes(x.code)).map(x=>x.id);
+  const bez=state.personQualifikationen.filter(pq=>pq.personId===personId && bq.includes(pq.qualifikationId) && pq.datum).sort((a,b)=>String(b.datum).localeCompare(String(a.datum)))[0];
+  if(!bez && !eintraege.length) return null;
+  if(!bez) return {code, regel, ohneBezug:true, ist:eintraege.reduce((a,e)=>a+e.ue,0), soll:regel.soll, eintraege};
+  const von=bez.datum, bis=bez.gueltigBis || plusMonate(von, regel.monate);
+  const imZeitraum=eintraege.filter(e=>e.pq.datum>=von && e.pq.datum<=bis); const ist=imZeitraum.reduce((a,e)=>a+e.ue,0);
+  return {code, regel, ist, soll:regel.soll, erfuellt: ist>=regel.soll, von, bis, bezugAbgelaufen: bis<heute, eintraege:imZeitraum};
+}
+/* Rollierende Konten: Gültigkeit der Nachweise aus der UE-Summe ableiten (für Fristen und Einsatzfähigkeit) */
+function ueKontenAktualisieren(){
+  try{ Object.entries(UE_KONTEN).forEach(([code, regel])=>{ if(regel.modus!=='rollierend' && regel.modus!=='zeitraum') return; const q=state.qualifikationen.find(x=>x.code===code); if(!q) return;
+    const personen=new Set(state.personQualifikationen.filter(pq=>pq.qualifikationId===q.id).map(pq=>pq.personId));
+    personen.forEach(pid=>{ const st=ueKontoStatus(pid, code); if(!st) return; const neu=st.bis || (st.eintraege[0]||st.alle[0]).pq.datum;
+      state.personQualifikationen.forEach(pq=>{ if(pq.personId===pid && pq.qualifikationId===q.id) pq.gueltigBis=neu; }); }); }); }catch(e){ console.warn('UE-Konten', e); }
+}
+function fmtUe(n){ return String(Math.round(n*10)/10).replace('.',','); }
+function ueKontenFuer(personId){ return Object.keys(UE_KONTEN).map(c=>ueKontoStatus(personId, c)).filter(Boolean); }
+function ueKontoZeileHtml(st){
+  const r=st.regel, fehlt=Math.max(0, st.soll-st.ist), pausch=st.eintraege.some(e=>e.art==='pauschal'), umger=st.eintraege.some(e=>e.art==='stunden');
+  const punkt = r.modus==='zeitraum' ? (!st.gueltig ? '🔴' : !st.offen ? '🟢' : st.warn ? '🟠' : '🟡') : st.erfuellt ? '🟢' : (st.bezugAbgelaufen ? '🔴' : (st.bis && st.bis < plusMonate(new Date().toISOString().slice(0,10), 12) ? '🟠' : '🟡'));
+  let text;
+  if(r.modus==='zeitraum') text = !st.gueltig ? `seit ${fmtDatum(st.vorher.bis)} nicht mehr gültig – im Zeitraum ${fmtDatum(st.vorher.von)}–${fmtDatum(st.vorher.bis)} wurden nur ${fmtUe(st.vorher.ist)} von ${st.soll} UE erreicht`
+    : st.offen ? `gültig · ${fmtUe(st.ist)} von ${st.soll} UE im laufenden Zeitraum (${fmtDatum(st.von)}–${fmtDatum(st.stichtag)}) – noch ${fmtUe(st.fehlt)} UE bis zum ${fmtDatum(st.stichtag)}`
+    : `gültig bis ${fmtDatum(st.bis)} · ${fmtUe(st.ist)} UE im laufenden Zeitraum (${fmtDatum(st.von)}–${fmtDatum(st.stichtag)}) – Ziel erreicht`;
+  else if(r.modus==='rollierend') text = st.erfuellt ? `erfüllt bis ${fmtDatum(st.bis)} · in den letzten ${r.monate} Monaten ${fmtUe(st.ist)} UE` : `${fmtUe(st.ist)} von ${st.soll} UE in den letzten ${r.monate} Monaten – noch ${fmtUe(fehlt)} UE`;
+  else if(st.ohneBezug) text = `${fmtUe(st.ist)} UE erfasst – ${r.bezugTitel} fehlt noch als Nachweis`;
+  else text = `${fmtUe(st.ist)} von ${st.soll} UE · ${r.bezugTitel} ${st.bezugAbgelaufen?'abgelaufen am':'gültig bis'} ${fmtDatum(st.bis)}${st.erfuellt?' – Fortbildung für die Verlängerung erfüllt':` – noch ${fmtUe(fehlt)} UE für die ${r.zweck}`}`;
+  const lg=st.eintraege.some(e=>e.art==='lehrgang');
+  return `<li>${punkt} <b>${esc(r.titel)}:</b> ${text}${lg?' <span class="hint">(Sanitätslehrgang als 16 UE gezählt)</span>':''}${pausch?' <span class="hint">(ohne UE-Angabe je Ganztag 8 UE angesetzt – bitte mit der Teilnahmebescheinigung prüfen)</span>':''}${umger?' <span class="hint">(Stunden umgerechnet, 1 UE = 45 Min.)</span>':''} <span class="hint">· ${esc(r.quelle)}</span></li>`;
+}
+function ueKontenHtml(personId){ const k=ueKontenFuer(personId); if(!k.length) return '';
+  const ich=aktuellePerson&&aktuellePerson(); const darf=!!(ich && darfTrainingBearbeiten(ich));
+  const liste=st=>{ const e=(st.alle||st.eintraege||[]).filter(x=>x.art!=='lehrgang'); if(!e.length) return '';
+    return `<details style="margin:2px 0 6px 18px"><summary class="hint" style="cursor:pointer">Nachweise (${e.length})</summary><ul class="hint" style="margin:4px 0 0 -18px">${e.map(x=>{ const q=state.qualifikationen.find(y=>y.id===x.pq.qualifikationId);
+      return `<li>${fmtDatum(x.pq.datum)} · ${esc(x.pq.thema||(q?q.label:''))} · ${fmtUe(x.ue)} UE${x.art==='pauschal'?' (Standard 8 UE je Ganztag)':x.art==='stunden'?' (aus Stunden)':''}${darf?` <input inputmode="decimal" placeholder="UE" value="${esc(x.pq.ue||'')}" style="width:62px;padding:2px 4px" title="UE laut Bescheinigung; leer = Standardwert" onchange="ueSetzen('${x.pq.id}', this.value)">`:''}</li>`; }).join('')}</ul></details>`; };
+  return `<div style="margin-top:10px"><p class="hint" style="margin:0 0 2px"><b>📚 Fortbildungen mit Unterrichtseinheiten</b></p><ul style="margin:0 0 0 -18px">${k.map(st=>ueKontoZeileHtml(st)+liste(st)).join('')}</ul></div>`; }
+
 /* Fristenstufe eines Nachweises: gueltig · faellig (gelb) · nachfrist (orange, zählt noch) · kritisch (rot, zählt nicht) */
 function fristStufe(pq, q, heute){
   heute = heute || new Date().toISOString().slice(0,10);
@@ -2887,7 +2989,7 @@ function lerncampusAusZusatzfeldern(s){
     const regel = lcModulRegel(thema);
     const anrechnung = regel!==null ? regel : q.code==='lc_rsd' ? 'san_fb_offen' : '';
     const stunden = (k.umfangStunden!==null && k.umfangStunden!==undefined && k.umfangStunden!=='') ? String(k.umfangStunden).replace('.',',') : '';
-    const e = {id:uid(), personId:pz.personId, qualifikationId:q.id, datum, gueltigBis:null, thema:thema||undefined, stunden:stunden||undefined, anrechnung:anrechnung||undefined, quelle:'drkserver', zusatzId:pz.id};
+    const e = {id:uid(), personId:pz.personId, qualifikationId:q.id, datum, datumBis:(pz.bis&&pz.bis!==pz.von)?pz.bis:undefined, gueltigBis:null, thema:thema||undefined, stunden:stunden||undefined, anrechnung:anrechnung||undefined, quelle:'drkserver', zusatzId:pz.id};
     s.personQualifikationen.push(e); pz.uebernommenAls = e.id; n++;
   });
   // Einmalig: bereits übernommene drkserver-Einträge auf die festgelegten Regeln bringen
@@ -2950,6 +3052,11 @@ function qualiKatalogMigrieren(s){
   if(alteKatalogVersion>0 && alteKatalogVersion<8){
     // Hinweise der wiederkehrenden Pflichtnachweise auf den aktuellen Stand bringen
     ['eh','slg','hlw','san_fb','suwr','uvv_jaehrlich','hygiene'].forEach(code=>{ const q=s.qualifikationen.find(x=>x.code===code), c=QUALIFIKATIONEN_KATALOG_VORSCHLAG.find(x=>x.code===code); if(q && c) q.hinweis=c.hinweis; });
+  }
+  if(alteKatalogVersion>0 && alteKatalogVersion<16){
+    ['ausb_fl','ausb_tr','san_fb'].forEach(code=>{ const q=s.qualifikationen.find(x=>x.code===code), c=QUALIFIKATIONEN_KATALOG_VORSCHLAG.find(x=>x.code===code); if(q && c){ q.hinweis=c.hinweis; if(c.intervallMonate) q.intervallMonate=c.intervallMonate; } });
+    ['ausb_fl','ausb_tr'].forEach(code=>{ const q=s.qualifikationen.find(x=>x.code===code); if(!q) return;
+      s.personQualifikationen.forEach(pq=>{ if(pq.qualifikationId===q.id && pq.datum && !pq.gueltigBis){ const d=new Date(pq.datum); if(!isNaN(d)){ d.setMonth(d.getMonth()+36); pq.gueltigBis=d.toISOString().slice(0,10); } } }); });
   }
   if(alteKatalogVersion>0 && alteKatalogVersion<6){
     // SLG ist ein einmaliger Lehrgang; die Wiederholung läuft über „Sanitätsfortbildung“ → Ablaufdatum beim SLG entfernen
@@ -3346,7 +3453,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.42';
+const BARRY_APP_VERSION = '2.45';
 const BARRY_APP_STAND = '04.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -3429,6 +3536,7 @@ function ladeState(){
 }
 function renderErhalteScroll(){ const y = window.scrollY; render(); window.scrollTo(0, y); }
 function speichereState(){
+  ueKontenAktualisieren();
   state.meta.letzteAenderung = nowIso();
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
@@ -5001,6 +5109,11 @@ function fristenAuswertung(){
     if(tage < 0) abgelaufen.push({p,q,pq,tage});
     else if(tage <= FRISTEN_BALD_TAGE) baldAblaufend.push({p,q,pq,tage});
   });
+  { const qs=state.qualifikationen.find(x=>x.code==='san_fb');
+    if(qs){ for(const L of [abgelaufen, baldAblaufend]) for(let i=L.length-1;i>=0;i--) if(L[i].q.id===qs.id) L.splice(i,1);
+      aktivePersonen.forEach(p=>{ if(qualiFristEntfaellt(p.id, qs)) return; const st=ueKontoStatus(p.id,'san_fb'); if(!st || st.regel.modus!=='zeitraum') return;
+        if(!st.gueltig){ const pq={gueltigBis:st.vorher.bis, datum:st.vorher.von}; abgelaufen.push({p,q:qs,pq,tage:tageBisHeute(st.vorher.bis)}); }
+        else if(st.offen){ const tage=tageBisHeute(st.stichtag); if(st.warn || tage<=FRISTEN_BALD_TAGE) baldAblaufend.push({p,q:qs,pq:{gueltigBis:st.stichtag, datum:st.von},tage}); } }); } }
   abgelaufen.sort((a,b)=>a.tage-b.tage);
   baldAblaufend.sort((a,b)=>a.tage-b.tage);
 
@@ -5073,6 +5186,13 @@ function renderTabFristen(){
         <h3>⚠️ Läuft bald ab (nächste ${FRISTEN_BALD_TAGE} Tage) (${baldAblaufend.length} bei ${new Set(baldAblaufend.map(r=>r.p.id)).size} Personen)</h3>
         ${proPerson(baldAblaufend, r=>`<li>${r.stufe?stufenPunkt(r):'⚠️'} ${esc(r.q.label)} <span class="hint">– ${r.tage<0?'abgelaufen':'noch '+r.tage+' Tage'} (${fmtDatum(r.pq.gueltigBis)})${stufenText(r)?' · '+esc(stufenText(r)):''}</span></li>`)}
       </div>
+
+      ${(()=>{ const zeilen=state.personen.filter(x=>x.status!=='inaktiv').map(x=>({p:x, k:ueKontenFuer(x.id).filter(st=>st.regel.modus==='zeitraum' ? (!st.gueltig || st.offen) : !st.erfuellt)})).filter(x=>x.k.length).sort((a,b)=>a.p.name.localeCompare(b.p.name,'de'));
+        return `<div class="card card-pad sprung-ziel" id="fr-ue">
+        <h3>📚 Fortbildungen mit Unterrichtseinheiten (${zeilen.length} Personen mit offenem Bedarf)</h3>
+        <p class="hint">Ausbilderfortbildung 16 UE, Bewerter- und Prüferfortbildung je 8 UE innerhalb der laufenden Lehrberechtigung bzw. Ernennung (Ordnung für Aus-, Fort- und Weiterbildung, Teil Rettungshundearbeit, Ziff. 2.2.4, 3.2.4, 4.3.4); Sanitätsfortbildung 16 UE in 24 Monaten.</p>
+        ${zeilen.length?zeilen.map(z=>`<div style="border-top:1px solid var(--line);padding:8px 0"><strong>${esc(z.p.name)}</strong><ul style="margin:4px 0 0 -18px">${z.k.map(ueKontoZeileHtml).join('')}</ul></div>`).join(''):'<p class="hint">Alle erfassten Fortbildungskonten sind erfüllt.</p>'}
+      </div>`; })()}
 
       <div class="card card-pad sprung-ziel" id="fr-rhf">
         <h3>🐕 Pflichtausbildungen Rettungshundeführende (${rhfLuecken.length})</h3>
@@ -6193,6 +6313,8 @@ const AUSBILDUNGSPROFILE = [
    quelle:'Seminarbroschüre 2025: Qualifikationsstufe Einsatzkraft KatS (für RHA: RHd, RH-Prüf, TF) und Nachweis Truppführer'},
   {id:'gf_rha', gruppe:'Führung', label:'Rettungshunde Einsatz-Fachberater/in (GF-RHA)', codes:[...RHD_HELFER,'rh_pruef','tf','rkas','teukm','gfue','gf_pruef'], empfohlen:['psnv_e'],
    quelle:'Dienstanweisung 8.3 und Übersicht Seminare; PSNV-E empfohlen'},
+  {id:'zul_ausb', gruppe:'Rettungshundearbeit', label:'Zulassung Ausbilderlehrgang Rettungshunde', codes:[...RHD_HELFER,'rh_pruef','rkas','teukm','eug'],
+   quelle:'Ordnung für Aus-, Fort- und Weiterbildung, Teil Rettungshundearbeit (Stand 18.03.2024), Ziff. 2.1.1 – zusätzlich nachzuweisen (nicht in BARRY erfasst): drei Jahre Einsatzerfahrung als Hundeführer/-in und Mitwirkung an der Ausbildung von Rettungshundeteams im Umfang von mindestens 40 UE. EUG kann durch gleichwertige Ausbildung (z. B. Pädagogen) ersetzt werden.'},
   {id:'zul_zfue', gruppe:'Führung', label:'Zulassung Lehrgang Zugführer/in (ZFü)', codes:['rkas','teukm','gfue','gf_pruef'],
    quelle:'Seminarbroschüre 2025: Qualifikationsstufe Gruppenführung (Nachweis GF-Prüfung)'},
   {id:'zf_rha', gruppe:'Führung', label:'Staffelleitung (ZF-RHA)', codes:[...RHD_HELFER,'rh_pruef','tf','rkas','teukm','gfue','gf_pruef','smufk','susm','zfue','zf_pruef'],
@@ -6480,6 +6602,11 @@ function eigeneFristen(personId, tage){
     }
     if(!pq.gueltigBis) return;
     if(pq.gueltigBis<heute) abgelaufen.push({pq,q,stufe:'kritisch'}); else if(pq.gueltigBis<=grenze) bald.push({pq,q,stufe:'bald'}); });
+  // Sanitätsfortbildung (Zeitraum-Regel): Warnung ab 12 Monaten vor dem Stichtag, solange UE fehlen
+  ueKontenFuer(personId).filter(st=>st.regel.modus==='zeitraum').forEach(st=>{ const q=state.qualifikationen.find(x=>x.code===st.code); if(!q) return;
+    ['abgelaufen','bald','nachfrist'].forEach(l=>{ const L=l==='abgelaufen'?abgelaufen:l==='bald'?bald:nachfrist; for(let i=L.length-1;i>=0;i--) if(L[i].q.id===q.id) L.splice(i,1); });
+    if(!st.gueltig) abgelaufen.push({pq:{gueltigBis:st.vorher.bis, datum:st.vorher.von}, q, stufe:'kritisch', ue:st});
+    else if(st.offen && (st.warn || st.stichtag<=grenze)) bald.push({pq:{gueltigBis:st.stichtag, datum:st.von}, q, stufe:'bald', ue:st}); });
   const sort=(a,b)=>String(a.pq.gueltigBis||'').localeCompare(String(b.pq.gueltigBis||''));
   return {abgelaufen:abgelaufen.sort(sort), nachfrist:nachfrist.sort(sort), bald:bald.sort(sort)};
 }
@@ -6503,6 +6630,7 @@ function renderMeinStand(person){
       <h3 style="margin-top:0">⏳ Fristen</h3>
       ${f.abgelaufen.length||f.nachfrist.length||f.bald.length?`<ul style="margin:0 0 0 -18px">${[...f.abgelaufen,...f.nachfrist,...f.bald].map(fristZeileHtml).join('')}</ul>`:'<p class="hint" style="margin:0">In den nächsten 90 Tagen läuft nichts ab.</p>'}
       <p class="hint" style="margin:8px 0 0">Jährliche Nachweise gelten für das Kalenderjahr: ab Januar gelb (fällig), ab September orange (abgelaufen, zählt aber noch), ab Dezember rot (kritisch für die Einsatzfähigkeit).</p>
+      ${ueKontenHtml(person.id)}
       ${(()=>{ const o=lcSanOffen(person.id); if(!o.length) return ''; const summe=o.reduce((a,pq)=>a+(Number(String(pq.stunden||'').replace(',','.'))||0),0);
         return `<p class="hint" style="margin:8px 0 2px">❓ <b>Zur Klärung – Sanitätsfortbildung (16 UE in 2 Jahren):</b> Lerncampus-Module, deren Anrechnung noch offen ist${summe?` (zusammen ${String(summe).replace('.',',')} h)`:''}:</p><ul class="hint" style="margin:0 0 0 -18px">${o.map(pq=>`<li>${pq.datum?fmtDatum(pq.datum)+' · ':''}${esc(pq.thema||((state.qualifikationen.find(x=>x.id===pq.qualifikationId)||{}).label)||'')}${pq.stunden?' ('+esc(String(pq.stunden))+' h)':''}</li>`).join('')}</ul>`; })()}
     </div>
@@ -6532,6 +6660,7 @@ function renderMeinStand(person){
         <input id="ms-plakette" placeholder="Plakettennummer" style="flex:1 1 130px;display:none">
         <input id="ms-lc-thema" placeholder="Modul (Nähere Bezeichnung)" style="flex:2 1 200px;display:none">
         <input id="ms-lc-std" placeholder="Umfang in h" inputmode="decimal" style="flex:0 1 100px;display:none">
+        <input id="ms-ue" placeholder="Umfang in UE" inputmode="decimal" style="flex:0 1 110px;display:none" title="Unterrichtseinheiten laut Teilnahmebescheinigung (1 UE = 45 Min.)">
         <select id="ms-lc-anr" style="flex:1 1 200px;display:none" title="Zählt das Modul als Pflichtnachweis?">${lcAnrechnungOptionen('')}</select>
         <button class="btn btn-sm btn-primary" id="ms-add">Hinzufügen</button>
       </div>
@@ -6569,6 +6698,7 @@ function bindMeinStand(person){
     document.getElementById('ms-hund').style.display=team?'':'none'; document.getElementById('ms-sparte').style.display=such?'':'none'; document.getElementById('ms-plakette').style.display=such?'':'none';
     const hs=document.getElementById('ms-hund'); if(team && hs.options.length===2) hs.selectedIndex=1;
     const lc=istLerncampus(q); ['ms-lc-thema','ms-lc-std','ms-lc-anr'].forEach(id=>{ document.getElementById(id).style.display=lc?'':'none'; });
+    document.getElementById('ms-ue').style.display = (q && UE_KONTEN[q.code]) ? '' : 'none';
     const a=document.getElementById('ms-lc-anr'); if(lc && !a.dataset.manuell) a.value=lcAnrechnungVorschlag(q, document.getElementById('ms-lc-thema').value); };
   const msAnr=document.getElementById('ms-lc-anr'); if(msAnr) msAnr.onchange=()=>{ msAnr.dataset.manuell='1'; };
   const msTh=document.getElementById('ms-lc-thema'); if(msTh) msTh.oninput=()=>{ if(!msAnr.dataset.manuell) msAnr.value=lcAnrechnungVorschlag(state.qualifikationen.find(x=>x.id===qs.value), msTh.value); };
@@ -6579,7 +6709,10 @@ function bindMeinStand(person){
     if(q.code==='rh_pruef' && !sparte){ zeigeToast('Bitte die Sparte wählen.'); return; }
     const lcDaten = istLerncampus(q) ? {thema:document.getElementById('ms-lc-thema').value.trim(), stunden:document.getElementById('ms-lc-std').value.trim().replace('.',','), anrechnung:document.getElementById('ms-lc-anr').value} : null;
     if(lcDaten && !lcDaten.thema){ zeigeToast('Bitte den Modulnamen eintragen.'); return; }
+    const ueWert = UE_KONTEN[q.code] ? document.getElementById('ms-ue').value.trim().replace('.',',') : '';
+    if(UE_KONTEN[q.code] && !ueWert){ zeigeToast('Bitte die Unterrichtseinheiten (UE) laut Bescheinigung eintragen.'); return; }
     eigenerNachweisHinzufuegen(person, q.id, document.getElementById('ms-datum').value, hund, sparte, document.getElementById('ms-plakette').value.trim(), lcDaten);
+    if(ueWert){ const neuE=[...state.personQualifikationen].reverse().find(x=>x.personId===person.id && x.qualifikationId===q.id); if(neuE){ neuE.ue=ueWert; speichereState(); } }
     zeigeToast(darfTrainingBearbeiten(person)?'Nachweis eingetragen.':'Eingetragen – bitte „Meine Angaben senden“.'); render(); };
   document.querySelectorAll('[data-ms-del]').forEach(b=>b.onclick=()=>{ state.personQualifikationen=state.personQualifikationen.filter(pq=>!(pq.id===b.dataset.msDel && pq.vomMitglied && !pq.bestaetigt)); speichereState(); render(); });
   const snd=document.getElementById('ms-senden'); if(snd) snd.onclick=()=>meldungSenden(person);
@@ -6789,7 +6922,7 @@ function bindModalMeldungImport(){
     const v=meldungVorschau; const ich=aktuellePerson(); let n=0;
     document.querySelectorAll('[data-mi]').forEach(cb=>{ const e=v.eintraege[+cb.dataset.mi]; if(!cb.checked || !e.q || e.doppelt) return;
       const bis = istKalenderjaehrlich(e.q) ? ablaufDatumFuer(e.n.datum, e.q) : (e.n.gueltigBis || ablaufDatumFuer(e.n.datum, e.q));
-      state.personQualifikationen.push({id:e.n.id||uid(), personId:e.person.id, qualifikationId:e.q.id, datum:e.n.datum||'', gueltigBis:bis, hundId:e.n.hundId||undefined, sparte:e.n.sparte||undefined, plakette:e.n.plakette||undefined, thema:e.n.thema||undefined, stunden:e.n.stunden||undefined, anrechnung:e.n.anrechnung||undefined, vomMitglied:true, bestaetigt:true, bestaetigtVon:ich?ich.id:'', bestaetigtAm:nowIso()});
+      state.personQualifikationen.push({id:e.n.id||uid(), personId:e.person.id, qualifikationId:e.q.id, datum:e.n.datum||'', gueltigBis:bis, hundId:e.n.hundId||undefined, sparte:e.n.sparte||undefined, plakette:e.n.plakette||undefined, thema:e.n.thema||undefined, stunden:e.n.stunden||undefined, ue:e.n.ue||undefined, anrechnung:e.n.anrechnung||undefined, vomMitglied:true, bestaetigt:true, bestaetigtVon:ich?ich.id:'', bestaetigtAm:nowIso()});
       const h=e.n.hundId?state.hunde.find(x=>x.id===e.n.hundId):null; modulQualiUebertragen(e.person.id, e.q.id, h); if(e.q.code==='rh_pruef' && h && e.n.sparte) suchpruefungAufHundUebertragen(h, e.n.sparte, e.n.plakette, e.n.datum);
       n++; });
     state.kurswuensche=state.kurswuensche||[]; v.wuensche.forEach(x=>state.kurswuensche.push(x.w));
@@ -6882,6 +7015,7 @@ function empfehlungText(pid, q){ return q && q.code==='rke' && hatQualiCode(pid,
 function ersatzErfuellt(pid, code){
   const heute = new Date().toISOString().slice(0,10);
   if(code==='eh') return hatSanAusbildung(pid);
+  if(code==='san_fb'){ const st=ueKontoStatus(pid,'san_fb'); return !!(st && st.erfuellt); }   // Sanitätslehrgang zählt als 16 UE
   if(code==='rke_online') return hatQualiCode(pid,'rke');   // vollständiges RKE schließt den Online-Teil ein
   if(code==='hlw' && heute<=HLW_UEBERGANG_BIS){
     const q = state.qualifikationen.find(x=>x.code==='hlw');
@@ -7678,6 +7812,7 @@ function renderPersonQualifikationenBereich(p){
       </select>
       <input id="pf-qual-lc-thema" placeholder="Modul (Nähere Bezeichnung im drkserver)" style="flex:2 1 220px;display:none">
       <input id="pf-qual-lc-std" placeholder="Umfang in h" inputmode="decimal" style="flex:0 1 110px;display:none">
+      <input id="pf-qual-ue" placeholder="Umfang in UE" inputmode="decimal" style="flex:0 1 110px;display:none" title="Unterrichtseinheiten laut Teilnahmebescheinigung (1 UE = 45 Min.)">
       <select id="pf-qual-lc-anr" style="flex:1 1 220px;display:none" title="Zählt das Modul als Pflichtnachweis?">${lcAnrechnungOptionen('')}</select>
       <input id="pf-qual-datum" type="date" value="${new Date().toISOString().slice(0,10)}" style="width:auto">
       <input id="pf-qual-bis" type="date" placeholder="Gültig bis (optional)" style="width:auto">
@@ -7709,6 +7844,7 @@ function bindPersonQualifikationenBereich(p){
     if(istModul && eigeneHunde.length===1) hundSel.value = eigeneHunde[0].id;
     const lc = istLerncampus(q);
     ['pf-qual-lc-thema','pf-qual-lc-std','pf-qual-lc-anr'].forEach(id=>{ document.getElementById(id).style.display = lc ? '' : 'none'; });
+    document.getElementById('pf-qual-ue').style.display = (q && UE_KONTEN[q.code]) ? '' : 'none';
     if(lc){ const a=document.getElementById('pf-qual-lc-anr'); if(!a.dataset.manuell) a.value = lcAnrechnungVorschlag(q, document.getElementById('pf-qual-lc-thema').value); }
     vorschlagen();
   };
@@ -7742,6 +7878,7 @@ function bindPersonQualifikationenBereich(p){
     const lcAnr = lcWahl ? document.getElementById('pf-qual-lc-anr').value : '';
     if(lcWahl && !lcThema){ alert('Bitte den Modulnamen eintragen (im drkserver unter „Nähere Bezeichnung“).'); document.getElementById('pf-qual-lc-thema').focus(); return; }
     state.personQualifikationen.push({id:uid(), personId:p.id, qualifikationId:qualId, datum:von.value, gueltigBis: istKalenderjaehrlich(qWahl) ? ablaufDatumFuer(von.value, qWahl) : (bis.value||null), hundId: modulHund ? modulHund.id : undefined, sparte: sparteWahl || undefined, plakette: plaketteWahl || undefined, thema: lcThema || undefined, stunden: lcStd || undefined, anrechnung: lcAnr || undefined});
+    if(qWahl && UE_KONTEN[qWahl.code]){ const u=document.getElementById('pf-qual-ue').value.trim().replace('.',','); if(u){ state.personQualifikationen[state.personQualifikationen.length-1].ue=u; } }
     if(istSuchWahl && modulHund) suchpruefungAufHundUebertragen(modulHund, sparteWahl, plaketteWahl, von.value);
     const uebertragHund = modulQualiUebertragen(p.id, qualId, modulHund);
     if(uebertragHund) setTimeout(()=>zeigeToast(`Auch unter Prüfungsordnungen für ${uebertragHund.name} als bestanden eingetragen.`), 50);
@@ -10100,7 +10237,7 @@ function renderWissen(person){
     <div class="row" style="margin:14px 0 20px;border-bottom:1px solid var(--line);padding-bottom:2px">
       ${WISSEN_TABS.map(t=>`<button class="btn ${wissenTab===t.id?'btn-primary':'btn-ghost'}" data-wtab="${t.id}">${esc(t.label)}</button>`).join('')}
     </div>
-    ${wissenTab==='apps' ? renderWissenApps(person) : wissenTab==='pruefung' ? renderAusbildungPruefung(person) : wissenTab==='fehlerdiagnose' ? renderAusbildungFehlerdiagnose(person) : wissenTab==='sparten' ? renderAusbildungSparten(person) : wissenTab==='funk' ? renderWissenFunk(person) : wissenTab==='lernen' ? renderWissenLernen(person) : renderAusbildungMaterial(person)}
+    ${wissenTab==='apps' ? renderWissenApps(person) : wissenTab==='pruefung' ? (renderAusbildungsordnungKarte() + renderAusbildungPruefung(person)) : wissenTab==='fehlerdiagnose' ? renderAusbildungFehlerdiagnose(person) : wissenTab==='sparten' ? renderAusbildungSparten(person) : wissenTab==='funk' ? renderWissenFunk(person) : wissenTab==='lernen' ? renderWissenLernen(person) : renderAusbildungMaterial(person)}
     ${modal ? renderModal() : ''}
   `;
 }
@@ -10722,6 +10859,17 @@ function renderTeilBElement(el, hundId){
     ${el.aufbau?.length?`<p class="hint" style="margin-bottom:4px"><strong>Aufbau-Tipps:</strong></p><ul class="hint" style="margin-top:0">${el.aufbau.map(a=>`<li>${esc(a)}</li>`).join('')}</ul>`:''}
     <div class="row" style="margin-top:10px">${pruefungStatusButtons(hundId, 'vdh_b', el.id)}</div>
   </div>`;
+}
+/* Ordnung für Aus-, Fort- und Weiterbildung im DRK, Teil Rettungshundearbeit – Kurzfassung (nur für den Dienstgebrauch; kein Volltext) */
+function renderAusbildungsordnungKarte(){
+  const z=(t,l)=>`<p style="margin:10px 0 2px"><b>${t}</b></p><ul class="hint" style="margin:0 0 0 -18px">${l.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+  return `<details class="card card-pad" style="margin-bottom:14px"><summary style="cursor:pointer;font-weight:600">📘 Ordnung für Aus-, Fort- und Weiterbildung im DRK, Teil Rettungshundearbeit – Kurzfassung</summary>
+  <p class="hint" style="margin-top:8px">Stand des vorliegenden Dokuments: 18.03.2024 (das Beschlussdatum ist im Dokument noch nicht eingetragen). Nur für den Dienstgebrauch im DRK; hier eine Zusammenfassung mit Ziffern, kein Volltext. 1 Unterrichtseinheit (UE) = 45 Minuten ohne Pausen. Landesverbände können ergänzende Regelungen erlassen.</p>
+  ${z('1 · Ausbildung des Rettungshundeteams',['Voraussetzungen: Mitglied der Bereitschaften, Erste Hilfe, Rotkreuz-Einführungsseminar (1.1).','Theorie: mindestens EGA Sanität, Erste Hilfe am Hund, Kynologie, Orientierung/Karte/GPS, Sprechfunk, Einsatztaktik, Trümmerkunde (nur Trümmer), Transport und Abseilsicherung, Unfallverhütung und Rechtsgrundlagen, Grundkenntnisse PSNV (1.1.5). Nachweis der Theorie auch über das Online-Modul Fachfragen im DRK-Lerncampus (1.1.6).','Praxis nach individueller Eignungsüberprüfung in der Einheit; gelistete Hunde je nach Bundesland mit Wesenstest vor dem Eignungstest (1.2.2).','Lehrgänge höchstens 15, absolut 20 Teilnehmende.'])}
+  ${z('2 · Ausbilder/-innen',['Zulassung zum Ausbilderlehrgang: abgeschlossene Teamausbildung, drei Jahre Einsatzerfahrung als Hundeführer/-in, Rotkreuz-Aufbauseminar, „Teamentwicklung und Konfliktmanagement“, EUG oder gleichwertige Ausbildung, Mitwirkung an der Teamausbildung von mindestens 40 UE (2.1.1).','Ausbilderlehrgang des Landesverbandes, mindestens 40 UE, mit Facharbeit und Lehrprobe (2.1.4, 2.1.5).','Lehrberechtigung: auf drei Jahre befristet (2.3.1); Verlängerung um jeweils drei Jahre bei gültiger Lehrberechtigung, aktiver Mitwirkung in der Ausbildung und <b>Ausbilderfortbildung von mindestens 16 UE innerhalb von drei Jahren</b> (2.2.4, 2.3.2).','Entzug durch den Landesverband möglich, wenn die Voraussetzungen für die Verlängerung nicht erfüllt sind (2.3.3).'])}
+  ${z('3 · Bewerter/-innen (Modul Verhalten und Grundfertigkeiten)',['Zulassung: Ausbilder/-in mit mindestens drei Jahren Ausbildertätigkeit, Mitbewertung von 20 Hunden bei Eignungstests unter Anleitung (3.1.1).','Bewerterseminar mindestens 16 UE; Ernennung auf drei Jahre (3.1.4, 3.3).','Verlängerung bei aktiver Mitwirkung und <b>Bewerterfortbildung von mindestens 8 UE in drei Jahren</b> (3.2.4, 3.3).'])}
+  ${z('4 · Prüfer/-innen',['Anwärterzeit mindestens ein, höchstens drei Jahre; Voraussetzungen u. a. Ausbilderbefähigung, fünf Jahre Erfahrung, eigener Rettungshund mit zwei bestandenen Prüfungen in der Sparte (4).','Theorie: schriftliche Prüfung, 35 von 50 Fragen in 45 Minuten (4.1.1); Praxis: Mitwirkung an 40 Einzelsuchprüfungen (davon 20 in der eigenen Sparte) sowie Modulbewertungen (4.2.4).','Ernennung durch die Bundesbereitschaftsleitung je Sparte, auf drei Jahre befristet (4.4).','Verlängerung bei aktiver Mitwirkung, <b>Prüferfortbildung von mindestens 8 UE in drei Jahren</b> und Prüftätigkeit: innerhalb von zwei Kalenderjahren mindestens 20 Teams selbst prüfen oder an mindestens drei verschiedenen Prüfungs- oder Modulveranstaltungen teilnehmen (4.3.4, 4.4.1).'])}
+  <p class="hint" style="margin-top:10px">In BARRY erfasst: Lehrberechtigung, Ernennungen und Fortbildungen mit UE (Verwaltung → Qualifikationen bzw. 🎓 Mein Stand). BARRY zählt die UE innerhalb der laufenden Lehrberechtigung bzw. Ernennung und zeigt offenen Bedarf unter „Fristen“.</p></details>`;
 }
 function renderAusbildungPruefung(person){
   const hunde = state.hunde.filter(h=>h.status!=='inaktiv' && (darfTrainingBearbeiten(person) || hundGefuehrtVon(h, person.id)));
