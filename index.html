@@ -220,6 +220,18 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
 </style>
 </head>
 <body>
+<!-- BARRY 2.49: eigener Startbildschirm (Search And Rescue) – erscheint kurz nach dem System-Startbild und blendet dann aus -->
+<div id="barry-splash" aria-hidden="true" style="position:fixed;inset:0;z-index:99999;background:#f5f6f7;display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:calc(env(safe-area-inset-top,0px) + 12vh) 24px calc(env(safe-area-inset-bottom,0px) + 7vh);transition:opacity .45s ease;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif">
+  <div style="display:inline-block;text-align:left;line-height:1.05;color:#202428;font-size:clamp(28px,8vw,40px);font-weight:300;letter-spacing:.02em">
+    <div><span style="color:#c8102e;font-weight:800;font-size:1.45em;display:inline-block;min-width:.8em">S</span>earch</div>
+    <div><span style="color:#c8102e;font-weight:800;font-size:1.45em;display:inline-block;min-width:.8em">A</span>nd</div>
+    <div><span style="color:#c8102e;font-weight:800;font-size:1.45em;display:inline-block;min-width:.8em">R</span>escue</div>
+  </div>
+  <img src="./rhs-apple-touch-icon.png" alt="" width="150" height="150" style="width:min(38vw,180px);height:auto;border-radius:22%;box-shadow:0 6px 18px rgba(0,0,0,.18)">
+  <div style="text-align:center;color:#202428;font-size:clamp(20px,6vw,30px);font-weight:400;line-height:1.25">BARRY – der<br>Rettungshundekompass</div>
+</div>
+<script>(function(){ var s=document.getElementById('barry-splash'); if(!s) return; var weg=function(){ s.style.opacity='0'; setTimeout(function(){ if(s.parentNode) s.parentNode.removeChild(s); },500); };
+  var t0=Date.now(); window.addEventListener('load', function(){ setTimeout(weg, Math.max(0, 1300-(Date.now()-t0))); }); setTimeout(weg, 4000); s.addEventListener('click', weg); })();</script>
 <div id="app"></div>
 <div id="toast-root"></div>
 <script>
@@ -3494,7 +3506,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.48';
+const BARRY_APP_VERSION = '2.50';
 const BARRY_APP_STAND = '04.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
