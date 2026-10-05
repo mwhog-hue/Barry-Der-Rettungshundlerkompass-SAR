@@ -2788,7 +2788,7 @@ function ablaufDatumFuer(datum, q){
    bezug: Summe der UE innerhalb der laufenden Lehrberechtigung bzw. Ernennung (AO RH 2024). 1 UE = 45 Minuten.
    Einträge ohne UE-Angabe gelten als vollständiger Nachweis (rückwärtskompatibel). */
 const UE_KONTEN = {
-  san_fb:     { soll:16, monate:24, modus:'zeitraum', anker:['slg'], titel:'Sanitätsfortbildung', zweck:'Erhalt der Sanitätsausbildung', quelle:'Staffelregel 05.10.2026: je Zweijahreszeitraum ab Ende des Sanitätslehrgangs 16 UE; der Lehrgang enthält die 16 UE des ersten Zeitraums', auchCodes:{slg:16}, warnMonate:12 },
+  san_fb:     { soll:16, monate:24, modus:'zeitraum', anker:['slg'], titel:'Sanitätsfortbildung', zweck:'Erhalt der Sanitätsausbildung', quelle:'Staffelregel 05.10.2026: je Zweijahreszeitraum 16 UE – Zeitraum laut Bescheinigung, sonst ab Ende des Sanitätslehrgangs (Lehrgang = 16 UE des ersten Zeitraums)', auchCodes:{slg:16}, warnMonate:12 },
   ausb_fb:    { soll:16, monate:36, modus:'bezug', bezug:['ausb_fl','ausb_tr'], titel:'Ausbilderfortbildung', bezugTitel:'Lehrberechtigung', zweck:'Verlängerung der Lehrberechtigung', quelle:'AO RH Ziff. 2.2.4, 2.3.2' },
   bewerter_fb:{ soll:8,  monate:36, modus:'bezug', bezug:['bewerter'], titel:'Bewerterfortbildung', bezugTitel:'Ernennung als Bewerter/-in', zweck:'Verlängerung der Ernennung', quelle:'AO RH Ziff. 3.2.4, 3.3' },
   pruefer_fb: { soll:8,  monate:36, modus:'bezug', bezug:['pruefer'], titel:'Prüferfortbildung', bezugTitel:'Ernennung als Prüfer/-in', zweck:'Verlängerung der Prüfberechtigung', quelle:'AO RH Ziff. 4.3.4, 4.4.1' }
@@ -2802,6 +2802,10 @@ function ueVonNachweis(pq, regel){
   return {ue:UE_GANZTAG*tage, art:'pauschal'};
 }
 const UE_GANZTAG = 8;
+/* „gilt für die Jahre 2025–2026“ → {von:'2025-01-01', bis:'2027-01-01'} */
+function zeitraumVon(pq){ const m=String(pq.zeitraum||'').match(/(\d{4})\D+(\d{4})/) || String(pq.zeitraum||'').match(/^(\d{4})$/); if(!m) return null; const a=+m[1], b=+(m[2]||m[1]); if(!a||!b||b<a) return null; return {von:a+'-01-01', bis:(b+1)+'-01-01', text:a+(b!==a?'–'+b:'')}; }
+function fmtEnde(d){ if(!d) return ''; if(String(d).slice(5,10)==='01-01'){ const x=new Date(d); x.setDate(x.getDate()-1); return fmtDatum(x.toISOString().slice(0,10)); } return fmtDatum(d); }
+function zeitraumSetzen(pqId, wert){ const pq=state.personQualifikationen.find(x=>x.id===pqId); if(!pq) return; const v=String(wert||'').trim(); if(v && !zeitraumVon({zeitraum:v})){ zeigeToast('Bitte Jahre angeben, z. B. 2025-2026.'); return; } if(v) pq.zeitraum=v; else delete pq.zeitraum; speichereState(); zeigeToast(v?'Zeitraum gespeichert.':'Zeitraum entfernt.'); render(); }
 /* UE eines Nachweises nachträglich setzen (Leitung/Ausbilder; leer = Standardwert 8 UE je Ganztag) */
 function ueSetzen(pqId, wert){
   const pq=state.personQualifikationen.find(x=>x.id===pqId); if(!pq) return;
@@ -2817,24 +2821,36 @@ function ueKontoStatus(personId, code, heute){
     .map(pq=>{ if(auchIds[pq.qualifikationId]) return {pq:Object.assign({}, pq, {datum:pq.datumBis||pq.datum}), ue:auchIds[pq.qualifikationId], art:'lehrgang'}; return Object.assign({pq}, ueVonNachweis(pq, regel)); })
     .sort((a,b)=>String(b.pq.datum).localeCompare(String(a.pq.datum)));
   if(regel.modus==='zeitraum'){
-    // Anker = Ende des Sanitätslehrgangs; ohne Lehrgang der früheste Fortbildungsnachweis
+    // Variante C (05.10.2026): Bescheinigungen mit eigenem Zeitraum („gilt für die Jahre 2025–2026“) zählen für genau diesen Zeitraum;
+    // ohne Angabe: Zweijahreszeiträume ab Ende des Sanitätslehrgangs (Lehrgang = 16 UE des ersten Zeitraums).
     const ankerIds=state.qualifikationen.filter(x=>(regel.anker||[]).includes(x.code)).map(x=>x.id);
     const ankerPq=state.personQualifikationen.filter(pq=>pq.personId===personId && ankerIds.includes(pq.qualifikationId) && pq.datum).map(pq=>pq.datumBis||pq.datum).sort()[0];
-    const anker = ankerPq || (eintraege.length ? eintraege[eintraege.length-1].pq.datum : null);
-    if(!anker) return null;
-    const perioden=[]; let k=0, start=anker;
-    while(start<=heute && k<60){ const ende=plusMonate(anker, regel.monate*(k+1)); perioden.push({k, von:start, bis:ende}); start=ende; k++; }
-    const sum=(von,bis)=>eintraege.filter(e=>e.pq.datum>=von && e.pq.datum<bis).reduce((a,e)=>a+e.ue,0)
-      + eintraege.filter(e=>e.art==='lehrgang' && e.pq.datum===von && von===anker && bis>von && !(e.pq.datum>=von && e.pq.datum<bis)).reduce((a,e)=>a+e.ue,0);
-    const akt=perioden[perioden.length-1]; const vor=perioden.length>1?perioden[perioden.length-2]:null;
-    const istAkt=sum(akt.von, akt.bis), istVor=vor?sum(vor.von, vor.bis):null;
-    const gueltig = !vor || istVor>=regel.soll;
-    const offen = istAkt < regel.soll;
-    // Gültig bis: Ende des laufenden Zeitraums; ist er schon erfüllt, Ende des folgenden
-    const bis = gueltig ? (offen ? akt.bis : plusMonate(akt.bis, regel.monate)) : (vor ? vor.bis : akt.bis);
-    const warn = gueltig && offen && akt.bis <= plusMonate(heute, regel.warnMonate||12);
-    return {code, regel, ist:istAkt, soll:regel.soll, fehlt:Math.max(0, regel.soll-istAkt), erfuellt:gueltig, gueltig, offen, warn, bis, stichtag:akt.bis, von:akt.von, anker, vorher: vor?{von:vor.von, bis:vor.bis, ist:istVor}:null,
-      eintraege:eintraege.filter(e=>e.pq.datum>=akt.von && e.pq.datum<akt.bis), alle:eintraege};
+    const mitZr=eintraege.filter(e=>zeitraumVon(e.pq)), ohneZr=eintraege.filter(e=>!zeitraumVon(e.pq));
+    const anker = ankerPq || (ohneZr.length ? ohneZr[ohneZr.length-1].pq.datum : null);
+    if(!anker && !mitZr.length) return null;
+    const erfuellt=[]; // {von,bis,ist,quelle}
+    // a) Bescheinigte Zeiträume
+    const proZr=new Map(); mitZr.forEach(e=>{ const z=zeitraumVon(e.pq); const k=z.von+'|'+z.bis; const o=proZr.get(k)||{von:z.von,bis:z.bis,ist:0,quelle:'bescheinigt'}; o.ist+=e.ue; proZr.set(k,o); });
+    // b) Zeiträume ab Lehrgangsende (nur Nachweise ohne eigenen Zeitraum)
+    const ankerPerioden=[];
+    if(anker){ let k=0, start=anker; while(start<=heute && k<60){ const ende=plusMonate(anker, regel.monate*(k+1)); ankerPerioden.push({von:start, bis:ende, ist:ohneZr.filter(e=>e.pq.datum>=start && e.pq.datum<ende).reduce((a,e)=>a+e.ue,0), quelle:'ab Lehrgang'}); start=ende; k++; } }
+    [...proZr.values(), ...ankerPerioden].forEach(p=>{ if(p.ist>=regel.soll) erfuellt.push(p); });
+    erfuellt.sort((a,b)=>a.bis.localeCompare(b.bis));
+    const letzte = erfuellt[erfuellt.length-1] || null;
+    let von, stichtag, ist, gueltig, offen, bis, vorher=null;
+    if(letzte && letzte.bis>heute){ // laufender Zeitraum bereits erfüllt
+      von=letzte.von; stichtag=letzte.bis; ist=letzte.ist; gueltig=true; offen=false; bis=plusMonate(letzte.bis, regel.monate);
+    } else if(letzte){ // Folgezeitraum nach dem letzten erfüllten
+      von=letzte.bis; stichtag=plusMonate(letzte.bis, regel.monate);
+      ist=ohneZr.filter(e=>e.pq.datum>=von && e.pq.datum<stichtag).reduce((a,e)=>a+e.ue,0);
+      gueltig = heute<stichtag; offen = ist<regel.soll; bis=stichtag; vorher={von:letzte.von, bis:letzte.bis, ist:letzte.ist};
+      if(!gueltig){ vorher={von, bis:stichtag, ist}; von=stichtag; stichtag=plusMonate(von, regel.monate); ist=ohneZr.filter(e=>e.pq.datum>=von && e.pq.datum<stichtag).reduce((a,e)=>a+e.ue,0); offen=ist<regel.soll; bis=vorher.bis; }
+    } else { // noch kein Zeitraum erfüllt
+      const akt=ankerPerioden[ankerPerioden.length-1]; von=akt?akt.von:heute; stichtag=akt?akt.bis:plusMonate(heute, regel.monate); ist=akt?akt.ist:0; gueltig=false; offen=true; bis=von; vorher={von, bis:von, ist};
+    }
+    const warn = gueltig && offen && stichtag <= plusMonate(heute, regel.warnMonate||12);
+    return {code, regel, ist, soll:regel.soll, fehlt:Math.max(0, regel.soll-ist), erfuellt:gueltig, gueltig, offen, warn, bis, stichtag, von, anker, vorher,
+      eintraege:eintraege.filter(e=>(e.pq.datum>=von && e.pq.datum<stichtag) || (letzte && letzte.quelle==='bescheinigt' && zeitraumVon(e.pq) && zeitraumVon(e.pq).von===letzte.von)), alle:eintraege, letzteQuelle: letzte?letzte.quelle:null};
   }
   if(regel.modus==='rollierend'){
     if(!eintraege.length) return null;
@@ -2855,17 +2871,42 @@ function ueKontenAktualisieren(){
   try{ Object.entries(UE_KONTEN).forEach(([code, regel])=>{ if(regel.modus!=='rollierend' && regel.modus!=='zeitraum') return; const q=state.qualifikationen.find(x=>x.code===code); if(!q) return;
     const personen=new Set(state.personQualifikationen.filter(pq=>pq.qualifikationId===q.id).map(pq=>pq.personId));
     personen.forEach(pid=>{ const st=ueKontoStatus(pid, code); if(!st) return; const neu=st.bis || (st.eintraege[0]||st.alle[0]).pq.datum;
-      state.personQualifikationen.forEach(pq=>{ if(pq.personId===pid && pq.qualifikationId===q.id) pq.gueltigBis=neu; }); }); }); }catch(e){ console.warn('UE-Konten', e); }
+      state.personQualifikationen.forEach(pq=>{ if(pq.personId===pid && pq.qualifikationId===q.id && !pq.gueltigBisManuell) pq.gueltigBis=neu; }); }); }); }catch(e){ console.warn('UE-Konten', e); }
+}
+/* Kurztext Zeitraum-Konto: welcher Zeitraum ist abgedeckt, was ist bis zum nächsten Stichtag offen */
+function ueKontoKurz(st){
+  if(!st.gueltig) return `nicht mehr gültig seit ${fmtDatum(st.vorher.bis)} (${fmtUe(st.vorher.ist)} von ${st.soll} UE im Zeitraum bis dahin)`;
+  if(!st.offen) return `Fortbildung abgedeckt bis ${fmtEnde(st.stichtag)}${st.eintraege.some(e=>e.art==='lehrgang')?' (16 UE im Lehrgang enthalten)':''} · danach bis ${fmtEnde(st.bis)} erneut 16 UE nötig`;
+  const abgedeckt = st.vorher ? st.vorher.bis : st.von;
+  return `Fortbildung abgedeckt bis ${fmtEnde(abgedeckt)} · seitdem ${fmtUe(st.ist)} von ${st.soll} UE – Frist für die nächsten 16 UE: ${fmtEnde(st.stichtag)}`;
 }
 function fmtUe(n){ return String(Math.round(n*10)/10).replace('.',','); }
+/* Prüfliste nach der Umstellung auf UE-Zählung (BARRY 2.46): Nachweise, deren Wert BARRY nur annimmt */
+function slgEndeSetzen(pqId, wert){ const pq=state.personQualifikationen.find(x=>x.id===pqId); if(!pq || !wert) return; pq.datumBis=wert; speichereState(); zeigeToast('Lehrgangsende gespeichert – Sanitätsfortbildung neu berechnet.'); render(); }
+function uePruefliste(){
+  const qs=c=>state.qualifikationen.find(x=>x.code===c); const slg=qs('slg');
+  const kontoIds=new Set(Object.keys(UE_KONTEN).map(c=>(qs(c)||{}).id).filter(Boolean));
+  return state.personen.filter(p=>p.status!=='inaktiv').map(p=>{
+    const punkte=[];
+    state.personQualifikationen.filter(pq=>pq.personId===p.id).forEach(pq=>{ const q=state.qualifikationen.find(x=>x.id===pq.qualifikationId); if(!q) return;
+      const titel=esc(pq.thema||q.label)+(pq.datum?' vom '+fmtDatum(pq.datum):'');
+      if(kontoIds.has(q.id) && (pq.ue===undefined||pq.ue===null||pq.ue==='') && !pq.stunden) punkte.push(`${titel}: keine UE angegeben – angesetzt mit 8 UE je Ganztag`);
+      else if(kontoIds.has(q.id) && (pq.ue===undefined||pq.ue===null||pq.ue==='') && pq.stunden) punkte.push(`${titel}: UE aus ${esc(String(pq.stunden))} Stunden umgerechnet`);
+      if(slg && q.id===slg.id && !pq.datumBis) punkte.push(`${titel}: Lehrgangsende fehlt – BARRY rechnet ab diesem Datum; ist es der Lehrgangsbeginn, hier das Enddatum eintragen: <input type="date" style="padding:2px 4px" onchange="slgEndeSetzen('${pq.id}', this.value)">`);
+      if(pq.anrechnung==='san_fb_offen') punkte.push(`${titel}: Lerncampus-Modul – Anrechnung auf die Sanitätsfortbildung offen, zählt derzeit nicht`);
+    });
+    const st=ueKontoStatus(p.id,'san_fb'); if(st && st.regel.modus==='zeitraum' && !st.gueltig) punkte.push(`Sanitätsfortbildung nach neuer Regel nicht gültig (Zeitraum ${fmtDatum(st.vorher.von)}–${fmtDatum(st.vorher.bis)}: ${fmtUe(st.vorher.ist)} von 16 UE) – Nachweise vollständig?`);
+    return {p, punkte};
+  }).filter(x=>x.punkte.length).sort((a,b)=>a.p.name.localeCompare(b.p.name,'de'));
+}
 function ueKontenFuer(personId){ return Object.keys(UE_KONTEN).map(c=>ueKontoStatus(personId, c)).filter(Boolean); }
 function ueKontoZeileHtml(st){
   const r=st.regel, fehlt=Math.max(0, st.soll-st.ist), pausch=st.eintraege.some(e=>e.art==='pauschal'), umger=st.eintraege.some(e=>e.art==='stunden');
   const punkt = r.modus==='zeitraum' ? (!st.gueltig ? '🔴' : !st.offen ? '🟢' : st.warn ? '🟠' : '🟡') : st.erfuellt ? '🟢' : (st.bezugAbgelaufen ? '🔴' : (st.bis && st.bis < plusMonate(new Date().toISOString().slice(0,10), 12) ? '🟠' : '🟡'));
   let text;
-  if(r.modus==='zeitraum') text = !st.gueltig ? `seit ${fmtDatum(st.vorher.bis)} nicht mehr gültig – im Zeitraum ${fmtDatum(st.vorher.von)}–${fmtDatum(st.vorher.bis)} wurden nur ${fmtUe(st.vorher.ist)} von ${st.soll} UE erreicht`
-    : st.offen ? `gültig · ${fmtUe(st.ist)} von ${st.soll} UE im laufenden Zeitraum (${fmtDatum(st.von)}–${fmtDatum(st.stichtag)}) – noch ${fmtUe(st.fehlt)} UE bis zum ${fmtDatum(st.stichtag)}`
-    : `gültig bis ${fmtDatum(st.bis)} · ${fmtUe(st.ist)} UE im laufenden Zeitraum (${fmtDatum(st.von)}–${fmtDatum(st.stichtag)}) – Ziel erreicht`;
+  if(r.modus==='zeitraum') text = !st.gueltig ? (st.vorher && st.vorher.bis>st.vorher.von ? `seit ${fmtEnde(st.vorher.bis)} nicht mehr gültig – im Zeitraum ${fmtDatum(st.vorher.von)}–${fmtEnde(st.vorher.bis)} wurden nur ${fmtUe(st.vorher.ist)} von ${st.soll} UE erreicht` : `noch kein vollständiger Zeitraum nachgewiesen (${fmtUe(st.ist)} von ${st.soll} UE)`)
+    : st.offen ? `gültig · ${fmtUe(st.ist)} von ${st.soll} UE im laufenden Zeitraum (${fmtDatum(st.von)}–${fmtEnde(st.stichtag)}) – noch ${fmtUe(st.fehlt)} UE bis zum ${fmtEnde(st.stichtag)}`
+    : `16 UE für den Zeitraum ${fmtDatum(st.von)}–${fmtEnde(st.stichtag)} erfüllt${st.eintraege.some(e=>e.art==='lehrgang')?' (im Lehrgang enthalten)':''} · für den folgenden Zeitraum bis ${fmtEnde(st.bis)} wieder 16 UE sammeln`;
   else if(r.modus==='rollierend') text = st.erfuellt ? `erfüllt bis ${fmtDatum(st.bis)} · in den letzten ${r.monate} Monaten ${fmtUe(st.ist)} UE` : `${fmtUe(st.ist)} von ${st.soll} UE in den letzten ${r.monate} Monaten – noch ${fmtUe(fehlt)} UE`;
   else if(st.ohneBezug) text = `${fmtUe(st.ist)} UE erfasst – ${r.bezugTitel} fehlt noch als Nachweis`;
   else text = `${fmtUe(st.ist)} von ${st.soll} UE · ${r.bezugTitel} ${st.bezugAbgelaufen?'abgelaufen am':'gültig bis'} ${fmtDatum(st.bis)}${st.erfuellt?' – Fortbildung für die Verlängerung erfüllt':` – noch ${fmtUe(fehlt)} UE für die ${r.zweck}`}`;
@@ -2876,7 +2917,7 @@ function ueKontenHtml(personId){ const k=ueKontenFuer(personId); if(!k.length) r
   const ich=aktuellePerson&&aktuellePerson(); const darf=!!(ich && darfTrainingBearbeiten(ich));
   const liste=st=>{ const e=(st.alle||st.eintraege||[]).filter(x=>x.art!=='lehrgang'); if(!e.length) return '';
     return `<details style="margin:2px 0 6px 18px"><summary class="hint" style="cursor:pointer">Nachweise (${e.length})</summary><ul class="hint" style="margin:4px 0 0 -18px">${e.map(x=>{ const q=state.qualifikationen.find(y=>y.id===x.pq.qualifikationId);
-      return `<li>${fmtDatum(x.pq.datum)} · ${esc(x.pq.thema||(q?q.label:''))} · ${fmtUe(x.ue)} UE${x.art==='pauschal'?' (Standard 8 UE je Ganztag)':x.art==='stunden'?' (aus Stunden)':''}${darf?` <input inputmode="decimal" placeholder="UE" value="${esc(x.pq.ue||'')}" style="width:62px;padding:2px 4px" title="UE laut Bescheinigung; leer = Standardwert" onchange="ueSetzen('${x.pq.id}', this.value)">`:''}</li>`; }).join('')}</ul></details>`; };
+      return `<li>${fmtDatum(x.pq.datum)} · ${esc(x.pq.thema||(q?q.label:''))} · ${fmtUe(x.ue)} UE${x.art==='pauschal'?' (Standard 8 UE je Ganztag)':x.art==='stunden'?' (aus Stunden)':''}${zeitraumVon(x.pq)?` · gilt für ${zeitraumVon(x.pq).text}`:''}${darf?` <input inputmode="decimal" placeholder="UE" value="${esc(x.pq.ue||'')}" style="width:62px;padding:2px 4px" title="UE laut Bescheinigung; leer = Standardwert" onchange="ueSetzen('${x.pq.id}', this.value)">${st.regel.modus==='zeitraum'?` <input placeholder="Jahre" value="${esc(x.pq.zeitraum||'')}" style="width:96px;padding:2px 4px" title="gilt für die Jahre laut Bescheinigung, z. B. 2025-2026; leer = ab Lehrgangsende rechnen" onchange="zeitraumSetzen('${x.pq.id}', this.value)">`:''}`:''}</li>`; }).join('')}</ul></details>`; };
   return `<div style="margin-top:10px"><p class="hint" style="margin:0 0 2px"><b>📚 Fortbildungen mit Unterrichtseinheiten</b></p><ul style="margin:0 0 0 -18px">${k.map(st=>ueKontoZeileHtml(st)+liste(st)).join('')}</ul></div>`; }
 
 /* Fristenstufe eines Nachweises: gueltig · faellig (gelb) · nachfrist (orange, zählt noch) · kritisch (rot, zählt nicht) */
@@ -3453,7 +3494,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.45';
+const BARRY_APP_VERSION = '2.48';
 const BARRY_APP_STAND = '04.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -4964,8 +5005,8 @@ function renderTabQualifikationen(){
   `;
 }
 /* ---------- Import/Export Qualifikationen (CSV, additiv) ---------- */
-const CSV_QUAL_KOPF = ['Person','Qualifikation','Kategorie','Seit','GueltigBis'];
-const CSV_QUAL_BEISPIEL = ['Max Mustermann','EH – Erste Hilfe','DRK Grundausbildung EK-B','2024-03-01','2026-03-01'];
+const CSV_QUAL_KOPF = ['Person','Qualifikation','Kategorie','Seit','GueltigBis','Bis','Thema','UE','Stunden'];
+const CSV_QUAL_BEISPIEL = ['Max Mustermann','EH – Erste Hilfe','DRK Grundausbildung EK-B','2024-03-01','2026-03-01','','','',''];
 function csvQualifikationenVorlageHerunterladen(){
   const zeilen = [ CSV_QUAL_KOPF.join(';'), CSV_QUAL_BEISPIEL.map(csvZeileEscapen).join(';') ];
   const hinweis = '# Bitte die Beispielzeile oben löschen oder überschreiben. "Person" muss exakt dem Namen in BARRY entsprechen. '
@@ -5007,6 +5048,8 @@ function csvQualifikationenEinlesen(file){
       const idxKategorie = kopf.indexOf('kategorie');
       const idxSeit = kopf.indexOf('seit');
       const idxBis = kopf.indexOf('gueltigbis');
+      const idxEnde = kopf.indexOf('bis'), idxThema = kopf.indexOf('thema'), idxUe = kopf.indexOf('ue'), idxStd = kopf.indexOf('stunden');
+      const feld = (f,i)=> i>-1 ? String(f[i]||'').trim() : '';
       let neueZuordnungen=0, neueQualis=0, unbekanntePersonen=new Set(), uebersprungen=0;
       for(let i=0;i<datenZeilen.length;i++){
         const f = datenZeilen[i];
@@ -5022,9 +5065,13 @@ function csvQualifikationenEinlesen(file){
         }
         const datum = idxSeit>-1 ? (f[idxSeit]||'').trim() : '';
         const gueltigBis = idxBis>-1 ? (f[idxBis]||'').trim() : '';
-        const bereitsVorhanden = state.personQualifikationen.some(pq=>pq.personId===person.id && pq.qualifikationId===qual.id && pq.datum===datum);
+        const thema = feld(f,idxThema), ende = feld(f,idxEnde), ue = feld(f,idxUe).replace('.',','), std = feld(f,idxStd).replace('.',',');
+        const bereitsVorhanden = state.personQualifikationen.some(pq=>pq.personId===person.id && pq.qualifikationId===qual.id && String(pq.datum||'').slice(0,10)===datum && (!thema || qualiNorm(pq.thema||'')===qualiNorm(thema)));
         if(bereitsVorhanden){ uebersprungen++; continue; }
-        state.personQualifikationen.push({ id:uid(), personId:person.id, qualifikationId:qual.id, datum, gueltigBis: istKalenderjaehrlich(qual) ? ablaufDatumFuer(datum, qual) : (gueltigBis||null) });
+        const e = { id:uid(), personId:person.id, qualifikationId:qual.id, datum, gueltigBis: istKalenderjaehrlich(qual) ? ablaufDatumFuer(datum, qual) : (gueltigBis || (qual.intervallMonate ? ablaufDatumFuer(ende||datum, qual) : null)), quelle:'csv' };
+        if(ende && ende!==datum) e.datumBis = ende; if(thema) e.thema = thema; if(ue) e.ue = ue; if(std) e.stunden = std;
+        if(istLerncampus(qual)){ const r=lcModulRegel(thema); const a = r!==null ? r : qual.code==='lc_rsd' ? 'san_fb_offen' : ''; if(a) e.anrechnung=a; }
+        state.personQualifikationen.push(e);
         neueZuordnungen++;
       }
       if(neueZuordnungen===0 && neueQualis===0){
@@ -5193,6 +5240,12 @@ function renderTabFristen(){
         <p class="hint">Ausbilderfortbildung 16 UE, Bewerter- und Prüferfortbildung je 8 UE innerhalb der laufenden Lehrberechtigung bzw. Ernennung (Ordnung für Aus-, Fort- und Weiterbildung, Teil Rettungshundearbeit, Ziff. 2.2.4, 3.2.4, 4.3.4); Sanitätsfortbildung 16 UE in 24 Monaten.</p>
         ${zeilen.length?zeilen.map(z=>`<div style="border-top:1px solid var(--line);padding:8px 0"><strong>${esc(z.p.name)}</strong><ul style="margin:4px 0 0 -18px">${z.k.map(ueKontoZeileHtml).join('')}</ul></div>`).join(''):'<p class="hint">Alle erfassten Fortbildungskonten sind erfüllt.</p>'}
       </div>`; })()}
+
+      ${(()=>{ const l=uePruefliste(); return `<details class="card card-pad sprung-ziel" id="fr-ue-pruef" ${l.length?'open':''}>
+        <summary style="cursor:pointer"><h3 style="display:inline">🔎 Nach der Umstellung bitte prüfen (${l.length} Personen)</h3></summary>
+        <p class="hint">Nachweise, bei denen BARRY Werte annimmt: fehlende UE (Standard 8 UE je Ganztag), aus Stunden umgerechnete UE, Sanitätslehrgang ohne Enddatum, Lerncampus-Module mit offener Anrechnung. Korrektur: UE unter 🎓 Mein Stand bzw. im Personenprofil → „Nachweise“ eintragen, Datum im Nachweis anpassen.</p>
+        ${l.length?l.map(x=>`<div style="border-top:1px solid var(--line);padding:8px 0"><strong>${esc(x.p.name)}</strong><ul class="hint" style="margin:4px 0 0 -18px">${x.punkte.map(t=>`<li>${t}</li>`).join('')}</ul></div>`).join(''):'<p class="hint">Keine offenen Punkte.</p>'}
+      </details>`; })()}
 
       <div class="card card-pad sprung-ziel" id="fr-rhf">
         <h3>🐕 Pflichtausbildungen Rettungshundeführende (${rhfLuecken.length})</h3>
@@ -6334,6 +6387,7 @@ function auswNeuester(personId, q){
 /* Status einer Qualifikation für eine Person: gueltig | abgelaufen | durchSuch (einmalige Pflicht, durch Suchprüfung erfüllt) | entfaellt | fehlt */
 function qualiStatusFuer(personId, q){
   if(!q) return {s:'fehlt'};
+  if(UE_KONTEN[q.code] && UE_KONTEN[q.code].modus==='zeitraum'){ const st=ueKontoStatus(personId, q.code); if(st){ const e=auswNeuester(personId, q); return st.gueltig ? {s:'gueltig', e, faellig:st.warn} : {s:'abgelaufen', e}; } }
   const n = auswNeuester(personId, q);
   const heute = new Date().toISOString().slice(0,10);
   if(n){
@@ -6661,6 +6715,7 @@ function renderMeinStand(person){
         <input id="ms-lc-thema" placeholder="Modul (Nähere Bezeichnung)" style="flex:2 1 200px;display:none">
         <input id="ms-lc-std" placeholder="Umfang in h" inputmode="decimal" style="flex:0 1 100px;display:none">
         <input id="ms-ue" placeholder="Umfang in UE" inputmode="decimal" style="flex:0 1 110px;display:none" title="Unterrichtseinheiten laut Teilnahmebescheinigung (1 UE = 45 Min.)">
+        <input id="ms-zr" placeholder="gilt für Jahre, z. B. 2025-2026" style="flex:1 1 170px;display:none" title="Nur ausfüllen, wenn die Bescheinigung einen Zeitraum nennt">
         <select id="ms-lc-anr" style="flex:1 1 200px;display:none" title="Zählt das Modul als Pflichtnachweis?">${lcAnrechnungOptionen('')}</select>
         <button class="btn btn-sm btn-primary" id="ms-add">Hinzufügen</button>
       </div>
@@ -6699,6 +6754,7 @@ function bindMeinStand(person){
     const hs=document.getElementById('ms-hund'); if(team && hs.options.length===2) hs.selectedIndex=1;
     const lc=istLerncampus(q); ['ms-lc-thema','ms-lc-std','ms-lc-anr'].forEach(id=>{ document.getElementById(id).style.display=lc?'':'none'; });
     document.getElementById('ms-ue').style.display = (q && UE_KONTEN[q.code]) ? '' : 'none';
+    document.getElementById('ms-zr').style.display = (q && UE_KONTEN[q.code] && UE_KONTEN[q.code].modus==='zeitraum') ? '' : 'none';
     const a=document.getElementById('ms-lc-anr'); if(lc && !a.dataset.manuell) a.value=lcAnrechnungVorschlag(q, document.getElementById('ms-lc-thema').value); };
   const msAnr=document.getElementById('ms-lc-anr'); if(msAnr) msAnr.onchange=()=>{ msAnr.dataset.manuell='1'; };
   const msTh=document.getElementById('ms-lc-thema'); if(msTh) msTh.oninput=()=>{ if(!msAnr.dataset.manuell) msAnr.value=lcAnrechnungVorschlag(state.qualifikationen.find(x=>x.id===qs.value), msTh.value); };
@@ -6712,7 +6768,9 @@ function bindMeinStand(person){
     const ueWert = UE_KONTEN[q.code] ? document.getElementById('ms-ue').value.trim().replace('.',',') : '';
     if(UE_KONTEN[q.code] && !ueWert){ zeigeToast('Bitte die Unterrichtseinheiten (UE) laut Bescheinigung eintragen.'); return; }
     eigenerNachweisHinzufuegen(person, q.id, document.getElementById('ms-datum').value, hund, sparte, document.getElementById('ms-plakette').value.trim(), lcDaten);
-    if(ueWert){ const neuE=[...state.personQualifikationen].reverse().find(x=>x.personId===person.id && x.qualifikationId===q.id); if(neuE){ neuE.ue=ueWert; speichereState(); } }
+    const zrWert = (UE_KONTEN[q.code] && UE_KONTEN[q.code].modus==='zeitraum') ? document.getElementById('ms-zr').value.trim() : '';
+    if(zrWert && !zeitraumVon({zeitraum:zrWert})){ zeigeToast('Zeitraum bitte als Jahre angeben, z. B. 2025-2026.'); }
+    if(ueWert || zrWert){ const neuE=[...state.personQualifikationen].reverse().find(x=>x.personId===person.id && x.qualifikationId===q.id); if(neuE){ if(ueWert) neuE.ue=ueWert; if(zrWert && zeitraumVon({zeitraum:zrWert})) neuE.zeitraum=zrWert; speichereState(); } }
     zeigeToast(darfTrainingBearbeiten(person)?'Nachweis eingetragen.':'Eingetragen – bitte „Meine Angaben senden“.'); render(); };
   document.querySelectorAll('[data-ms-del]').forEach(b=>b.onclick=()=>{ state.personQualifikationen=state.personQualifikationen.filter(pq=>!(pq.id===b.dataset.msDel && pq.vomMitglied && !pq.bestaetigt)); speichereState(); render(); });
   const snd=document.getElementById('ms-senden'); if(snd) snd.onclick=()=>meldungSenden(person);
@@ -6922,7 +6980,7 @@ function bindModalMeldungImport(){
     const v=meldungVorschau; const ich=aktuellePerson(); let n=0;
     document.querySelectorAll('[data-mi]').forEach(cb=>{ const e=v.eintraege[+cb.dataset.mi]; if(!cb.checked || !e.q || e.doppelt) return;
       const bis = istKalenderjaehrlich(e.q) ? ablaufDatumFuer(e.n.datum, e.q) : (e.n.gueltigBis || ablaufDatumFuer(e.n.datum, e.q));
-      state.personQualifikationen.push({id:e.n.id||uid(), personId:e.person.id, qualifikationId:e.q.id, datum:e.n.datum||'', gueltigBis:bis, hundId:e.n.hundId||undefined, sparte:e.n.sparte||undefined, plakette:e.n.plakette||undefined, thema:e.n.thema||undefined, stunden:e.n.stunden||undefined, ue:e.n.ue||undefined, anrechnung:e.n.anrechnung||undefined, vomMitglied:true, bestaetigt:true, bestaetigtVon:ich?ich.id:'', bestaetigtAm:nowIso()});
+      state.personQualifikationen.push({id:e.n.id||uid(), personId:e.person.id, qualifikationId:e.q.id, datum:e.n.datum||'', gueltigBis:bis, hundId:e.n.hundId||undefined, sparte:e.n.sparte||undefined, plakette:e.n.plakette||undefined, thema:e.n.thema||undefined, stunden:e.n.stunden||undefined, ue:e.n.ue||undefined, zeitraum:e.n.zeitraum||undefined, anrechnung:e.n.anrechnung||undefined, vomMitglied:true, bestaetigt:true, bestaetigtVon:ich?ich.id:'', bestaetigtAm:nowIso()});
       const h=e.n.hundId?state.hunde.find(x=>x.id===e.n.hundId):null; modulQualiUebertragen(e.person.id, e.q.id, h); if(e.q.code==='rh_pruef' && h && e.n.sparte) suchpruefungAufHundUebertragen(h, e.n.sparte, e.n.plakette, e.n.datum);
       n++; });
     state.kurswuensche=state.kurswuensche||[]; v.wuensche.forEach(x=>state.kurswuensche.push(x.w));
@@ -7780,21 +7838,30 @@ function renderPersonQualifikationenBereich(p){
   const zeilen = zuordnungen.map(pq=>{
     const q = state.qualifikationen.find(x=>x.id===pq.qualifikationId);
     if(!q) return '';
+    const konto=UE_KONTEN[q.code], istSlg=q.code==='slg';
+    const bearb=`<details style="display:block;margin-top:4px"><summary class="hint" style="cursor:pointer">✏️ ändern</summary>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:4px;align-items:flex-end">
+        <label class="hint">${istSlg?'Beginn':'Datum'}<br><input type="date" data-pq-feld="datum" data-pq-id="${pq.id}" value="${esc(pq.datum||'')}" style="width:auto"></label>
+        ${istSlg||pq.datumBis?`<label class="hint">${istSlg?'Lehrgangsende':'bis'}<br><input type="date" data-pq-feld="datumBis" data-pq-id="${pq.id}" value="${esc(pq.datumBis||'')}" style="width:auto"></label>`:''}
+        ${konto?`<label class="hint">UE<br><input inputmode="decimal" data-pq-feld="ue" data-pq-id="${pq.id}" value="${esc(pq.ue||'')}" placeholder="8 je Ganztag" style="width:90px"></label>`:''}
+        ${konto&&konto.modus==='zeitraum'?`<label class="hint">gilt für Jahre<br><input data-pq-feld="zeitraum" data-pq-id="${pq.id}" value="${esc(pq.zeitraum||'')}" placeholder="z. B. 2025-2026" style="width:120px"></label>`:''}
+        ${!konto?`<label class="hint">gültig bis<br><input type="date" data-pq-feld="gueltigBis" data-pq-id="${pq.id}" value="${esc(pq.gueltigBis||'')}" style="width:auto"></label>`:''}
+      </div></details>`;
     return `<div class="row" style="justify-content:space-between;align-items:center;padding:6px 0;border-top:1px dashed var(--line)">
-      <span>${esc(q.label)}${lcInfoHtml(pq, istLerncampus(q))}${istLerncampus(q)?` <select data-pq-anr="${pq.id}" style="width:auto;font-size:.85em;margin-top:4px" title="Anrechnung">${lcAnrechnungOptionen(pq.anrechnung)}</select>`:''}${pq.nachweis?` <details style="display:inline-block;font-size:.85em"><summary class="hint" style="cursor:pointer">Nachweis</summary><span class="hint">${esc(pq.nachweis)}</span></details>`:''}${pq.hundId?` <span class="chip muted">🐕 ${esc((state.hunde.find(h=>h.id===pq.hundId)||{}).name||'Hund?')}</span>`:''}${pq.sparte?` <span class="chip muted">${esc(spartenLabel(pq.sparte))}</span>`:''}${pq.plakette?` <span class="chip muted">Plakette ${esc(pq.plakette)}</span>`:''}${pq.datum?` <span class="hint">(seit ${fmtDatum(pq.datum)})</span>`:''}${pq.gueltigBis?` <span class="hint">– gültig bis ${fmtDatum(pq.gueltigBis)}</span>`:''}</span>
+      <span>${esc(q.label)}${lcInfoHtml(pq, istLerncampus(q))}${istLerncampus(q)?` <select data-pq-anr="${pq.id}" style="width:auto;font-size:.85em;margin-top:4px" title="Anrechnung">${lcAnrechnungOptionen(pq.anrechnung)}</select>`:''}${pq.nachweis?` <details style="display:inline-block;font-size:.85em"><summary class="hint" style="cursor:pointer">Nachweis</summary><span class="hint">${esc(pq.nachweis)}</span></details>`:''}${pq.hundId?` <span class="chip muted">🐕 ${esc((state.hunde.find(h=>h.id===pq.hundId)||{}).name||'Hund?')}</span>`:''}${pq.sparte?` <span class="chip muted">${esc(spartenLabel(pq.sparte))}</span>`:''}${pq.plakette?` <span class="chip muted">Plakette ${esc(pq.plakette)}</span>`:''}${pq.datum?` <span class="hint">(seit ${fmtDatum(pq.datum)})</span>`:''}${(()=>{ const r=UE_KONTEN[q.code]; if(r && r.modus==='zeitraum'){ const st=ueKontoStatus(p.id,q.code); return st?` <span class="hint">– ${esc(ueKontoKurz(st))}</span>`:''; } return pq.gueltigBis?` <span class="hint">– gültig bis ${fmtDatum(pq.gueltigBis)}</span>`:''; })()}${bearb}</span>
       <button class="btn btn-sm btn-ghost" data-person-qual-entfernen="${pq.id}" type="button">✕</button>
     </div>`;
   }).join('') || '<p class="hint" style="margin:6px 0">Noch keine Qualifikation zugeordnet.</p>';
   return `
+  <details class="pf-abschnitt" open style="border-bottom:1px solid var(--line);margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;font-size:1.02em;padding:6px 0">🎓 Qualifikationen & Nachweise <span class="hint" style="font-weight:400">(${zuordnungen.length})</span></summary>
   <div class="field">
     <details style="margin:0 0 10px"><summary style="cursor:pointer;font-weight:600">🎓 Kurswunsch prüfen</summary>
       <select id="pf-kurs" style="width:100%;box-sizing:border-box;margin-top:6px"><option value="">– Lehrgang wählen –</option>${kursOptionenHtml('')}</select>
       <div id="pf-kurs-ergebnis"></div>
     </details>
     <label>Qualifikationen dieser Person</label>
-    ${hatSuchpruefung(p.id)?'<p class="hint" style="margin:0 0 4px;color:var(--ink)">✓ Modulprüfung 2 (Suchprüfung) vorhanden – alle einmaligen Pflichtausbildungen bis dahin gelten als erfüllt. Einzutragen sind nur noch aufbauende Qualifikationen und die wiederkehrenden Nachweise (jährlich: HLW/AED, UVV, Hygiene, Datenschutz, Sonderrechte; alle 2 Jahre: Suchprüfung, Sanitätsfortbildung; alle 5 Jahre: Erste Hilfe am Hund).</p>':''}
-    <div id="pf-qual-liste">${zeilen}</div>
-    <div class="row" style="gap:6px;margin-top:10px;flex-wrap:wrap">
+    <p class="hint" style="margin:0 0 4px">➕ Neue Qualifikation eintragen:</p>
+    <div class="row" style="gap:6px;margin:4px 0 10px;flex-wrap:wrap">
       <select id="pf-qual-neu" style="flex:1;min-width:160px">
         <option value="">– Qualifikation wählen –</option>
         ${qualiOptionenHtml()}
@@ -7813,14 +7880,28 @@ function renderPersonQualifikationenBereich(p){
       <input id="pf-qual-lc-thema" placeholder="Modul (Nähere Bezeichnung im drkserver)" style="flex:2 1 220px;display:none">
       <input id="pf-qual-lc-std" placeholder="Umfang in h" inputmode="decimal" style="flex:0 1 110px;display:none">
       <input id="pf-qual-ue" placeholder="Umfang in UE" inputmode="decimal" style="flex:0 1 110px;display:none" title="Unterrichtseinheiten laut Teilnahmebescheinigung (1 UE = 45 Min.)">
+      <input id="pf-qual-zr" placeholder="gilt für Jahre, z. B. 2025-2026" style="flex:1 1 170px;display:none" title="Nur ausfüllen, wenn die Bescheinigung einen Zeitraum nennt">
       <select id="pf-qual-lc-anr" style="flex:1 1 220px;display:none" title="Zählt das Modul als Pflichtnachweis?">${lcAnrechnungOptionen('')}</select>
       <input id="pf-qual-datum" type="date" value="${new Date().toISOString().slice(0,10)}" style="width:auto">
       <input id="pf-qual-bis" type="date" placeholder="Gültig bis (optional)" style="width:auto">
       <button class="btn btn-sm btn-primary" id="pf-qual-hinzufuegen" type="button">+ Hinzufügen</button>
     </div>
-  </div>`;
+
+    ${hatSuchpruefung(p.id)?'<p class="hint" style="margin:0 0 4px;color:var(--ink)">✓ Modulprüfung 2 (Suchprüfung) vorhanden – alle einmaligen Pflichtausbildungen bis dahin gelten als erfüllt. Einzutragen sind nur noch aufbauende Qualifikationen und die wiederkehrenden Nachweise (jährlich: HLW/AED, UVV, Hygiene, Datenschutz, Sonderrechte; alle 2 Jahre: Suchprüfung, Sanitätsfortbildung; alle 5 Jahre: Erste Hilfe am Hund).</p>':''}
+    <details id="pf-qual-details" style="margin-top:4px"><summary style="cursor:pointer;font-weight:600">Vorhandene Qualifikationen (${zuordnungen.length}) – zum Aufklappen</summary>
+    <div id="pf-qual-liste">${zeilen}</div></details>
+  </div></details>`;
 }
 function bindPersonQualifikationenBereich(p){
+  document.querySelectorAll('[data-pq-feld]').forEach(inp=>{ inp.onchange=()=>{ const pq=state.personQualifikationen.find(x=>x.id===inp.dataset.pqId); if(!pq) return;
+    const f=inp.dataset.pqFeld, v=inp.value.trim();
+    if(f==='zeitraum' && v && !zeitraumVon({zeitraum:v})){ zeigeToast('Bitte Jahre angeben, z. B. 2025-2026.'); return; }
+    if(f==='ue'){ if(v) pq.ue=v.replace('.',','); else delete pq.ue; }
+    else if(v) pq[f]=v; else delete pq[f];
+    if(f==='gueltigBis') pq.gueltigBisManuell = !!v;
+    if(f==='datum' && !UE_KONTEN[(state.qualifikationen.find(x=>x.id===pq.qualifikationId)||{}).code] && !pq.gueltigBisManuell){ const q=state.qualifikationen.find(x=>x.id===pq.qualifikationId); const b=ablaufDatumFuer(v,q); if(b) pq.gueltigBis=b; }
+    speichereState(); zeigeToast('Nachweis geändert.');
+    const d=document.getElementById('pf-qual-details'); const offen=d&&d.open; renderErhalteScroll ? renderErhalteScroll() : render(); const d2=document.getElementById('pf-qual-details'); if(d2&&offen) d2.open=true; }; });
   const sel = document.getElementById('pf-qual-neu');
   const bis = document.getElementById('pf-qual-bis');
   const von = document.getElementById('pf-qual-datum');
@@ -7845,6 +7926,7 @@ function bindPersonQualifikationenBereich(p){
     const lc = istLerncampus(q);
     ['pf-qual-lc-thema','pf-qual-lc-std','pf-qual-lc-anr'].forEach(id=>{ document.getElementById(id).style.display = lc ? '' : 'none'; });
     document.getElementById('pf-qual-ue').style.display = (q && UE_KONTEN[q.code]) ? '' : 'none';
+    document.getElementById('pf-qual-zr').style.display = (q && UE_KONTEN[q.code] && UE_KONTEN[q.code].modus==='zeitraum') ? '' : 'none';
     if(lc){ const a=document.getElementById('pf-qual-lc-anr'); if(!a.dataset.manuell) a.value = lcAnrechnungVorschlag(q, document.getElementById('pf-qual-lc-thema').value); }
     vorschlagen();
   };
@@ -7878,7 +7960,8 @@ function bindPersonQualifikationenBereich(p){
     const lcAnr = lcWahl ? document.getElementById('pf-qual-lc-anr').value : '';
     if(lcWahl && !lcThema){ alert('Bitte den Modulnamen eintragen (im drkserver unter „Nähere Bezeichnung“).'); document.getElementById('pf-qual-lc-thema').focus(); return; }
     state.personQualifikationen.push({id:uid(), personId:p.id, qualifikationId:qualId, datum:von.value, gueltigBis: istKalenderjaehrlich(qWahl) ? ablaufDatumFuer(von.value, qWahl) : (bis.value||null), hundId: modulHund ? modulHund.id : undefined, sparte: sparteWahl || undefined, plakette: plaketteWahl || undefined, thema: lcThema || undefined, stunden: lcStd || undefined, anrechnung: lcAnr || undefined});
-    if(qWahl && UE_KONTEN[qWahl.code]){ const u=document.getElementById('pf-qual-ue').value.trim().replace('.',','); if(u){ state.personQualifikationen[state.personQualifikationen.length-1].ue=u; } }
+    if(qWahl && UE_KONTEN[qWahl.code]){ const neuE=state.personQualifikationen[state.personQualifikationen.length-1]; const u=document.getElementById('pf-qual-ue').value.trim().replace('.',','); if(u) neuE.ue=u;
+      const z=document.getElementById('pf-qual-zr').value.trim(); if(z && zeitraumVon({zeitraum:z})) neuE.zeitraum=z; }
     if(istSuchWahl && modulHund) suchpruefungAufHundUebertragen(modulHund, sparteWahl, plaketteWahl, von.value);
     const uebertragHund = modulQualiUebertragen(p.id, qualId, modulHund);
     if(uebertragHund) setTimeout(()=>zeigeToast(`Auch unter Prüfungsordnungen für ${uebertragHund.name} als bestanden eingetragen.`), 50);
@@ -7902,6 +7985,7 @@ function renderModalPerson(){
   <div class="modal-back"><div class="modal">
     <div class="modal-head"><h3>${bestehend?'Person bearbeiten':'Person anlegen'}</h3><button class="btn btn-ghost btn-sm" id="m-schliessen">✕</button></div>
     <div class="modal-body">
+      <details class="pf-abschnitt" ${bestehend?'':'open'} style="border-bottom:1px solid var(--line);margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;font-size:1.02em;padding:6px 0">👤 Stammdaten & Kontakt <span class="hint" style="font-weight:400">${esc(p.name||'')}</span></summary>
       <div class="grid-2">
         <div class="field"><label>Name</label><input id="pf-name" value="${esc(p.name)}"></div>
         <div class="field"><label>Benutzername (optional, für kürzere Anmeldung)</label><input id="pf-benutzername" value="${esc(p.benutzername||'')}" placeholder="z. B. emma">
@@ -7928,6 +8012,8 @@ function renderModalPerson(){
           <div class="hint">Für die automatische Vorbelegung bei der Kilometererfassung.</div>
         </div>
       </div>
+      </details>
+      <details class="pf-abschnitt" ${bestehend?'':'open'} style="border-bottom:1px solid var(--line);margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;font-size:1.02em;padding:6px 0">🔑 Rollen & Rechte <span class="hint" style="font-weight:400">${(p.rollen||[]).map(r=>esc(rolleInfo(r).label)).join(', ')||'keine Rolle'}</span></summary>
       <div class="field"><label>Rollen (Mehrfachauswahl möglich)</label>
         <div class="row">${ROLLEN_KATALOG.map(r=>`
           <label class="chip ${p.rollen.includes(r.id)?'':'muted'}" style="cursor:pointer">
@@ -7943,10 +8029,13 @@ function renderModalPerson(){
           </label>`).join('')}
         </div>
       </div>`:''}
+      </details>
+      ${bestehend?renderPersonQualifikationenBereich(bestehend):''}
       ${!bestehend?`
       <div class="field"><label>Erstpasswort</label><input id="pf-erstpw" type="text" placeholder="wird bei der ersten Anmeldung geändert">
         <div class="hint">Die Person muss dieses Passwort bei der ersten Anmeldung durch ein eigenes ersetzen.</div>
       </div>`:`
+      <details class="pf-abschnitt" style="border-bottom:1px solid var(--line);margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;font-size:1.02em;padding:6px 0">🔐 Zugang, Passwort & Dateien</summary>
       <div class="field"><button class="btn btn-sm" id="pf-pw-reset">Passwort zurücksetzen</button>
         <div class="hint" id="pf-pw-reset-hint"></div>
       </div>
@@ -7961,11 +8050,13 @@ function renderModalPerson(){
         <div class="hint" id="pf-zp-hint" style="margin-top:6px"></div>
         <button class="btn btn-sm" id="pf-selbstauskunft" type="button" style="margin-top:8px">📋 Selbstauskunft-Datei (Excel) für diese Person</button>
         <button class="btn btn-sm" id="pf-standupdate" type="button" style="margin-top:8px">📥 Stand-Update (eigene Nachweise; Anmeldepasswort bleibt)</button>
-        <div style="margin-top:14px"><strong>Freigaben</strong> <span class="hint">${bestehend.einwilligung&&bestehend.einwilligung.datum?'Einwilligung vom '+fmtDatum(bestehend.einwilligung.datum)+(bestehend.einwilligung.form?' ('+esc(bestehend.einwilligung.form)+')':''):'noch keine Einwilligung erfasst – es gelten die Vorgaben'} · Übersicht aller Mitglieder: Verwaltung → Freigaben &amp; Einwilligungen</span>
+      </div>
+      </details>
+        ${(()=>{ const ok=!!(bestehend.einwilligung&&bestehend.einwilligung.datum); return `<details class="pf-abschnitt" style="border-bottom:1px solid var(--line);margin-bottom:8px"><summary style="cursor:pointer;font-weight:700;font-size:1.02em;padding:6px 0;${ok?'':'color:#b3261e'}">${ok?'🔐 Datenschutz & Freigaben':'⚠️ Datenschutz & Freigaben – bitte prüfen (keine Einwilligung erfasst)'}</summary>`; })()}
+        <div style="margin-top:6px"><span class="hint">${bestehend.einwilligung&&bestehend.einwilligung.datum?'Einwilligung vom '+fmtDatum(bestehend.einwilligung.datum)+(bestehend.einwilligung.form?' ('+esc(bestehend.einwilligung.form)+')':''):'noch keine Einwilligung erfasst – es gelten die Vorgaben'} · Übersicht aller Mitglieder: Verwaltung → Freigaben &amp; Einwilligungen</span>
           ${FREIGABEN.map(d=>`<label class="row" style="gap:8px;align-items:flex-start;padding:3px 0;cursor:pointer"><input type="checkbox" data-pf-freigabe="${d.k}" ${freigabe(bestehend,d.k)?'checked':''} style="margin-top:3px"> <span class="hint" style="color:var(--ink)">${esc(d.label)}${d.genutzt?'':' <i>(noch nicht genutzt)</i>'}</span></label>`).join('')}
-        </div>
-      </div>`}
-      ${bestehend?renderPersonQualifikationenBereich(bestehend):''}
+        </div></details>
+`}
       ${bestehend?renderPersonHospitationenBereich(bestehend):''}
     </div>
     <div class="modal-foot">
