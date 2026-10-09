@@ -1,3 +1,20 @@
+# Änderungen in Version 2.54 (09.10.2026)
+
+- **Qualifikationen neu erfassen** in drei Schritten, auch am Handy: Bereich wählen, Qualifikation suchen und wählen, Angaben eintragen („gültig bis“ wird vorbelegt). Zu finden unter Mein Stand → „Nachweis eintragen“, im Personen-Dialog und unter Verwaltung → Qualifikationen.
+- **Listen** nach Bereich gruppiert, alphabetisch oder nach Fälligkeit, mit Suche und Filtern. Abgelaufene Nachweise sind rot, bald fällige gelb markiert.
+- **DRK-Lerncampus:** „UVV-Unterweisung online“ und „freier Kurs“ mit Kurstitel als Freitext.
+- Ein Fehler ist behoben: Verschiedene Lerncampus-Module vom selben Tag wurden bei einer Katalogumstellung als Dubletten gelöscht.
+- Die beiliegende `sw.js` ist bereits angepasst (Cache `Barry-2.54`).
+
+---
+
+# Änderungen in Version 2.53 (09.10.2026)
+
+- Übung „Verbellen am stärksten Geruchsaustritt“ (früher „Bellen mit Scharren“, TB-TS-01) an die Staffelfestlegung angepasst; Übungsrad: R13-H3 dauert 30 Min., R21-G2 nur mit Ausbilder, Hinweis zum Heben bei Schmerzen (R31-G2).
+- Beim Veröffentlichen den Cache-Namen in `sw.js` hochzählen (z. B. `…-v2-53`).
+
+---
+
 # Änderungen in Version 2.52 (09.10.2026)
 
 - **Filter „Wo?“** im Übungsrad: Egal · 🌧 Drinnen (Schlechtwetter) · Draußen. „Drinnen“ zeigt nur Übungen, die drinnen gehen (356 von 420). Übungen mit Hund oder als Helfer haben einen grünen Kasten „Drinnen üben“ mit Hinweisen, z. B. zu rutschfestem Boden, Raumgröße oder Lautstärke.
