@@ -1,3 +1,10 @@
+# Änderungen in Version 2.55 (09.10.2026)
+
+- **Neu im Übungsrad: Modul K08 „Kommunikation – Missverständnisse verstehen“** mit 15 Übungen: Vier-Seiten-Modell, selektive Wahrnehmung, Beobachtung und Deutung, Stille Post mit Funk und Briefing, Rollenspiele und Mensch-Hund-Übungen. Gruppen- und Helferübungen zeigen aufklappbare **Rollenkarten**, die jeweils nur der vorgesehenen Person gezeigt werden. Insgesamt 435 Übungen zu 33 Themen.
+- Die beiliegende `sw.js` ist bereits angepasst (Cache `Barry-2.55`).
+
+---
+
 # Änderungen in Version 2.54 (09.10.2026)
 
 - **Qualifikationen neu erfassen** in drei Schritten, auch am Handy: Bereich wählen, Qualifikation suchen und wählen, Angaben eintragen („gültig bis“ wird vorbelegt). Zu finden unter Mein Stand → „Nachweis eintragen“, im Personen-Dialog und unter Verwaltung → Qualifikationen.
