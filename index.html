@@ -97,6 +97,7 @@ input,select,textarea{font-family:inherit;font-size:.95rem}
 }
 .topbar .brand{font-family:var(--font-head);font-size:1.1rem;font-weight:600}
 .burger{background:none;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+.burger-text{font-size:.8rem;font-weight:600;vertical-align:middle}
 
 .content{padding:28px 34px;max-width:980px}
 .content .eyebrow{color:var(--dot,var(--muted));font-size:.85rem;font-weight:600;margin-bottom:2px}
@@ -135,14 +136,19 @@ input,select,textarea{font-family:inherit;font-size:.95rem}
 @media (pointer:coarse){.btn-sm{min-height:40px}button.chip,.chip[data-goto-meinstand],.chip[data-goto-inline]{min-height:40px;display:inline-flex;align-items:center}}
 .btn:disabled,.btn[disabled]{opacity:.45;cursor:not-allowed;filter:grayscale(.4)}
 @media (max-width:640px){
-  .reiterleiste{flex-wrap:nowrap !important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;padding-bottom:6px !important}
-  .reiterleiste>.btn{flex:0 0 auto;white-space:nowrap}
+  .reiterleiste{display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px !important;padding-bottom:10px !important}
+  .reiterleiste>.btn{white-space:normal;min-height:44px;padding:8px 10px;font-size:.88rem;line-height:1.2;text-align:center;justify-content:center;margin:0}
   table.karten-mobil thead{display:none}
   table.karten-mobil,table.karten-mobil tbody{display:block}
   table.karten-mobil tr{display:flex;flex-wrap:wrap;gap:4px 8px;border-bottom:1px solid var(--line);padding:10px 4px}
   table.karten-mobil td{display:block;border:0 !important;padding:0 !important;width:auto !important}
   table.karten-mobil td:nth-child(2){flex:1 1 100%;order:-1}
 }
+.unterlagen-leiste{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 12px;padding:8px 10px;background:var(--t-ausbildung-soft);border-radius:10px}
+.bereich-kacheln{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+.bereich-kacheln .btn{justify-content:flex-start;text-align:left;min-height:44px}
+.kal-werkzeug{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;margin:4px 0 0}
+.kal-filter,.kal-aktion{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .qe-personen{display:flex;flex-direction:column;gap:2px;max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-top:6px}
 .qe-personen label{display:flex;gap:8px;align-items:center;min-height:36px;cursor:pointer}
 .ms-sprungleiste{display:flex;gap:6px;overflow-x:auto;padding:2px 0 10px;margin:0 0 4px;-webkit-overflow-scrolling:touch}
@@ -3990,7 +3996,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.59';
+const BARRY_APP_VERSION = '2.60';
 const BARRY_APP_STAND = '10.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -4474,9 +4480,9 @@ function render(){
     </div>
     <div class="main">
       <div class="topbar">
-        <button class="burger" id="btn-burger" aria-label="Menü">☰</button>
+        <button class="burger" id="btn-burger" aria-label="Menü">☰ <span class="burger-text">Menü</span></button>
         <div class="brand">${esc(APP_NAME)} <span style="font-family:system-ui,sans-serif;font-weight:400;font-size:.55em;opacity:.65;vertical-align:middle">v${BARRY_APP_VERSION}</span></div>
-        <button class="burger" data-barry-suche aria-label="Suchen" title="Suchen">🔍</button>
+        <button class="burger" data-barry-suche aria-label="Suchen" title="Suchen">🔍 <span class="burger-text">Suchen</span></button>
       </div>
       ${ansichtAls?`<div class="ansicht-banner" role="status">👁 Vorschau: So sieht BARRY für ${ansichtAls==='ausbilder'?'eine/n Ausbilder/-in':'ein Mitglied'} aus. Änderungen werden trotzdem gespeichert. <button class="btn btn-sm" data-ansicht-als>Vorschau beenden</button></div>`:''}
       <div class="content" id="content"></div>
@@ -4733,6 +4739,8 @@ function renderStart(person){
       <button class="quick-tile" data-goto-meinstand><span>🎓</span>Mein Stand</button>
       <button class="quick-tile" data-start-sprung="nachweis"><span>✏️</span>Nachweis eintragen</button>
       <button class="quick-tile" data-start-sprung="kurs"><span>📝</span>Kurswunsch</button>
+      <button class="quick-tile" data-unterlage="pruefung"><span>📜</span>Prüfung & Module</button>
+      <button class="quick-tile" data-unterlage="material"><span>📚</span>Unterlagen</button>
       <button class="quick-tile" data-goto-inline="organisation"><span>📅</span>Termine</button>
       <button class="quick-tile" id="btn-start-funk"><span>📻</span>Funk</button>
       ${(istLeitung || hatAusbilderRecht(person))?`<button class="quick-tile" data-datei-einlesen><span>📂</span>Datei einlesen</button>`:''}
@@ -4787,6 +4795,11 @@ function renderStart(person){
     ${renderStartGeburtstage(person)}
     ${(istLeitung || hatAusbilderRecht(person)) ? leitungKarte + einsatzKarte : ''}
     ${renderUebungDesTages(person, eigeneHunde)}
+    <div class="card card-pad" style="margin:20px 0">
+      <h3 style="margin-top:0">Alle Bereiche</h3>
+      <div class="bereich-kacheln">${BEREICHE.filter(b=>b.id!=='start' && darfBereichSehen(b,person) && !(person.bereicheAusgeblendet||[]).includes(b.id)).map(b=>`<button type="button" class="btn btn-ghost" data-goto="${b.id}">${b.icon||''} ${esc(b.label)}</button>`).join('')}</div>
+      <p class="hint" style="margin:8px 0 0">Dieselben Bereiche öffnet auch ☰ Menü oben links; mit 🔍 Suchen findest du jede Funktion über ein Stichwort.</p>
+    </div>
     ${(istLeitung || hatAusbilderRecht(person)) ? `<div class="card card-pad" style="margin:20px 0">
       <div class="hint">Gemeinsam dokumentiert – letzte 30 Tage</div>
       <h2>${trainingsDieserMonat} Trainingseinträge</h2>
@@ -10180,15 +10193,17 @@ function renderOrganisationKalender(person){
   `).join('') : `<div class="card empty" style="margin-top:16px"><h3>Keine Termine</h3><p>${orgFilter==='kommend'?'Aktuell liegen keine kommenden Termine vor.':'Für diese Auswahl liegen keine Termine vor.'}</p></div>`;
 
   return `
-    <div class="spread">
-      <span></span>
-      <div class="row">
-        ${darf?`<button class="btn" id="btn-jahresplan">Jahresplan (Excel)</button>`:''}
-        ${darf?`<button class="btn btn-primary" id="btn-neuer-termin">+ Termin anlegen</button>`:''}
+    <div class="kal-werkzeug">
+      <div class="kal-filter" role="group" aria-label="Termine filtern">
+        <button class="btn btn-sm ${orgFilter==='kommend'?'btn-primary':'btn-ghost'}" data-filter="kommend">Kommende</button>
+        <button class="btn btn-sm ${orgFilter==='alle'?'btn-primary':'btn-ghost'}" data-filter="alle">Alle</button>
+        <select id="org-kat" aria-label="Art des Termins" style="width:auto;max-width:100%"><option value="">Alle Arten</option>${TERMIN_KATEGORIEN.map(k=>`<option value="${k.id}" ${orgFilter===k.id?'selected':''}>${esc(k.label)}</option>`).join('')}</select>
       </div>
+      ${darf?`<div class="kal-aktion"><button class="btn btn-sm btn-primary" id="btn-neuer-termin">+ Termin anlegen</button><button class="btn btn-sm btn-ghost" id="btn-jahresplan">Jahresplan (Excel)</button></div>`:''}
     </div>
-    <details class="card card-pad" style="margin-top:12px">
-      <summary style="cursor:pointer;font-weight:600">🔄 Terminplan ${darf?'verteilen / ':''}aktualisieren · 📅 in eigenen Kalender</summary>
+    <details class="kal-mehr" style="margin-top:8px">
+      <summary class="hint" style="cursor:pointer">🔄 Terminplan ${darf?'verteilen / ':''}aktualisieren · 📅 in den eigenen Handy-Kalender</summary>
+      <div class="card card-pad" style="margin-top:6px">
       <p class="hint" style="margin-top:8px">${darf
         ? 'Nach Änderungen am Jahresplan den <strong>Terminplan exportieren</strong> und die Datei an die Mitglieder schicken (z. B. per Messenger oder E-Mail). Sie enthält nur die Staffeltermine und die Löschvermerke – keine Personen-, Planungs- oder Ausbilderdaten.'
         : 'Hat die Leitung einen neuen Terminplan geschickt, hier einlesen. Neue Termine kommen hinzu, geänderte werden aktualisiert, entfallene entfernt – nichts wird doppelt angelegt, eigene Zusagen bleiben erhalten.'}</p>
@@ -10200,13 +10215,8 @@ function renderOrganisationKalender(person){
       <div class="row" style="gap:8px;flex-wrap:wrap">
         <button class="btn btn-sm btn-primary" id="btn-kal-ics">📅 Kalenderdatei (.ics)</button>
         <button class="btn btn-sm" id="btn-kal-csv">Tabelle (CSV, Google-Format)</button>
-      </div>
+      </div></div>
     </details>
-    <div class="row" style="margin:14px 0 4px">
-      <button class="btn btn-sm ${orgFilter==='kommend'?'btn-primary':'btn-ghost'}" data-filter="kommend">Kommende</button>
-      <button class="btn btn-sm ${orgFilter==='alle'?'btn-primary':'btn-ghost'}" data-filter="alle">Alle</button>
-      ${TERMIN_KATEGORIEN.map(k=>`<button class="btn btn-sm ${orgFilter===k.id?'btn-primary':'btn-ghost'}" data-filter="${k.id}">${esc(k.label)}</button>`).join('')}
-    </div>
     ${renderEntfalleneTermineHinweis()}
     ${gruppenHtml}
   `;
@@ -10331,7 +10341,8 @@ function bindOrganisationPlanung(person){
 }
 function bindOrganisation(person){
   document.querySelectorAll('[data-otab]').forEach(b=>{ b.onclick=()=>{ orgTab=b.dataset.otab; render(); }; });
-  document.querySelectorAll('[data-filter]').forEach(b=>{ b.onclick=()=>{ orgFilter=b.dataset.filter; render(); }; });
+  document.querySelectorAll('[data-filter]').forEach(b=>{ b.onclick=()=>{ orgFilter=b.dataset.filter; renderErhalteScroll(); }; });
+  const okat=document.getElementById('org-kat'); if(okat) okat.onchange=()=>{ orgFilter=okat.value||'kommend'; renderErhalteScroll(); };
   const neu = document.getElementById('btn-neuer-termin');
   if(neu) neu.onclick = ()=>{ modal={type:'termin', id:null}; render(); };
   const jp = document.getElementById('btn-jahresplan');
@@ -11466,6 +11477,7 @@ function renderAusbildung(person){
   return `
     <div class="eyebrow" style="--dot:var(--t-ausbildung)">Ausbildung & Team</div>
     <h1>Ausbildung & Team</h1>
+    ${unterlagenLeisteHtml()}
     <div class="row reiterleiste" style="margin:14px 0 20px;border-bottom:1px solid var(--line);padding-bottom:2px">
       ${AUSBILDUNG_TABS.filter(t=>ausbildungTabSichtbar(t, person, darfPlanung)).map(t=>`<button class="btn ${ausbildungTab===t.id?'btn-primary':'btn-ghost'}" data-atab="${t.id}">${esc(t.label)}</button>`).join('')}
     </div>
@@ -11487,7 +11499,8 @@ function bindAusbildung(person){
 function renderWissenFachfragen(){
   if(typeof FACHFRAGEN==='undefined' || !FACHFRAGEN.length) return '';
   const themen=[...new Set(FACHFRAGEN.map(f=>f.thema))];
-  return `<details class="card card-pad" style="margin-bottom:14px" id="wissen-fachfragen"><summary style="cursor:pointer;font-weight:700">📝 Fachfragen zur Theorieprüfung (Modul 1.0) <span class="chip muted">${FACHFRAGEN.length}</span></summary>
+  const offen = wfOffen; wfOffen = false;
+  return `<details class="card card-pad" style="margin-bottom:14px" id="wissen-fachfragen" ${offen?'open':''}><summary style="cursor:pointer;font-weight:700">📝 Fachfragen zur Theorieprüfung (Modul 1.0) <span class="chip muted">${FACHFRAGEN.length}</span></summary>
     <input type="search" id="wf-suche" class="qe-suche" placeholder="Fachfragen durchsuchen …" autocomplete="off" style="margin:10px 0">
     ${themen.map(t=>`<div data-wf-gruppe><h4 style="margin:12px 0 6px">${esc(t)}</h4>${FACHFRAGEN.filter(f=>f.thema===t).map(f=>`<details class="card" data-wf-item data-wf-text="${esc(qeFalten(f.frage+' '+f.antwort+' '+t))}" style="margin-bottom:8px;padding:10px 12px"><summary style="cursor:pointer;font-weight:600">${esc(f.frage)}</summary><p class="hint" style="margin-top:8px">${esc(f.antwort)}</p></details>`).join('')}</div>`).join('')}
     <p class="hint" data-wf-leer hidden>Keine Fachfrage gefunden.</p></details>`;
@@ -11504,6 +11517,20 @@ function renderAnzeigeProgrammeKarte(){
     <p class="hint" style="margin-top:8px">Schritt-für-Schritt-Abläufe je Anzeigeart.</p>
     ${INDICATION_PROGRAMS.map(p=>`<details class="card" style="margin-bottom:10px;padding:12px 14px"><summary style="cursor:pointer;font-weight:600">${esc(p.title)}</summary><p class="hint" style="margin-top:8px;font-style:italic">${esc(p.subtitle)}</p><ol class="hint">${p.steps.map(s=>`<li><strong>${esc(s[1])}:</strong> ${esc(s[2])}</li>`).join('')}</ol></details>`).join('')}</details>`;
 }
+/* 2.60: Unterlagen auf einen Blick – Prüfungsordnungen & Module, Fachfragen, Lehrmaterial, Fehlerdiagnose, Formulare */
+let wfOffen = false;
+function unterlagenLeisteHtml(){
+  const b=[['pruefung','Prüfungsordnungen & Module',''],['pruefung','Fachfragen (Modul 1.0)','wissen-fachfragen'],['material','Lehrmaterial',''],['fehlerdiagnose','Fehlerdiagnose',''],['formulare','Formulare & Vordrucke','']];
+  return `<div class="unterlagen-leiste" role="group" aria-label="Unterlagen"><span class="hint"><b>📚 Unterlagen:</b></span>${b.map(([w,l,s])=>`<button type="button" class="btn btn-ghost btn-sm" data-unterlage="${w}"${s?` data-unterlage-sprung="${s}"`:''}>${l}</button>`).join('')}</div>`;
+}
+document.addEventListener('click', e=>{
+  const b = e.target.closest && e.target.closest('[data-unterlage]'); if(!b || !session) return;
+  e.preventDefault(); modal=null; sidebarOffen=false;
+  const w = b.dataset.unterlage;
+  if(w==='formulare'){ route={bereich:'organisation',unter:null,id:null}; orgTab='formulare'; sprungZiel='content'; }
+  else { route={bereich:'wissen',unter:null,id:null}; wissenTab=w; sprungZiel=b.dataset.unterlageSprung||'content'; if(b.dataset.unterlageSprung==='wissen-fachfragen') wfOffen=true; }
+  render();
+});
 function renderWissen(person){
   return `
     <div class="eyebrow" style="--dot:var(--t-ausbildung)">Wissen & Material</div>
@@ -12146,9 +12173,20 @@ function renderAusbildungsordnungKarte(){
   ${z('4 · Prüfer/-innen',['Anwärterzeit mindestens ein, höchstens drei Jahre; Voraussetzungen u. a. Ausbilderbefähigung, fünf Jahre Erfahrung, eigener Rettungshund mit zwei bestandenen Prüfungen in der Sparte (4).','Theorie: schriftliche Prüfung, 35 von 50 Fragen in 45 Minuten (4.1.1); Praxis: Mitwirkung an 40 Einzelsuchprüfungen (davon 20 in der eigenen Sparte) sowie Modulbewertungen (4.2.4).','Ernennung durch die Bundesbereitschaftsleitung je Sparte, auf drei Jahre befristet (4.4).','Verlängerung bei aktiver Mitwirkung, <b>Prüferfortbildung von mindestens 8 UE in drei Jahren</b> und Prüftätigkeit: innerhalb von zwei Kalenderjahren mindestens 20 Teams selbst prüfen oder an mindestens drei verschiedenen Prüfungs- oder Modulveranstaltungen teilnehmen (4.3.4, 4.4.1).'])}
   <p class="hint" style="margin-top:10px">In BARRY erfasst: Lehrberechtigung, Ernennungen und Fortbildungen mit UE (Verwaltung → Qualifikationen bzw. 🎓 Mein Stand). BARRY zählt die UE innerhalb der laufenden Lehrberechtigung bzw. Ernennung und zeigt offenen Bedarf unter „Fristen“.</p></details>`;
 }
-function renderAusbildungPruefung(person){
-  const hunde = state.hunde.filter(h=>h.status!=='inaktiv' && (darfTrainingBearbeiten(person) || hundGefuehrtVon(h, person.id)));
-  if(hunde.length===0) return `<div class="card empty"><h3>Noch keine Teams</h3><p>${darfTrainingBearbeiten(person)?'Lege zuerst unter Verwaltung → Hunde ein Team (Hund + Hundeführer/in) an.':'Dir ist noch kein eigener Hund zugeordnet – die Leitung kann das unter Verwaltung → Hunde eintragen.'}</p></div>`;
+/* 2.60: Prüfungsordnung auch ohne eigenen Hund lesbar – ohne Prüfstand und ohne Eingaben */
+let pfNurLesen = false;
+function renderPruefungNurLesen(person){
+  pfNurLesen = true;
+  const alt = pruefungHundId; pruefungHundId = '__lesen__';
+  let html = '';
+  try{ html = renderAusbildungPruefungInhalt(person, [{id:'__lesen__', name:'Nur lesen', status:'aktiv', sparten:[]}]); } finally { pruefungHundId = alt; }
+  return `<div class="pf-nurlesen"><p class="hint" style="margin:0 0 8px;padding:8px 10px;background:var(--soft);border-radius:8px">📖 Zum Nachlesen: Inhalte und Bestehensregeln der Module. Der Prüfstand wird je Rettungshundeteam geführt und erscheint, sobald dir ein Hund zugeordnet ist.</p>${html}</div>`;
+}
+function renderAusbildungPruefung(person){ pfNurLesen = false; return renderAusbildungPruefungInhalt(person, null); }
+function renderAusbildungPruefungInhalt(person, lesenHunde){
+  const hunde = lesenHunde || state.hunde.filter(h=>h.status!=='inaktiv' && (darfTrainingBearbeiten(person) || hundGefuehrtVon(h, person.id)));
+  if(hunde.length===0) return renderPruefungNurLesen(person);
+  if(false) return `<div class="card empty"><h3>Noch keine Teams</h3><p>${darfTrainingBearbeiten(person)?'Lege zuerst unter Verwaltung → Hunde ein Team (Hund + Hundeführer/in) an.':'Dir ist noch kein eigener Hund zugeordnet – die Leitung kann das unter Verwaltung → Hunde eintragen.'}</p></div>`;
   if(!hunde.some(h=>h.id===pruefungHundId)) pruefungHundId = hunde[0]?.id || null;
   const hid = pruefungHundId;
   return `
@@ -12246,6 +12284,8 @@ function renderVerbandVergleich(hid){
   `;
 }
 function bindAusbildungPruefung(person){
+  if(pfNurLesen){ const r=document.querySelector('.pf-nurlesen'); if(r){ const t=r.querySelector('#pf-team'); if(t && t.parentElement) t.parentElement.hidden=true;
+    r.querySelectorAll('input,select,textarea,button').forEach(el=>{ if(el.matches('[data-pf-modul],[data-pf-verband],#pf-verband')) return; el.disabled=true; }); } }
   const sel = document.getElementById('pf-team');
   if(sel) sel.onchange = e=>{ pruefungHundId = e.target.value; pruefungVorschlag = null; pruefungVorschlagVersucht = false; render(); };
   const verbandSel = document.getElementById('pf-verband');
