@@ -4022,7 +4022,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.62';
+const BARRY_APP_VERSION = '2.63';
 const BARRY_APP_STAND = '10.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -4494,7 +4494,7 @@ function render(){
         `).join('')}
       </nav>
       <div class="sidebar-foot">
-        <div class="who clickable" id="btn-mein-profil" title="Mein Profil bearbeiten">${esc(person.name)} ✎</div>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-mein-profil" title="Mein Profil bearbeiten" style="width:100%;justify-content:flex-start;margin-bottom:6px">👤 Mein Profil · ${esc(person.name)} ✎</button>
         <div style="margin-bottom:8px">${(person.rollen||[]).map(r=>`<span class="chip muted">${esc(rolleInfo(r).label)}</span>`).join(' ')}</div>
         <button class="btn btn-sm" data-datei-einlesen style="width:100%;margin-bottom:6px">📂 Datei einlesen</button>
         <button class="btn btn-sm btn-ghost" data-bereiche-waehlen style="width:100%;margin-bottom:4px">⚙️ Bereiche auswählen</button>
@@ -4540,6 +4540,7 @@ function sucheSeiten(person){
   const ausb = darfTrainingBearbeiten(person), leit = istLeitungOderAdmin(person), hund = hatEigenenHund(person);
   const S = (t, k, go, sicht) => ({t, k, go, sicht: sicht===undefined ? true : sicht});
   const seiten = [
+    S('Mein Profil', 'profil passwort fingerabdruck standard-km sparte anzeigeart hund einstellungen konto', {b:route.bereich||'start', fn:()=>{ modal={type:'meinProfil'}; }}),
     S('Mein Stand', 'ausbildungsstand nachweise fristen qualifikationen', {b:'ausbildung', a:'meinstand'}),
     S('Meine Einsatzfunktionen', 'einsatz funktion helfer praktikant funker sanitäter rettungshundeführer alarmierbar', {b:'ausbildung', a:'meinstand', sprung:'ms-einsatzfunktionen'}),
     S('Nachweis eintragen', 'qualifikation unterweisung uvv erfassen eintragen bescheinigung', {b:'ausbildung', a:'meinstand', sprung:'ms-nachweis-karte', fn:()=>{ qeOffen.msq=true; }}),
@@ -4599,6 +4600,10 @@ function sucheTreffer(s, person){
   }
   return gruppen;
 }
+document.addEventListener('click', e=>{
+  const b = e.target.closest && e.target.closest('[data-mein-profil]'); if(!b || !session) return;
+  e.preventDefault(); sidebarOffen=false; modal={type:'meinProfil'}; render();
+});
 function sucheGehe(z){
   const o=document.getElementById('barry-suche'); if(o) o.remove();
   modal=null; route={bereich:z.b, unter:z.u||null, id:null};
@@ -7984,7 +7989,7 @@ function renderMeinStand(person){
       ${(()=>{ const o=lcSanOffen(person.id); if(!o.length) return ''; const summe=o.reduce((a,pq)=>a+(Number(String(pq.stunden||'').replace(',','.'))||0),0);
         return `<p class="hint" style="margin:8px 0 2px">❓ <b>Zur Klärung – Sanitätsfortbildung (16 UE in 2 Jahren):</b> Lerncampus-Module, deren Anrechnung noch offen ist${summe?` (zusammen ${String(summe).replace('.',',')} h)`:''}:</p><ul class="hint" style="margin:0 0 0 -18px">${o.map(pq=>`<li>${pq.datum?fmtDatum(pq.datum)+' · ':''}${esc(pq.thema||((state.qualifikationen.find(x=>x.id===pq.qualifikationId)||{}).label)||'')}${pq.stunden?' ('+esc(String(pq.stunden))+' h)':''}</li>`).join('')}</ul>`; })()}
     </div>
-    <nav class="ms-sprungleiste" aria-label="Abschnitte">${[['ms-einsatzfunktionen','Einsatzfunktionen'],['ms-was-fehlt','Was fehlt'],['ms-kurs-karte','Kurswunsch'],['ms-nachweis-karte','Nachweis eintragen'],['ms-nachweise','Meine Nachweise']].map(([id,l])=>`<button type="button" class="btn btn-ghost btn-sm" data-ms-sprung="${id}">${l}</button>`).join('')}</nav>
+    <nav class="ms-sprungleiste" aria-label="Abschnitte">${[['ms-einsatzfunktionen','Einsatzfunktionen'],['ms-was-fehlt','Was fehlt'],['ms-kurs-karte','Kurswunsch'],['ms-nachweis-karte','Nachweis eintragen'],['ms-nachweise','Meine Nachweise']].map(([id,l])=>`<button type="button" class="btn btn-ghost btn-sm" data-ms-sprung="${id}">${l}</button>`).join('')}<button type="button" class="btn btn-ghost btn-sm" data-mein-profil>👤 Mein Profil</button></nav>
     ${renderMeineEinsatzfunktionen(person)}
     <div class="card card-pad" style="margin-bottom:12px" id="ms-was-fehlt">
       <h3 style="margin-top:0">🎯 Was noch fehlt</h3>
@@ -15338,6 +15343,9 @@ function renderModalMeinProfil(){
     <div class="modal-body">
       <p class="hint">Rolle(n): ${(p.rollen||[]).map(r=>esc(rolleInfo(r).label)).join(', ')||'Mitglied'}</p>
       ${eigeneHunde.length?`<p class="hint">Eigene(s) Team(s): ${eigeneHunde.map(h=>esc(h.name)).join(', ')}</p>`:''}
+      ${eigeneHunde.filter(h=>h.status!=='inaktiv').map(h=>`<div class="field" style="margin-top:10px"><label>Anzeigeart von ${esc(h.name)} <span class="hint">(steuert u. a., welche Übungen im Übungsrad erscheinen)</span></label>
+        <select data-mp-anzeige="${h.id}"><option value="">– noch offen –</option>${RH_ANZEIGEARTEN.map(a=>`<option value="${a.id}" ${h.anzeigeart===a.id?'selected':''}>${esc(a.label)}</option>`).join('')}</select></div>`).join('')}
+      <p class="hint" style="margin-top:6px">Kontaktdaten und Fahrzeuge trägst du unter Ausbildung &amp; Team → Mein Stand ein.</p>
       <div class="field" style="margin-top:10px"><label>Standard-Kilometer zum Übungsort (für Dienstnachweis-Vorschlag)</label>
         <input id="mp-km" type="number" step="0.5" min="0" value="${p.kmStandard??''}">
       </div>
@@ -15390,6 +15398,7 @@ function bindModalMeinProfil(){
     const km = document.getElementById('mp-km').value;
     p.kmStandard = km ? parseFloat(km) : null;
     p.bevorzugteSparten = Array.from(document.querySelectorAll('[data-mp-sparte]:checked')).map(el=>el.dataset.mpSparte);
+    document.querySelectorAll('[data-mp-anzeige]').forEach(sel=>{ const h=state.hunde.find(x=>x.id===sel.dataset.mpAnzeige); if(h && hundGefuehrtVon(h, p.id)) h.anzeigeart = sel.value; });
     speichereState();
     zeigeToast('Profil gespeichert.');
     schliesseModal();
@@ -16015,6 +16024,11 @@ function uaBinden(person){
   uaRender(person, true);
 }
 
+function eigeneAnzeigeart(pid){
+  const h = (state.hunde||[]).find(x=>x.status!=='inaktiv' && hundGefuehrtVon(x, pid) && x.anzeigeart);
+  if(h) return h.anzeigeart;
+  const tt = (state.teams||[]).find(x=>x.personId===pid && x.anzeigeart && x.sparte!=='mantrailing'); return tt ? tt.anzeigeart : '';
+}
 function renderUebungsrad(person){
   const D = uemDaten(), n = D.reduce((a,m)=>a+(m.uebungen||[]).length, 0);
   const uad = uaData(person);
@@ -16025,6 +16039,7 @@ function renderUebungsrad(person){
     <div id="uaRad" ${uad.modus==='rad'?'':'hidden'}>
     <p class="lead">${n} Übungen zu ${D.length} Themen aus Kynologie, Rettungshundearbeit und Erster Hilfe – ohne Unterlagen lösbar. Rad drehen, Übung bearbeiten, Lösung vergleichen und abhaken.</p>
     <p class="hint" style="margin-top:-4px">Der Stand (erledigte Übungen, Notizen, „Meine Themen“) wird für <b>${esc(person.name)}</b> auf diesem Gerät gespeichert.${darfTrainingBearbeiten(person)||istLeitungOderAdmin(person)?' Jede angemeldete Person hat einen eigenen Stand; andere Personen sehen ihn nicht.':''}</p>
+    ${hatEigenenHund(person) && !eigeneAnzeigeart(person.id) ? `<p class="hint" style="margin:0 0 8px">Die Anzeigeart deines Hundes ist noch nicht festgelegt. <button type="button" class="btn btn-sm btn-ghost" data-mein-profil>👤 Im Profil festlegen</button></p>` : ''}
     ${D.length ? '<div id="barry-uem"></div>' : '<div class="card empty"><p>Der Übungsbestand konnte nicht geladen werden.</p></div>'}
     </div>
     <div id="uaEinheit" hidden></div><div id="uaAbenteuer" hidden></div><div id="uaProblem" hidden></div>
@@ -16037,7 +16052,7 @@ function bindUebungsrad(person){
   const pid = person.id;
   const inst = UEM.mount(el, {
     data: uemDaten(), appName: 'BARRY', anrede: 'du',
-    anzeigeart: ()=>{ const tt = (state.teams||[]).find(x=>x.personId===pid && x.anzeigeart && x.sparte!=='mantrailing'); return tt ? tt.anzeigeart : ''; },
+    anzeigeart: ()=>eigeneAnzeigeart(pid),
     dark: ()=> document.documentElement.getAttribute('data-theme')==='dark',
     store: {
       get: (k, d)=>{ const s = uemStandFuer(pid, false); return (s && s[k]!=null) ? s[k] : d; },
@@ -16107,6 +16122,8 @@ function renderBereich(person){
     case 'hilfe': el.innerHTML = renderHilfe(person); bindHilfe(person); break;
     default: el.innerHTML = renderStart(person); bindStart(person);
   }
+  /* 2.63: Bereiche ohne eigene Dialog-Ausgabe (Übungen, Wissen, Hilfe) zeigen Dialoge wie „Mein Profil“ trotzdem an */
+  if(modal && !el.querySelector('.modal-back')){ const m = renderModal(); if(m){ el.insertAdjacentHTML('beforeend', m); bindModal(person); } }
 }
 
 document.addEventListener('change', e=>{
