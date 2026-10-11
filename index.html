@@ -282,6 +282,14 @@ tr.clickable:hover{background:#fafbfb;cursor:pointer}
 .login-card{width:100%;max-width:380px}
 .login-card .brand{text-align:center;margin-bottom:22px}
 .login-card .brand h1{margin-bottom:2px}
+.pw-zeile{display:flex;gap:6px;align-items:stretch}.pw-zeile input{flex:1;min-width:0}.pw-auge{padding:0 10px;font-size:1.05rem}
+.erst-schritte{list-style:none;counter-reset:erst;padding:0;margin:0}
+.erst-schritte>li{counter-increment:erst;position:relative;padding:0 0 16px 40px}
+.erst-schritte>li::before{content:counter(erst);position:absolute;left:0;top:-2px;width:28px;height:28px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
+.erst-schritte>li.erst-fertig::before{content:'✓';background:#2e7d32}
+.erst-schritte>li:not(:last-child)::after{content:'';position:absolute;left:13px;top:30px;bottom:4px;width:2px;background:var(--line)}
+.erst-ok{display:block;margin-top:4px;color:#2e7d32;font-weight:600;font-size:.9rem}
+.erst-warnung{margin:6px 0 0;padding:6px 8px;background:#fff8e1;border-radius:8px}
 .login-card .brand small{color:var(--muted)}
 
 @media (max-width:860px){
@@ -4115,7 +4123,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.67';
+const BARRY_APP_VERSION = '2.69';
 const BARRY_APP_STAND = '11.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -4347,22 +4355,127 @@ function istErststartOhneDaten(){
   return state.personen.length===1 && state.personen[0].name==='Admin' && state.personen[0].mussPasswortAendern
     && !state.hunde.length && !state.termine.length && !state.einsaetze.length;
 }
+/* ---------- 2.68: Erste Einrichtung für Mitglieder vereinfacht ----------
+   Auf einem neuen Gerät zeigt BARRY statt des Anmeldeformulars eine Willkommensseite mit drei Schritten:
+   1. als App installieren (mit Installationsknopf, wo der Browser ihn anbietet), 2. Zugangspaket öffnen, 3. eigenes Passwort.
+   Wer das Zugangspaket mit dem Startpasswort entschlüsselt hat, muss Namen und Startpasswort nicht noch einmal eintippen –
+   BARRY geht direkt zum eigenen Passwort. Das normale Anmeldeformular (z. B. Erstzugang Admin) bleibt über einen Link erreichbar. */
+let loginLeitungZeigen = false;   // Willkommensseite übersprungen: normales Anmeldeformular auf einem neuen Gerät
+let loginWillkommen = false;      // Zugangspaket gerade eingespielt → freundlicher Text beim eigenen Passwort
+let barryInstallPrompt = null;    // vom Browser angebotene Installation (Chrome/Edge/Samsung Internet)
+window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); barryInstallPrompt = e;
+  try{ if(!session && !loginSchrittNeuesPasswort && istErststartOhneDaten() && !loginLeitungZeigen) render(); }catch(x){} });
+window.addEventListener('appinstalled', ()=>{ barryInstallPrompt = null; try{ if(!session && document.getElementById('erst-willkommen')) render(); }catch(x){} });
+function barryInstalliert(){ try{ return window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }catch(e){ return false; } }
+function pwAugeHtml(ziel){ return `<button type="button" class="btn btn-ghost btn-sm pw-auge" data-pw-zeigen="${ziel}" aria-label="Passwort anzeigen" title="Passwort anzeigen">👁</button>`; }
+document.addEventListener('click', e=>{
+  const b = e.target.closest && e.target.closest('[data-pw-zeigen]'); if(!b) return; e.preventDefault();
+  const ids = b.dataset.pwZeigen.split(','), els = ids.map(i=>document.getElementById(i)).filter(Boolean); if(!els.length) return;
+  const zeigen = els[0].type==='password'; els.forEach(x=>{ x.type = zeigen ? 'text' : 'password'; });
+  b.textContent = zeigen ? '🙈' : '👁'; b.setAttribute('aria-label', zeigen ? 'Passwort verbergen' : 'Passwort anzeigen');
+});
+/* ---------- 2.69: Passwort, Wiederfinden der App, sicheres Speichern ----------
+   - Passwortvergleich verzeiht typische Handy-Fehler (Leerzeichen am Rand, automatischer Großbuchstabe am Anfang).
+   - Nach dem Festlegen des eigenen Passworts prüft BARRY, ob es wirklich im Gerätespeicher steht.
+   - Nach der Einrichtung zeigt der Start einmalig, wie man sich künftig anmeldet und wo BARRY zu finden ist. */
+let barryGeradeInstalliert = false;
+window.addEventListener('appinstalled', ()=>{ barryGeradeInstalliert = true; });
+function pwVarianten(pw){ const t = String(pw||'').trim(); return [...new Set([String(pw||''), t, t.charAt(0).toLowerCase()+t.slice(1)])].filter(Boolean); }
+function passwortPasst(p, pw){ return !!(p && p.passwortHash && pwVarianten(pw).some(v=>einfacherHash(v)===p.passwortHash)); }
+/* Steht das neue Passwort wirklich im Gerätespeicher? (privater Modus, voller Speicher, gesperrter Speicher) */
+function passwortGespeichert(p){
+  try{ const s2 = JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); const x = s2 && (s2.personen||[]).find(y=>y.id===p.id);
+    return !!(x && x.passwortHash===p.passwortHash && !x.mussPasswortAendern); }catch(e){ return false; }
+}
+function barryIconHtml(gr){ return `<img src="./rhs-icon-192.png" alt="" width="${gr}" height="${gr}" style="border-radius:22%;vertical-align:middle;box-shadow:0 1px 4px rgba(0,0,0,.25)" onerror="this.onerror=null;this.src=BARRY_ICON_KLEIN">`; }
+function istIosGeraet(){ const ua = navigator.userAgent||''; return /iPhone|iPad|iPod/i.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1); }
+/* Einmalige Karte auf der Startseite nach der Einrichtung */
+function renderEinrichtungFertig(person){
+  if(!state.meta || state.meta.einrichtungHinweis!==person.id) return '';
+  const installiert = barryInstalliert(), web = /^https?:$/.test(location.protocol), ios = istIosGeraet();
+  const loginName = person.benutzername ? `„${esc(person.benutzername)}“ (oder „${esc(person.name)}“)` : `„${esc(person.name)}“`;
+  let wo = '';
+  if(installiert) wo = `<p style="margin:8px 0 0">${barryIconHtml(36)} &nbsp;<b>So findest du BARRY wieder:</b> über dieses Symbol mit dem Namen „BARRY“ auf dem Startbildschirm oder in der App-Übersicht.</p>
+      <p class="hint" style="margin:6px 0 0">Kein Symbol auf dem Startbildschirm? Bei vielen Android-Geräten liegt es nur in der App-Übersicht (vom unteren Rand nach oben wischen). Dort BARRY gedrückt halten und auf den Startbildschirm ziehen bzw. „Zum Startbildschirm hinzufügen“ wählen.</p>`;
+  else if(web) wo = `<p style="margin:8px 0 0"><b>Du nutzt BARRY gerade im Browser.</b> Damit du BARRY wiederfindest, lege es als App auf den Startbildschirm:</p>
+      ${barryInstallPrompt?`<button type="button" class="btn btn-primary btn-sm" id="ef-installieren" style="margin-top:6px">📲 BARRY installieren</button>`:
+        ios?`<p class="hint" style="margin:6px 0 0">In Safari auf <b>Teilen</b> → <b>„Zum Home-Bildschirm“</b>. <b>Achtung:</b> Die App auf dem iPhone hat einen eigenen Speicher – dort das Zugangspaket noch einmal öffnen. Bleibst du im Browser, löscht Safari die Daten, wenn BARRY etwa eine Woche lang nicht geöffnet wird.</p>`:
+        `<p class="hint" style="margin:6px 0 0">Im Browser-Menü (⋮) „App installieren“ bzw. „Zum Startbildschirm hinzufügen“ wählen. Deine Daten bleiben dabei erhalten.</p>`}`;
+  return `<div class="card card-pad" id="einrichtung-fertig" style="margin:12px 0 16px;border-left:4px solid #2e7d32">
+    <h3 style="margin:0 0 6px">✅ BARRY ist eingerichtet</h3>
+    <p style="margin:0"><b>So meldest du dich künftig an:</b> Name ${loginName} und <b>dein eigenes Passwort</b> – das Startpasswort gilt zum Anmelden nicht mehr.${loginAngemeldetBleiben?` Auf diesem Gerät bleibst du ${ANGEMELDET_TAGE} Tage angemeldet, wenn du dich nicht abmeldest.`:''}</p>
+    ${wo}
+    <button type="button" class="btn btn-sm btn-ghost" id="ef-verstanden" style="margin-top:10px">Verstanden</button>
+  </div>`;
+}
+function bindEinrichtungFertig(){
+  const v = document.getElementById('ef-verstanden'); if(v) v.onclick = ()=>{ delete state.meta.einrichtungHinweis; speichereState(); renderErhalteScroll(); };
+  const i = document.getElementById('ef-installieren'); if(i) i.onclick = async ()=>{ const p = barryInstallPrompt; if(!p) return; barryInstallPrompt = null;
+    try{ await p.prompt(); const r = await p.userChoice; if(r && r.outcome==='accepted') zeigeToast('BARRY wird installiert – danach über das Symbol „BARRY“ öffnen.'); }catch(e){} renderErhalteScroll(); };
+}
+function renderErststartWillkommen(){
+  const installiert = barryInstalliert(), web = /^https?:$/.test(location.protocol);
+  const ua = navigator.userAgent||'', ios = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  const iosFremd = ios && /CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+  let schritt1;
+  if(installiert) schritt1 = `<span class="erst-ok">✅ erledigt</span>`;
+  else if(barryGeradeInstalliert) schritt1 = `<span class="erst-ok">✅ installiert</span><p class="hint erst-warnung" style="color:var(--ink)">Öffne BARRY jetzt über dieses Symbol ${barryIconHtml(28)} „BARRY“ auf dem Startbildschirm oder in der App-Übersicht und mach dort mit Schritt 2 weiter. Diesen Browser kannst du danach schließen.</p>`;
+  else if(!web) schritt1 = `<p class="hint">Du nutzt BARRY als Datei – dieser Schritt entfällt.</p>`;
+  else if(barryInstallPrompt) schritt1 = `<button type="button" class="btn btn-primary" id="erst-installieren" style="width:100%;margin-top:6px">📲 BARRY installieren</button>
+      <p class="hint" style="margin:6px 0 0">Danach BARRY über das neue Symbol auf dem Startbildschirm öffnen und dort mit Schritt 2 weitermachen.</p>`;
+  else if(ios) schritt1 = `<p class="hint" style="margin:4px 0 0">${iosFremd?'<b>Bitte den Link in Safari öffnen</b> – nur dort lässt sich BARRY auf dem iPhone installieren. ':''}In Safari auf <b>Teilen</b> (Quadrat mit Pfeil) tippen → <b>„Zum Home-Bildschirm“</b> → <b>Hinzufügen</b>. Dann BARRY über das neue Symbol öffnen und dort weitermachen.</p>
+      <p class="hint erst-warnung">⚠️ Wichtig auf dem iPhone/iPad: Safari und die installierte App haben getrennte Speicher. Das Zugangspaket deshalb <b>erst in der installierten App</b> öffnen.</p>`;
+  else schritt1 = `<p class="hint" style="margin:4px 0 0">Im Browser-Menü (⋮ oben rechts) <b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b> wählen. Dann BARRY über das neue Symbol öffnen.</p>
+      <p class="hint" style="margin:4px 0 0">Kein solcher Menüpunkt? Dann einfach mit Schritt 2 weitermachen – BARRY läuft auch im Browser.</p>`;
+  return `
+  <div class="login-wrap"><div class="login-card card card-pad" id="erst-willkommen">
+    <div class="brand"><h1>${esc(APP_NAME)}</h1><small>Willkommen · Version ${BARRY_APP_VERSION}</small></div>
+    <p style="margin:0 0 12px">Schön, dass du dabei bist! In drei Schritten ist BARRY auf deinem Gerät eingerichtet.</p>
+    <ol class="erst-schritte">
+      <li class="${installiert||!web||barryGeradeInstalliert?'erst-fertig':''}"><b>BARRY als App installieren</b>${schritt1}${!installiert&&web&&!barryGeradeInstalliert?`<p class="hint" style="margin:6px 0 0">So sieht BARRY danach auf dem Startbildschirm aus: ${barryIconHtml(28)} <b>BARRY</b></p>`:''}</li>
+      <li><b>Dein Zugangspaket öffnen</b>
+        <p class="hint" style="margin:4px 0 8px">Die Datei heißt <b>BARRY_Zugang_</b><i>dein Name</i><b>.json</b>. Du bekommst sie von der Staffelleitung, z. B. über Teams oder per E-Mail – bitte vorher auf dem Gerät speichern. Das <b>Startpasswort</b> bekommst du getrennt davon.</p>
+        <label class="btn ${installiert||!web||!ios?'btn-primary':''}" style="display:flex;justify-content:center;cursor:pointer;width:100%">📂 Zugangspaket öffnen<input type="file" id="in-erststart-import" style="display:none"></label>
+        <details style="margin-top:8px"><summary class="hint" style="cursor:pointer;color:var(--ink)">Die Datei lässt sich nicht finden?</summary>
+          <p class="hint" style="margin:6px 0 0">Gespeicherte Dateien liegen meist im Ordner <b>Downloads</b>. Im Auswahlfenster findest du ihn über das Menü (☰) oder „Durchsuchen“ (iPhone: „Durchsuchen“ → „Auf meinem iPhone“ → „Downloads“). In Teams die Datei über „…“ → „Herunterladen“ speichern, in E-Mail-Apps über den Anhang → „Speichern“.</p>
+          <p class="hint" style="margin:6px 0 0"><b>Bitte nicht im privaten bzw. Inkognito-Fenster einrichten</b> – dort löscht der Browser beim Schließen alles wieder.</p></details></li>
+      <li><b>Eigenes Passwort festlegen</b><p class="hint" style="margin:4px 0 0">Nach dem Startpasswort fragt BARRY direkt nach deinem eigenen Passwort – Namen eintippen ist nicht nötig. Danach bist du angemeldet.</p></li>
+    </ol>
+    <p class="hint" style="margin:16px 0 0;text-align:center"><a href="#" id="erst-leitung">Ich richte BARRY für die Staffel ein (Staffelleitung/Admin) →</a></p>
+    <p class="hint" style="margin-top:10px;text-align:center">Alle Daten bleiben ausschließlich auf diesem Gerät.</p>
+  </div></div>`;
+}
+function bindErststartWillkommen(){
+  const imp = document.getElementById('in-erststart-import');
+  if(imp) imp.onclick = e=>{
+    if(istIosGeraet() && /^https?:$/.test(location.protocol) && !barryInstalliert() && !confirm('Du bist noch in Safari, nicht in der installierten App.\n\nAuf dem iPhone/iPad haben Safari und die App getrennte Speicher: Richtest du BARRY hier ein, ist in der App später nichts davon da.\n\nTrotzdem hier im Browser einrichten?')) e.preventDefault(); };
+  if(imp) imp.onchange = e=>{ const f=e.target.files[0]; e.target.value=''; if(f && istErststartOhneDaten()) bestandAusDateiImportieren(f); };
+  const inst = document.getElementById('erst-installieren');
+  if(inst) inst.onclick = async ()=>{ const p = barryInstallPrompt; if(!p) return; barryInstallPrompt = null;
+    try{ await p.prompt(); const r = await p.userChoice; if(r && r.outcome==='accepted') zeigeToast('BARRY wird installiert. Danach über das neue Symbol öffnen.'); }catch(err){} render(); };
+  const l = document.getElementById('erst-leitung'); if(l) l.onclick = e=>{ e.preventDefault(); loginLeitungZeigen = true; render(); };
+}
 function renderLogin(){
   if(loginSchrittNeuesPasswort){
     const p = state.personen.find(x=>x.id===loginSchrittNeuesPasswort);
     return `
     <div class="login-wrap"><div class="login-card card card-pad">
-      <div class="brand"><h1>${esc(APP_NAME)}</h1><small>Eigenes Passwort festlegen</small></div>
-      <p class="hint">Hallo ${esc(p?p.name:'')}. Das ist deine erste Anmeldung – bitte lege jetzt ein eigenes Passwort fest.</p>
-      <div class="field"><label>Neues Passwort</label><input type="password" id="in-neues-pw" autofocus autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-      <div class="field"><label>Neues Passwort wiederholen</label><input type="password" id="in-neues-pw2" enterkeyhint="go" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
-      ${loginFehler?`<p class="hint" style="color:var(--accent-ink)">${esc(loginFehler)}</p>`:''}
+      <div class="brand"><h1>${esc(APP_NAME)}</h1><small>${loginWillkommen?'Fast geschafft – Schritt 3 von 3':'Eigenes Passwort festlegen'}</small></div>
+      ${loginWillkommen?`<p style="margin:0 0 8px">✅ Dein Zugangspaket ist eingespielt${state.organisation&&state.organisation.name?` – ${esc(state.organisation.name)}`:''}.</p>`:''}
+      <p class="hint">Hallo ${esc(p?p.name:'')}! ${loginWillkommen?'Lege jetzt dein eigenes Passwort fest (mindestens 4 Zeichen). Damit meldest du dich künftig an – das Startpasswort brauchst du dafür nicht mehr.':'Das ist deine erste Anmeldung – bitte lege jetzt ein eigenes Passwort fest (mindestens 4 Zeichen).'}</p>
+      <div class="field"><label for="in-neues-pw">Neues Passwort</label><div class="pw-zeile"><input type="password" id="in-neues-pw" autofocus autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false">${pwAugeHtml('in-neues-pw,in-neues-pw2')}</div></div>
+      <div class="field"><label for="in-neues-pw2">Neues Passwort wiederholen</label><input type="password" id="in-neues-pw2" enterkeyhint="go" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+      <label class="row" style="gap:8px;align-items:flex-start;flex-wrap:nowrap;margin:-4px 0 12px;cursor:pointer"><input type="checkbox" id="in-angemeldet-neu" ${loginAngemeldetBleiben?'checked':''} style="margin-top:3px;width:auto"><span class="hint" style="margin:0;color:var(--ink)">Auf diesem Gerät angemeldet bleiben (${ANGEMELDET_TAGE} Tage) – nicht auf fremden oder geteilten Geräten</span></label>
+      <p class="hint" id="pw-neu-fehler" style="color:var(--accent-ink);${loginFehler?'':'display:none'}">${esc(loginFehler)}</p>
       <button class="btn btn-primary" id="btn-pw-setzen" style="width:100%">Passwort speichern und anmelden</button>
+      <p class="hint" style="margin:10px 0 0">Gut merken oder notieren! Leerzeichen am Anfang oder Ende werden nicht mitgespeichert.</p>
     </div></div>`;
   }
+  if(istErststartOhneDaten() && !loginLeitungZeigen) return renderErststartWillkommen();
   const aktive = state.personen.filter(p=>p.status!=='inaktiv');
   return `
   <div class="login-wrap"><div class="login-card card card-pad">
+    ${istErststartOhneDaten()?`<p class="hint" style="margin:0 0 10px"><a href="#" id="erst-zurueck">← Zurück: Ich habe ein Zugangspaket bekommen</a></p>`:''}
     <div class="brand"><h1>${esc(APP_NAME)}</h1>    <small>${esc(state.organisation.name||APP_CLAIM)} – Anmeldung · Version ${BARRY_APP_VERSION}</small>
     ${(()=>{ try{ const installiert = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; const ios=/iPhone|iPad|iPod/i.test(navigator.userAgent); const web=/^https?:$/.test(location.protocol);
       if(web && !installiert && istErststartOhneDaten()) return `<p class="hint" style="margin:8px 0 12px;padding:8px 10px;background:#fff8e1;border-radius:8px">📲 <b>Tipp vor dem Einspielen:</b> BARRY zuerst auf den Startbildschirm legen${ios?' (Safari: Teilen → „Zum Home-Bildschirm“)':' (Chrome: ⋮ → „App installieren“)'} und das Zugangspaket dann <b>in der installierten App</b> einspielen. ${ios?'Auf dem iPhone haben Safari und die installierte App getrennte Speicher – sonst müssen Anmeldung und Passwort dort wiederholt werden.':'Sonst kann es sein, dass Anmeldung und Passwort in der App wiederholt werden müssen.'}</p>`; }catch(e){} return ''; })()}</div>
@@ -4370,7 +4483,7 @@ function renderLogin(){
       <input id="in-person" list="in-person-liste" autocomplete="off" enterkeyhint="next" placeholder="Namen eintippen …" value="${esc(loginEingabe)}">
       <datalist id="in-person-liste">${aktive.map(p=>`<option value="${esc(kurzName(p.name))}">${p.benutzername?`Benutzername: ${esc(p.benutzername)}`:''}</option>`).join('')}</datalist>
     </div>
-    <div class="field"><label>Passwort</label><input type="password" id="in-pw" autofocus enterkeyhint="go" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+    <div class="field"><label>Passwort</label><div class="pw-zeile"><input type="password" id="in-pw" autofocus enterkeyhint="go" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false">${pwAugeHtml('in-pw')}</div></div>
     <label class="row" style="gap:8px;align-items:flex-start;margin:-4px 0 12px;cursor:pointer"><input type="checkbox" id="in-angemeldet" ${loginAngemeldetBleiben?'checked':''} style="margin-top:3px;width:auto"><span class="hint" style="margin:0;color:var(--ink)">Auf diesem Gerät angemeldet bleiben (${ANGEMELDET_TAGE} Tage) – nicht auf fremden oder geteilten Geräten</span></label>
     <button class="btn btn-primary" id="btn-anmelden" style="width:100%;margin-bottom:10px">Anmelden</button>
     ${loginHinweis?`<div class="card card-pad" style="background:var(--soft);border:none;margin-bottom:12px"><p class="hint" style="margin:0">${esc(loginHinweis)}</p></div>`:''}
@@ -4385,13 +4498,13 @@ function renderLogin(){
     <div class="card card-pad" style="background:var(--soft);border:none;margin-top:16px">
       <strong>Erste Einrichtung auf diesem Gerät</strong>
       <p class="hint" style="margin:6px 0 10px">Du hast von deiner Staffelleitung eine Datendatei erhalten? Dann importiere sie hier direkt – eine Anmeldung als „Admin“ ist dafür nicht nötig. Danach meldest du dich mit deinem eigenen Namen an.</p>
-      <label class="btn" style="display:inline-flex;cursor:pointer">📂 Datendatei importieren<input type="file" id="in-erststart-import" accept="application/json,.json" style="display:none"></label>
+      <label class="btn" style="display:inline-flex;cursor:pointer">📂 Datendatei importieren<input type="file" id="in-erststart-import" style="display:none"></label>
     </div>`:''}
     ${!istErststartOhneDaten()?`
     <details class="card card-pad" style="background:var(--soft);border:none;margin-top:16px">
       <summary style="cursor:pointer;font-weight:700">Kein Zugang mehr? Datei von der Leitung einspielen</summary>
       <p class="hint" style="margin:6px 0 10px">Hat die Staffelleitung ein <strong>Zugangspaket</strong> (oder eine Datensicherung) geschickt, kann es hier ohne Anmeldung eingespielt werden. Achtung: Der Bestand auf diesem Gerät wird dabei ersetzt – eigene Einträge seit dem letzten Abgleich gehen verloren.</p>
-      <label class="btn" style="display:inline-flex;cursor:pointer">📂 Zugangspaket / Datendatei einspielen<input type="file" id="in-login-import" accept="application/json,.json" style="display:none"></label>
+      <label class="btn" style="display:inline-flex;cursor:pointer">📂 Zugangspaket / Datendatei einspielen<input type="file" id="in-login-import" style="display:none"></label>
       <p class="hint" style="margin:14px 0 6px">Soll BARRY auf diesem Gerät komplett zurückgesetzt werden (z. B. Gerät wird abgegeben)? Das löscht alle lokal gespeicherten Daten unwiderruflich.</p>
       <button class="btn btn-danger btn-sm" id="btn-login-alles-loeschen">Alle BARRY-Daten auf diesem Gerät löschen</button>
     </details>`:''}
@@ -4452,7 +4565,7 @@ async function bioAnbieten(person){
   const d = bioDaten(); if(bioEintrag(person.id) || (d[person.id] && d[person.id].abgelehnt)) return;
   if(!await bioVerfuegbar()) return;
   setTimeout(async ()=>{
-    if(confirm('Künftig mit Fingerabdruck oder Gesicht anmelden?\n\nGilt nur auf diesem Gerät. Dein Passwort bleibt gültig, und BARRY fragt bei jeder 10. Anmeldung danach, damit es nicht in Vergessenheit gerät.\n\nSie können das jederzeit unter „Mein Profil“ ändern.')){ await bioEinrichten(person); }
+    if(confirm('Künftig mit Fingerabdruck oder Gesicht anmelden?\n\nGilt nur auf diesem Gerät. Dein Passwort bleibt gültig, und BARRY fragt bei jeder 10. Anmeldung danach, damit es nicht in Vergessenheit gerät.\n\nDu kannst das jederzeit unter „Mein Profil“ ändern.')){ await bioEinrichten(person); }
     else { const x = bioDaten(); x[person.id] = Object.assign({}, x[person.id]||{}, {abgelehnt:true}); bioSpeichern(x); }
   }, 400);
 }
@@ -4490,18 +4603,31 @@ function loginTastaturHilfen(){
 function bindLogin(){
   if(loginSchrittNeuesPasswort){
     document.getElementById('btn-pw-setzen').onclick = ()=>{
-      const pw1=document.getElementById('in-neues-pw').value;
-      const pw2=document.getElementById('in-neues-pw2').value;
-      if(pw1.length<4){ loginFehler='Bitte mindestens 4 Zeichen wählen.'; render(); return; }
-      if(pw1!==pw2){ loginFehler='Die beiden Eingaben stimmen nicht überein.'; render(); return; }
+      const pw1=document.getElementById('in-neues-pw').value.trim();
+      const pw2=document.getElementById('in-neues-pw2').value.trim();
+      const fehlerZeigen = t => { const el=document.getElementById('pw-neu-fehler'); if(el){ el.textContent=t; el.style.display=''; } else { loginFehler=t; render(); } };
+      if(pw1.length<4){ fehlerZeigen('Bitte mindestens 4 Zeichen wählen.'); return; }
+      if(pw1!==pw2){ fehlerZeigen('Die beiden Eingaben stimmen nicht überein. Tipp: Mit 👁 siehst du, was du getippt hast.'); return; }
       const p = state.personen.find(x=>x.id===loginSchrittNeuesPasswort);
+      const angNeu = document.getElementById('in-angemeldet-neu'); if(angNeu) loginAngemeldetBleiben = angNeu.checked;
+      const hashVorher = p.passwortHash;
       p.passwortHash = einfacherHash(pw1);
       p.mussPasswortAendern = false;
+      if(loginWillkommen) state.meta.einrichtungHinweis = p.id;
       speichereState();
+      // 2.69: prüfen, ob das Passwort wirklich im Gerätespeicher steht – sonst nicht so tun, als wäre alles gut
+      if(!passwortGespeichert(p)){
+        p.passwortHash = hashVorher; p.mussPasswortAendern = true;
+        alert('Dein Passwort konnte auf diesem Gerät NICHT gespeichert werden.\n\nMögliche Ursachen: privates bzw. Inkognito-Fenster, Speicher des Geräts voll oder „Websitedaten blockieren“ in den Browser-Einstellungen.\n\nBitte BARRY in einem normalen Fenster bzw. in der installierten App öffnen und das Zugangspaket dort erneut einlesen.');
+        return;
+      }
+      try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}
       session = { personId:p.id }; if(loginAngemeldetBleiben) dauerSitzungSetzen(p); else dauerSitzungLoeschen();
       try{ localStorage.setItem('barry-last-login', p.benutzername || p.name); }catch(e){}
-      loginSchrittNeuesPasswort = null; loginFehler='';
+      const warWillkommen = loginWillkommen;
+      loginSchrittNeuesPasswort = null; loginFehler=''; loginWillkommen = false; loginLeitungZeigen = false;
       render();
+      if(warWillkommen) zeigeToast(`Willkommen bei BARRY, ${kurzName(p.name)}! Du bist angemeldet.`);
       bioAnbieten(p);
     };
     const pw2el=document.getElementById('in-neues-pw2'), pw1el=document.getElementById('in-neues-pw');
@@ -4509,6 +4635,8 @@ function bindLogin(){
     if(pw2el) pw2el.onkeydown=e=>{ if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btn-pw-setzen').click(); } };
     return;
   }
+  if(document.getElementById('erst-willkommen')){ bindErststartWillkommen(); return; }
+  const erstZurueck = document.getElementById('erst-zurueck'); if(erstZurueck) erstZurueck.onclick = e=>{ e.preventDefault(); loginLeitungZeigen = false; loginFehler=''; render(); };
   document.getElementById('in-person').oninput = e=>{ loginEingabe=e.target.value; bioLoginBereichAktualisieren(); };
   loginTastaturHilfen();
   bioLoginBereichAktualisieren();
@@ -4533,8 +4661,12 @@ function bindLogin(){
     if(mehrdeutig){
       loginFehler = 'Dieser Name kommt mehrfach vor – bitte den Benutzernamen verwenden (bei der Leitung erfragen).'; render(); return;
     }
-    if(!p || p.passwortHash !== einfacherHash(pw)){
-      loginFehler = 'Name/Benutzername oder Passwort stimmt nicht.'; render(); return;
+    if(!p || !passwortPasst(p, pw)){
+      if(!p) loginFehler = loginEingabe.trim() ? 'Diesen Namen kennt BARRY auf diesem Gerät nicht. Beim Tippen erscheinen Vorschläge – bitte einen davon antippen.' : 'Bitte zuerst deinen Namen eingeben.';
+      else if(!p.mussPasswortAendern && state.meta && state.meta.dateiPasswort && state.meta.dateiPersonId===p.id && pwVarianten(pw).includes(state.meta.dateiPasswort))
+        loginFehler = 'Das ist dein Startpasswort. Bei der Einrichtung hast du ein eigenes Passwort festgelegt – bitte dieses verwenden. Vergessen? Dann schickt dir die Staffelleitung ein neues Zugangspaket.';
+      else loginFehler = 'Das Passwort stimmt nicht. Mit 👁 siehst du, was du getippt hast. Vergessen? Dann schickt dir die Staffelleitung ein neues Zugangspaket.';
+      render(); return;
     }
     loginFehler=''; loginHinweis='';
     p.bereicheAusgeblendet = [...document.querySelectorAll('[data-login-bereich]')].filter(c=>!c.checked).map(c=>c.dataset.loginBereich);
@@ -4918,6 +5050,7 @@ function renderStart(person){
   return `
     <div class="start-kopf"><img class="start-icon" src="./rhs-apple-touch-icon.png" alt="BARRY – DRK Rettungshundestaffel Region Kassel" width="64" height="64" onerror="this.onerror=null;this.src=BARRY_ICON_KLEIN"><h1>Hallo ${esc(person.name.split(' ')[0]||person.name)} 👋</h1></div>
     <p class="lead">Schön, dass du da bist – hier findest du auf einen Blick, was als Nächstes ansteht.</p>
+    ${renderEinrichtungFertig(person)}
     ${schnell}
     ${renderStartSicherung(person)}
     ${(()=>{ const z=uaOffenListe(person); return z.length?`<div class="card card-pad" style="margin:16px 0;border-left:4px solid var(--t-alltag)"><h3 style="margin:0 0 6px">⏳ Offen aus deinem letzten Training</h3><ul class="hint" style="margin:0 0 8px;padding-left:18px">${z.map(x=>`<li>${esc(x.txt)}</li>`).join('')}</ul><p class="hint" style="margin:0 0 6px">Hast du diese Übungen durchgeführt? Dann hake sie bitte ab – oder verwirf sie, wenn sie nicht stattgefunden haben.</p><div class="row" style="gap:6px;flex-wrap:wrap">${z.map(x=>`<button class="btn btn-sm btn-primary" type="button" data-ua-oeffnen="${x.m}">${x.m==='einheit'?'Trainingseinheit nachtragen':'Abenteuer nachtragen'}</button>`).join('')}</div></div>`:''; })()}
@@ -5014,6 +5147,7 @@ function renderStartLeitungsHinweise(person){
     </div>`;
 }
 function bindStart(person){
+  bindEinrichtungFertig();
   document.querySelectorAll('#content [data-goto]').forEach(el=>el.onclick=()=>{ route={bereich:el.dataset.goto, unter:null, id:null}; sidebarOffen=false; render(); window.scrollTo(0,0); });
   document.querySelectorAll('[data-ua-oeffnen]').forEach(el=>el.onclick=()=>{ uaModusSetzen(person, el.dataset.uaOeffnen); uaFrage[el.dataset.uaOeffnen]=true; route={bereich:'uebungsrad',unter:null,id:null}; render(); window.scrollTo(0,0); });
   document.querySelectorAll('[data-start-sprung]').forEach(el=>el.onclick=()=>{ route={bereich:'ausbildung',unter:null,id:null}; ausbildungTab='meinstand';
@@ -8972,8 +9106,8 @@ function passwortDialog({titel, text, bestaetigen=false, ohneErlaubt=false, knop
     w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px';
     w.innerHTML = `<div style="background:var(--card,#fff);color:inherit;max-width:420px;width:100%;border-radius:14px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:system-ui,sans-serif">
       <h3 style="margin:0 0 8px;font-size:1.1rem">${esc(titel)}</h3><p style="margin:0 0 12px;font-size:.92rem;line-height:1.4">${text}</p>
-      <input type="password" id="pwd-1" autocomplete="new-password" placeholder="Passwort" style="width:100%;box-sizing:border-box;padding:10px;font-size:1rem;margin-bottom:8px">
-      ${bestaetigen?'<input type="password" id="pwd-2" autocomplete="new-password" placeholder="Passwort wiederholen" style="width:100%;box-sizing:border-box;padding:10px;font-size:1rem;margin-bottom:8px">':''}
+      <input type="password" id="pwd-1" autocomplete="${bestaetigen?'new-password':'off'}" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Passwort" style="width:100%;box-sizing:border-box;padding:10px;font-size:1rem;margin-bottom:8px">
+      ${bestaetigen?'<input type="password" id="pwd-2" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Passwort wiederholen" style="width:100%;box-sizing:border-box;padding:10px;font-size:1rem;margin-bottom:8px">':''}
       <div id="pwd-fehler" style="color:#b3261e;font-size:.85rem;min-height:1.1em;margin-bottom:8px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         ${ohneErlaubt?'<button type="button" class="btn btn-sm" id="pwd-ohne">Ohne Passwort</button>':''}
@@ -8984,7 +9118,7 @@ function passwortDialog({titel, text, bestaetigen=false, ohneErlaubt=false, knop
     const p1 = w.querySelector('#pwd-1'), p2 = w.querySelector('#pwd-2'), fe = w.querySelector('#pwd-fehler');
     w.querySelector('#pwd-abbruch').onclick = ()=>ende(null);
     const ohne = w.querySelector('#pwd-ohne'); if(ohne) ohne.onclick = ()=>{ if(confirm('Die Datei wird dann unverschlüsselt gespeichert und ist mit jedem Texteditor lesbar. Trotzdem fortfahren?')) ende(''); };
-    const ok = ()=>{ const a=p1.value; if(a.length<6){ fe.textContent='Bitte mindestens 6 Zeichen.'; return; } if(p2 && a!==p2.value){ fe.textContent='Die beiden Eingaben stimmen nicht überein.'; return; } ende(a); };
+    const ok = ()=>{ const a=p1.value; if(a.length<(bestaetigen?6:1)){ fe.textContent=bestaetigen?'Bitte mindestens 6 Zeichen.':'Bitte das Passwort eingeben.'; return; } if(p2 && a!==p2.value){ fe.textContent='Die beiden Eingaben stimmen nicht überein.'; return; } ende(a); };
     w.querySelector('#pwd-ok').onclick = ok;
     [p1,p2].forEach(x=>{ if(x) x.addEventListener('keydown', e=>{ if(e.key==='Enter') ok(); }); });
     setTimeout(()=>p1.focus(), 50);
@@ -9000,7 +9134,11 @@ async function barryDateiLesen(file, hinweis, gemerktesPasswort){
     const pw = await passwortDialog({ titel:'🔒 Geschützte Datei', knopf:'Öffnen',
       text: (versuch>1?'<b style="color:#b3261e">Das Passwort war nicht richtig.</b> ':'') + (hinweis || 'Diese BARRY-Datei ist mit einem Passwort geschützt. Bei einem Zugangspaket ist es das Startpasswort, das du von der Staffelleitung erhalten hast.') });
     if(pw===null) return null;
-    try{ return await barryEntschluesseln(umschlag, pw); }catch(e){ if(!e.falschesPasswort || versuch===3) throw e; }
+    // 2.68: typische Tippfehler auf dem Handy abfangen – Leerzeichen beim Einfügen, automatischer Großbuchstabe am Anfang
+    const varianten = [...new Set([pw, pw.trim(), pw.trim().charAt(0).toLowerCase()+pw.trim().slice(1)])];
+    let letzterFehler = null;
+    for(const v of varianten){ try{ return await barryEntschluesseln(umschlag, v); }catch(e){ if(!e.falschesPasswort) throw e; letzterFehler = e; } }
+    if(versuch===3) throw letzterFehler;
   }
   return null;
 }
@@ -9044,12 +9182,12 @@ async function sicherungSchuetzen(text){
 
 /* Gemeinsame Importlogik für Datensicherung und Erststart – alle Schutzprüfungen an einer Stelle. */
 async function bestandAusDateiImportieren(file){
-  let text;
-  try{ text = await barryDateiLesen(file); }catch(err){ alert('Diese Datei konnte nicht gelesen werden: '+err.message); return; }
+  let text, verschluesselt = false;
+  try{ verschluesselt = !!istVerschluesselteDatei(await file.text()); text = await barryDateiLesen(file); }catch(err){ alert('Diese Datei konnte nicht gelesen werden: '+err.message); return; }
   if(text===null) return;
-  bestandAusTextImportieren(text);
+  bestandAusTextImportieren(text, {verschluesselt});
 }
-function bestandAusTextImportieren(text){
+function bestandAusTextImportieren(text, opt){
   (()=>{
     try{
       const parsed = JSON.parse(text);
@@ -9066,7 +9204,8 @@ function bestandAusTextImportieren(text){
       if(!hatZugang) throw new Error('In dieser Datei ist keine anmeldefähige Person (mit Passwort) enthalten. Ein Import würde alle Nutzer aussperren und wurde deshalb abgebrochen. Der vorhandene Bestand bleibt unverändert.');
       const info = parsed.exportInfo ? `\n\nDatei: ${parsed.exportInfo.organisation||'ohne Staffelname'}, exportiert am ${fmtDatum(parsed.exportInfo.exportiertAm)} (BARRY ${parsed.exportInfo.appVersion||'?'}, Schema ${parsed.exportInfo.schemaVersion||'?'})` : '\n\nHinweis: Ältere Datei ohne Exportkennung.';
       const umfang = `\nInhalt: ${parsed.personen.length} Personen, ${(parsed.hunde||[]).length} Hunde, ${(parsed.termine||[]).length} Termine, ${(parsed.einsaetze||[]).length} Einsätze.`;
-      if(!confirm('Der bestehende Bestand auf diesem Gerät wird ersetzt (der aktuelle Stand wird vorher automatisch als Sicherheitskopie abgelegt). Fortfahren?'+info+umfang)) return;
+      // 2.68: Auf einem neuen Gerät gibt es nichts zu ersetzen – keine Rückfrage
+      if(!istErststartOhneDaten() && !confirm('Der bestehende Bestand auf diesem Gerät wird ersetzt (der aktuelle Stand wird vorher automatisch als Sicherheitskopie abgelegt). Fortfahren?'+info+umfang)) return;
       try{ localStorage.setItem(STORAGE_KEY+'-vor-import-backup', JSON.stringify(state)); }catch(e){ /* Backup optional, Import trotzdem versuchen */ }
       const anlagenDaten = parsed.anlagenDaten; delete parsed.anlagenDaten;
       if(anlagenDaten && typeof anlagenDaten==='object') anlagenAusSicherungSchreiben(anlagenDaten);
@@ -9075,6 +9214,11 @@ function bestandAusTextImportieren(text){
       speichereState();
       if(sitzungUebernehmen(sitzungVorher)){ loginHinweis=''; zeigeToast('Bestand importiert – du bleibst angemeldet. Der vorherige Stand wurde als Sicherheitskopie abgelegt.'); render(); return; }
       loginEingabe = ''; loginFehler = '';
+      // 2.68: Wer das eigene Zugangspaket mit dem Startpasswort geöffnet hat, ist erkannt – direkt zum eigenen Passwort
+      { const pid = state.meta && state.meta.dateiPersonId, ich = pid && state.personen.find(x=>x.id===pid && x.status!=='inaktiv');
+        if(opt && opt.verschluesselt && parsed.exportInfo && parsed.exportInfo.paket==='zugang' && ich && ich.mussPasswortAendern && state.meta.dateiPasswort && ich.passwortHash===einfacherHash(state.meta.dateiPasswort)){
+          loginSchrittNeuesPasswort = ich.id; loginWillkommen = true; loginLeitungZeigen = false; loginHinweis = ''; loginEingabe = ich.benutzername || kurzName(ich.name);
+          render(); return; } }
       loginHinweis = 'Der Datenbestand wurde ersetzt. Bitte melde dich jetzt mit einer Person aus dem neuen Bestand an (Name oder Benutzername). Zugänge aus dem vorherigen Bestand – z. B. „Admin“ – gelten nicht mehr. Bei importierten Personen gilt das Startpasswort, das dir die Leitung mitgeteilt hat.';
       zeigeToast('Bestand importiert. Vorheriger Stand wurde als Sicherheitskopie abgelegt.');
       render();
@@ -16286,8 +16430,8 @@ function bindModalMeinProfil(){
   });
   document.getElementById('mp-speichern').onclick = ()=>{
     const p = aktuellePerson();
-    const pw1 = document.getElementById('mp-pw1').value;
-    const pw2 = document.getElementById('mp-pw2').value;
+    const pw1 = document.getElementById('mp-pw1').value.trim();
+    const pw2 = document.getElementById('mp-pw2').value.trim();
     if(pw1 || pw2){
       if(pw1.length<4){ document.getElementById('mp-pw-fehler').textContent = 'Neues Passwort muss mindestens 4 Zeichen haben.'; return; }
       if(pw1!==pw2){ document.getElementById('mp-pw-fehler').textContent = 'Die beiden Passwörter stimmen nicht überein.'; return; }
@@ -16372,7 +16516,7 @@ const HILFE_ARTIKEL = [
   {id:"verschluesselte-dateien", kategorie:"Daten sichern & teilen", titel:"Verschlüsselte Dateien: Startpasswort und Dateipasswort", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>BARRY schützt alle Dateien zwischen Leitung und Mitgliedern mit einem Passwort (AES-256). Ohne Passwort ist der Inhalt nicht lesbar – auch nicht in einem Texteditor.</p>\n<p>Es gibt <strong>zwei getrennte Passwörter</strong>:</p>\n<ul>\n<li><strong>Anmeldepasswort:</strong> selbst gewählt, nur zum Öffnen von BARRY auf dem eigenen Gerät. Kann jederzeit geändert werden.</li>\n<li><strong>Dateipasswort = Startpasswort</strong> aus der Zugangsliste der Leitung. Damit sind Zugangspaket, Stand-Updates und die eigenen Meldungen geschützt. Es ändert sich nur, wenn die Leitung ein neues Startpasswort vergibt.</li>\n</ul>\n<p><strong>Für Mitglieder:</strong> Beim Einspielen des Zugangspakets einmal das Startpasswort eingeben – BARRY merkt es sich auf dem Gerät. Stand-Updates öffnen sich danach automatisch, Meldungen an die Leitung werden automatisch verschlüsselt. Nach einem Gerätewechsel das Startpasswort bei der Leitung erfragen.</p>\n<p><strong>Für die Leitung:</strong> Meldungen der Mitglieder öffnet BARRY mit dem Startpasswort aus der Zugangsliste von selbst. Datensicherungen fragen nach einem frei wählbaren Passwort; ein vergessenes Passwort lässt sich nicht wiederherstellen. Die Zugangsliste getrennt und sicher aufbewahren – sie enthält alle Startpasswörter.</p>\n<p><strong>Umfang nach Rolle:</strong> Mitglieder erhalten nur eigene Daten. Ausbilder/-innen bekommen zusätzlich alle Hunde, Nachweise, Prüfungen und Trainings, Leitungspersonen den vollständigen Bestand. Ein Stand-Update bringt diese Daten auf den neuesten Stand, ohne das Anmeldepasswort zu ändern. Ein Zugangspaket ist nur beim ersten Mal oder bei vergessenem Passwort nötig.</p>\n<p>Alte, unverschlüsselte Dateien lassen sich weiterhin einspielen.</p>\n"},
   {id:"biometrie", kategorie:"Erste Schritte", titel:"Anmeldung per Fingerabdruck oder Gesicht", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>Nach einer Anmeldung mit Passwort bietet BARRY einmal an, künftig die Gerätesperre zu nutzen (Fingerabdruck, Gesicht oder Display-PIN). Ein- und ausschalten geht jederzeit unter <strong>Mein Profil</strong>.</p>\n<ul>\n<li>Gilt nur auf dem Gerät, auf dem es eingerichtet wurde; das Passwort bleibt gültig.</li>\n<li>Bei jeder <strong>10. Anmeldung</strong> fragt BARRY wieder nach dem Passwort, damit es nicht in Vergessenheit gerät.</li>\n<li>Voraussetzung: eingerichtete Displaysperre und BARRY über die Web-Adresse (https) geöffnet. Alle auf dem Handy hinterlegten Fingerabdrücke können BARRY öffnen.</li>\n<li>Das Dateipasswort (Startpasswort) ist davon nicht betroffen.</li>\n</ul>\n"},
   {id:"freigaben-geburtstage", kategorie:"Verwaltung", titel:"Freigaben, Einwilligungen und Geburtstage", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>Jedes Mitglied entscheidet selbst, was andere Mitglieder in BARRY sehen dürfen: den eigenen Geburtstag (nur Tag und Monat), den Wurftag der eigenen Hunde und – für künftige Funktionen – Telefonnummer, E-Mail und Wohnort.</p>\n<p><strong>Vorgaben ohne Einwilligung:</strong> Geburtstage von Menschen sieht nur die Leitung, Wurftage der Hunde sehen alle, Kontaktdaten niemand.</p>\n<p><strong>So wird die Entscheidung erfasst:</strong> über das Blatt „Freigaben“ der Excel-Selbstauskunft, über die unterschriebene PDF-Selbstauskunft oder mündlich. Die Leitung trägt alles unter <strong>Verwaltung → Freigaben &amp; Einwilligungen</strong> ein, mit Datum, Form und Ablageort. Die Freigaben erreichen die Mitglieder mit dem nächsten Zugangspaket.</p>\n<p><strong>Geburtstage</strong> erscheinen auf der Startseite von 7 Tagen vorher bis 7 Tage danach. Die Leitung sieht alle mit Alter, Mitglieder nur die freigegebenen Geburtstage und die Hunde.</p>\n"},
-  {id:"anmelden", kategorie:"Erste Schritte", titel:"Anmelden und erstes Passwort", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Beim allerersten \u00d6ffnen von BARRY tippt man oben seinen eigenen Namen ein \u2013 schon nach den ersten Buchstaben erscheinen passende Vorschl\u00e4ge zum Antippen. Wer von der Leitung einen <strong>Benutzernamen</strong> erhalten hat, kann stattdessen diesen k\u00fcrzeren Namen eingeben. Dann das\nvon der Staffelleitung mitgeteilte Passwort eingeben. BARRY verlangt dann sofort, ein <strong>eigenes,\nselbst gew\u00e4hltes Passwort</strong> festzulegen \u2013 das urspr\u00fcngliche Passwort ist danach nicht mehr g\u00fcltig.</p>\n<p>Wer sein Passwort vergessen hat, wendet sich an die Staffelleitung oder den Admin: Diese k\u00f6nnen unter\n<strong>Verwaltung \u2192 Personen</strong> ein neues Startpasswort vergeben.</p>\n"},
+  {id:"anmelden", kategorie:"Erste Schritte", titel:"Anmelden und erstes Passwort", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p><strong>Neues Gerät (seit 2.68):</strong> Beim allerersten Öffnen zeigt BARRY eine Willkommensseite mit drei Schritten: 1. BARRY als App installieren (wo der Browser es anbietet, mit Knopf „📲 BARRY installieren“; auf dem iPhone über Safari → Teilen → „Zum Home-Bildschirm“), 2. „📂 Zugangspaket öffnen“ und das <strong>Startpasswort</strong> eingeben, 3. ein <strong>eigenes Passwort</strong> festlegen. Namen und Startpasswort musst du danach nicht noch einmal eintippen – BARRY erkennt dich am Zugangspaket.</p>\n<p><strong>Auf dem iPhone/iPad</strong> haben Safari und die installierte App getrennte Speicher. Das Zugangspaket deshalb erst in der installierten App öffnen.</p>\n<p><strong>Anmelden danach:</strong> Namen eintippen – schon nach den ersten Buchstaben erscheinen Vorschläge. Wer einen <strong>Benutzernamen</strong> hat, kann diesen kürzeren Namen nehmen. Mit 👁 lässt sich das Passwort beim Tippen anzeigen. Ein automatischer Großbuchstabe am Anfang und Leerzeichen am Rand stören nicht.</p>\n<p><strong>BARRY wiederfinden:</strong> Nach der Installation heißt die App „BARRY“ und hat das rote Staffel-Symbol. Bei vielen Android-Geräten liegt sie zunächst nur in der App-Übersicht (vom unteren Rand nach oben wischen) – dort gedrückt halten und auf den Startbildschirm ziehen.</p>\n<p><strong>Staffelleitung/Admin auf einem neuen Gerät:</strong> Auf der Willkommensseite unten „Ich richte BARRY für die Staffel ein“ wählen – dort gibt es das normale Anmeldeformular (Erstzugang Admin) und das Einspielen einer Datensicherung.</p>\n<p>Wer sein Passwort vergessen hat, wendet sich an die Staffelleitung oder den Admin: Diese können unter <strong>Verwaltung → Personen</strong> ein neues Startpasswort und Zugangspaket erstellen.</p>\n"},
   {id:"mein-profil", kategorie:"Erste Schritte", titel:"Mein Profil: eigenes Passwort, Sparten, Kilometer", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Ein Klick auf den eigenen Namen unten links in der Seitenleiste \u00f6ffnet <strong>Mein Profil</strong>.\nDas kann jede Person f\u00fcr sich selbst nutzen, unabh\u00e4ngig von der Rolle:</p>\n<ul>\n<li><strong>Eigenes Passwort \u00e4ndern</strong> \u2013 zweimal das neue Passwort eintippen, speichern.</li>\n<li><strong>Meine Sparte(n)</strong> ausw\u00e4hlen (Fl\u00e4che, Tr\u00fcmmer, Mantrailing). Das bestimmt, welche\nSchnellzugriffe auf der Startseite zuerst angezeigt werden.</li>\n<li><strong>Standard-Kilometer</strong> zum \u00dcbungsort hinterlegen, damit dieser Wert beim Dienstnachweis\nautomatisch vorgeschlagen wird.</li>\n</ul>\n"},
   {id:"rollen", kategorie:"Rollen & Rechte", titel:"Rollen\u00fcbersicht: Wer darf was?", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Die genaue Tabelle steht oben auf dieser Seite fest angepinnt. Kurz zusammengefasst:</p>\n<ul>\n<li><strong>Mitglied:</strong> eigene Trainings f\u00fcr das eigene Team eintragen, Termine ansehen und\nzu-/absagen, Hausaufgaben des eigenen Teams erledigen, Wissen &amp; Material nachlesen.</li>\n<li><strong>Ausbilder, Ausbilder-Anw\u00e4rter, Ausbilder-Helfer:</strong> zus\u00e4tzlich Trainings f\u00fcr\n<em>jedes</em> Team eintragen, Pr\u00fcfstatus setzen, Termine anlegen, Hausaufgaben an mehrere/alle Teams\nverteilen, sowie Hunde, Qualifikationen, Anwesenheit und Orte in der Verwaltung pflegen. Alle drei\nAusbilder-Rollen haben fachlich exakt dieselben Rechte \u2013 nur die Bezeichnung unterscheidet sich.</li>\n<li><strong>Staffelleitung, Bereitschaftsleitung, Admin:</strong> zus\u00e4tzlich Personen, Rollen &amp;\nRechte, Datensicherung, den Staffelnamen und den kompletten Einsatzbereich (reale Eins\u00e4tze).</li>\n<li><strong>Individuelle Zusatzrechte:</strong> Die Leitung kann einzelnen Personen unter\n<strong>Verwaltung \u2192 Rollen &amp; Rechte</strong> gezielt das Recht \u201eKalender verwalten\" oder\n\u201eAusbildung verwalten\" geben, auch ohne dass diese Person offiziell Ausbilder/-in ist.</li>\n</ul>\n"},
   {id:"uebungsleitung", kategorie:"Rollen & Rechte", titel:"Einsatzleitung f\u00fcr eine \u00dcbung \u00fcbernehmen", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>F\u00fcr \u00dcbungseins\u00e4tze kann die Leitung ein <strong>normales Mitglied vor\u00fcbergehend als\nEinsatzleitung</strong> einsetzen. Diese Person sieht dann den Bereich <strong>Einsatz</strong> und kann\nf\u00fcr genau diese eine \u00dcbung alle Funktionen nutzen (Suchtrupps, Kr\u00e4fte, Risikobewertung, Karten,\nAbschluss) \u2013 ohne dass sich dadurch ihre Rolle oder ihre Rechte in der \u00fcbrigen App \u00e4ndern. Nach der\n\u00dcbung kann die n\u00e4chste \u00dcbung an eine ganz andere Person vergeben werden. Reale Eins\u00e4tze bleiben davon\nunber\u00fchrt und sind weiterhin nur f\u00fcr Leitung/Admin sichtbar.</p>\n"},
@@ -16418,7 +16562,7 @@ const HILFE_KATEGORIEN = [...new Set(HILFE_ARTIKEL.map(a=>a.kategorie))];
   const alt = ids.map(id=>HILFE_ARTIKEL.find(a=>a.id===id)).filter(Boolean);
   alt.forEach(a=>{ const i=HILFE_ARTIKEL.indexOf(a); if(i>=0) HILFE_ARTIKEL.splice(i,1); });
   HILFE_ARTIKEL.unshift({id:'was-ist-neu', kategorie:'Erste Schritte', titel:'Was ist neu?', rollen:['mitglied','ausbilder','leitung'],
-    text: '<p>Diese Übersicht fasst die Neuerungen zusammen – die neueste Version steht oben.</p><h4>BARRY 2.67 (Oktober 2026): eigene Unterlagen hochladen</h4><ul><li><strong>Für alle Mitglieder:</strong> In der Unterlagen-Bibliothek gibt es „➕ Eigene Unterlage hochladen“. PDF, Word, PowerPoint, Bilder und Texte lassen sich ablegen und direkt in BARRY öffnen.</li><li><strong>Automatisch einsortiert:</strong> BARRY liest Dateiname, Titel und die ersten Seiten und schlägt den passenden Ordner vor. Du kannst den Vorschlag ändern. Das geht auch über „📂 Datei einlesen“.</li><li><strong>Nichts doppelt:</strong> Liegt dieselbe Datei schon in der Bibliothek (gleicher Fingerabdruck), wird sie nicht noch einmal abgelegt. Bei ähnlichem Titel oder Dateinamen fragt BARRY nach. Liegt die Datei schon unter Lehrmaterial, kann sie in die Bibliothek umziehen.</li><li><strong>Weitergeben:</strong> Hochgeladene Unterlagen bleiben zunächst auf deinem Gerät. Mit „📤 Meine Unterlagen weitergeben“ entsteht ein Paket, das die Leitung oder andere Mitglieder einlesen – auch über „📂 Datei einlesen“. „Paket erstellen“ der Leitung nimmt die hochgeladenen Unterlagen mit.</li></ul><h4>BARRY 2.66 (Oktober 2026): Unterlagen direkt in BARRY lesen</h4><ul><li>PDF- und Word-Unterlagen aus der Unterlagen-Bibliothek öffnen sich jetzt in einer eigenen Ansicht in BARRY – auch auf Handys, deren Browser PDFs sonst nur herunterladen. Mit − und + vergrößern, mit ⤓ die Originaldatei auf dem Gerät speichern, mit ✕ oder der Zurück-Taste schließen. PowerPoint-Dateien werden weiterhin an das Gerät übergeben; zum Lesen gibt es jeweils die PDF-Fassung.</li></ul><h4>BARRY 2.65 (Oktober 2026): alles per Du, Nacht, Trümmer für Helfende, Ufer</h4><ul><li><strong>Du-Form überall:</strong> Alle Übungstexte im Übungsrad, die Fachfragen und die Hinweise zu Freigaben sprechen dich jetzt mit „du“ an. Sätze an Betroffene und Angehörige sowie der Sprechfunk bleiben bewusst beim „Sie“.</li><li><strong>Neue Übungsthemen:</strong> R36 Suchen, Führen und Sichern bei Nacht · R37 Trümmer für Helfende (sichern, beobachten, dokumentieren, betreuen) · R38 Am Ufer und im flachen Wasser – mit dem Hinweis, dass bei uns die Wasserwacht Wassersuche und Wasserortung übernimmt.</li><li><strong>Lernen &amp; Forschung:</strong> neue Themen „Sehen in der Dämmerung“, „Dunkelanpassung des menschlichen Auges“, „Die Erwartung des Hundeführers riecht mit“, „Nasenarbeit macht optimistischer“ und „Kinder und Hunde: Regeln üben statt nur erklären“.</li></ul><h4>BARRY 2.62–2.64 (Oktober 2026): Unterlagen-Bibliothek, neue Übungen, Profil</h4><ul><li><strong>📚 Unterlagen-Bibliothek</strong> (Wissen &amp; Material, Startkachel „Unterlagen“, Unterlagen-Leiste in Ausbildung &amp; Team): alle Unterlagen der Staffel geordnet in zehn Ordnern – Prüfungsordnung, Qualifikation, Einsatz und Führung, Ausbildung, Orientierung, Erste Hilfe am Hund, Formulare u. a. –, jede Unterlage genau einmal, mit Suche. Die Dateien kommen aus dem <strong>Unterlagenpaket</strong> der Staffelleitung, das du einmal einliest; danach öffnen sie sich auch ohne Netz. Vordrucke stehen zusätzlich unter Organisation → Formulare. Doppelt abgelegtes Lehrmaterial wird markiert.</li><li><strong>🎡 Neue Übungen:</strong> Themen R32 Führungssystem und taktische Zeichen, R33 Alarm – die ersten 30 Minuten, R34 Erstversorgung und Übergabe der gefundenen Person, R35 Kinderbesuch und Suchvorführung sowie weitere Übungen zu Anzeigearten (Rück- und Freiverweiser), Gerätearbeit, Nasenarbeit, Wind und Qualifikation.</li><li><strong>👤 Mein Profil</strong> ist leichter zu finden (Menü, Mein Stand, Suche); dort trägst du auch die Anzeigeart deines Hundes ein.</li></ul><h4>BARRY 2.60–2.61</h4><ul><li><strong>🎡 Übungen</strong> (früher Übungsrad): Übungsausgabe wie im Team-Begleiter – Glücksrad, <strong>Trainingseinheit</strong> (3 bis 8 Übungen nach Schwerpunkt und Stufe, abhaken, ins Trainingstagebuch), <strong>Abenteuer-Spaziergang</strong> (6 Stationen) und <strong>Problem angehen</strong> (Alltagsthema wählen, passende Übungen übernehmen). Offene Einheiten erscheinen auf der Startseite.</li><li>Startseite mit Kacheln für Übungen, Prüfung &amp; Module und Unterlagen sowie „Alle Bereiche“; alle Reiter sind ohne Schieben sichtbar; Prüfungsordnung auch ohne eigenen Hund lesbar.</li></ul><h4>BARRY 2.56–2.59 (Oktober 2026): leichter finden, klarer nach Rolle</h4><ul><li><strong>🔍 Suche</strong> oben rechts bzw. in der Seitenleiste: findet Seiten, Qualifikationen, Lehrgänge, Übungen und Hilfeartikel (Leitung zusätzlich Personen).</li><li><strong>Zurück-Taste</strong> des Handys geht jetzt eine Ebene zurück, statt BARRY zu verlassen.</li><li><strong>Mein Stand:</strong> Sprungleiste am Seitenanfang; neue Karte <strong>Meine Einsatzfunktionen</strong> (Rettungshundeführer/-in, Rettungshundehelfer/-in, Sanitäter/-in, Funker/-in, Praktikant/-in – nach der Festlegung der Staffel vom 10.10.2026, Mindestalter 18 Jahre). Bei fehlenden Nachweisen helfen die Knöpfe „eintragen“ und „Kurswunsch“.</li><li><strong>Kurswünsche:</strong> die Lehrgänge der Rettungshundearbeit (EH, RKE, EKGA-E und -S, Datenschutz, RHd, BOS, SLG, Modulprüfung 2) stehen zuerst, weiterführende dahinter. Suche, Zeichen ✅ / ⬜ / ✓ in der Liste, „Als Nächstes möglich“ zum Antippen, sonstiger Lehrgang mit freiem Titel, Rückfrage bei doppelten Wünschen, Wunsch zurückziehen.</li><li><strong>Nachweis eintragen:</strong> Liste „Für dich“ mit dem, was fehlt oder bald abläuft; die Suche nach Kürzeln wie EH, DS oder TF ist genauer; Reihenfolge wahlweise nach Ausbildungsweg oder alphabetisch; neue Bereiche PSNV sowie Leitung &amp; Vorstand.</li><li><strong>Ausbildungsnachweis drucken</strong> (Mein Stand → Meine Nachweise) – z. B. für Lehrgangsanmeldungen.</li><li><strong>Wissen:</strong> Fachfragen zur Theorieprüfung jetzt unter Prüfungsordnungen; Anzeigeart-Programme unter Findewille &amp; Anzeigetraining; die Übungssuche zeigt auch Treffer aus dem Übungsrad.</li><li><strong>Hilfe</strong> zeigt zuerst die Artikel für deine Rolle („Alle Artikel“ zeigt alles).</li><li><strong>Für Ausbilder/-innen und Leitung:</strong> Verwaltung beginnt mit einer Übersicht; „Wer hat …?“ mit Suchfeld; Matrix wahlweise nach ★-Pflicht oder Zielprofil; Kurswünsche filtern, nach Lehrgang bündeln, Lehrgangstermin und Anmeldedatum eintragen, als Tabelle herunterladen; einen Nachweis für mehrere Personen gleichzeitig eintragen; Leitung: Vorschau „Ansicht als Mitglied/Ausbilder“ in der Seitenleiste.</li><li><strong>Neue Namen:</strong> Alltagstagebuch (Alltag &amp; Zuhause), Trainingsplanung, Auswertung &amp; Kurswünsche, Orte &amp; Gebiete pflegen, Formulare &amp; Meldungen pflegen.</li></ul>' + alt.map(a=>`<h4>${a.titel}</h4>${a.text}`).join('')});
+    text: '<p>Diese Übersicht fasst die Neuerungen zusammen – die neueste Version steht oben.</p><h4>BARRY 2.69 (Oktober 2026): Passwort und Wiederfinden</h4><ul><li><strong>Neues Passwort wird geprüft:</strong> Nach dem Festlegen kontrolliert BARRY, ob das Passwort wirklich im Gerätespeicher steht. Klappt das nicht (z. B. im privaten Fenster), sagt BARRY es sofort, statt dass man später von vorne beginnen muss. Bei Tippfehlern bleiben die Eingaben stehen.</li><li><strong>Anmelden verzeiht mehr:</strong> Ein automatischer Großbuchstabe am Anfang und Leerzeichen am Rand führen nicht mehr zu „Passwort falsch“. Wer versehentlich noch das Startpasswort eingibt, bekommt einen klaren Hinweis.</li><li><strong>BARRY wiederfinden:</strong> Die Willkommensseite zeigt das App-Symbol. Nach dem Installieren sagt BARRY, dass es über dieses Symbol weitergeht. Nach der Einrichtung erscheint auf der Startseite einmalig eine Karte: wie du dich künftig anmeldest und wo du BARRY findest.</li><li><strong>iPhone/iPad:</strong> Wer das Zugangspaket noch in Safari statt in der installierten App öffnen will, wird vorher gewarnt.</li></ul><h4>BARRY 2.68 (Oktober 2026): leichter starten auf einem neuen Gerät</h4><ul><li><strong>Willkommensseite:</strong> Auf einem neuen Gerät führt BARRY in drei Schritten durch die Einrichtung: als App installieren, Zugangspaket öffnen, eigenes Passwort festlegen. Wo der Browser es erlaubt, gibt es einen Knopf „📲 BARRY installieren“.</li><li><strong>Weniger tippen:</strong> Nach dem Öffnen des Zugangspakets mit dem Startpasswort geht es direkt zum eigenen Passwort. Name und Startpasswort müssen nicht noch einmal eingegeben werden, und die Rückfrage „Bestand ersetzen?“ entfällt auf einem neuen Gerät.</li><li><strong>Datei leichter auswählbar:</strong> Zugangspakete, die aus Teams, E-Mail oder Messengern gespeichert wurden, lassen sich auswählen, auch wenn das Gerät sie nicht als .json erkennt.</li><li><strong>Startpasswort robuster:</strong> Ein automatischer Großbuchstabe am Anfang (Handy-Tastatur) oder ein mitkopiertes Leerzeichen führen beim Öffnen des Zugangspakets nicht mehr zu „Passwort falsch“. Kurze Startpasswörter mit 4 oder 5 Zeichen lassen sich jetzt ebenfalls eingeben – bisher verlangte das Eingabefenster mindestens 6 Zeichen.</li><li><strong>Passwort anzeigen:</strong> Mit 👁 ist beim Tippen sichtbar, was eingegeben wurde. „Angemeldet bleiben“ lässt sich schon beim Festlegen des eigenen Passworts wählen.</li><li><strong>Für die Leitung:</strong> Das normale Anmeldeformular mit dem Erstzugang „Admin“ ist auf einem neuen Gerät über „Ich richte BARRY für die Staffel ein“ erreichbar.</li></ul><h4>BARRY 2.67 (Oktober 2026): eigene Unterlagen hochladen</h4><ul><li><strong>Für alle Mitglieder:</strong> In der Unterlagen-Bibliothek gibt es „➕ Eigene Unterlage hochladen“. PDF, Word, PowerPoint, Bilder und Texte lassen sich ablegen und direkt in BARRY öffnen.</li><li><strong>Automatisch einsortiert:</strong> BARRY liest Dateiname, Titel und die ersten Seiten und schlägt den passenden Ordner vor. Du kannst den Vorschlag ändern. Das geht auch über „📂 Datei einlesen“.</li><li><strong>Nichts doppelt:</strong> Liegt dieselbe Datei schon in der Bibliothek (gleicher Fingerabdruck), wird sie nicht noch einmal abgelegt. Bei ähnlichem Titel oder Dateinamen fragt BARRY nach. Liegt die Datei schon unter Lehrmaterial, kann sie in die Bibliothek umziehen.</li><li><strong>Weitergeben:</strong> Hochgeladene Unterlagen bleiben zunächst auf deinem Gerät. Mit „📤 Meine Unterlagen weitergeben“ entsteht ein Paket, das die Leitung oder andere Mitglieder einlesen – auch über „📂 Datei einlesen“. „Paket erstellen“ der Leitung nimmt die hochgeladenen Unterlagen mit.</li></ul><h4>BARRY 2.66 (Oktober 2026): Unterlagen direkt in BARRY lesen</h4><ul><li>PDF- und Word-Unterlagen aus der Unterlagen-Bibliothek öffnen sich jetzt in einer eigenen Ansicht in BARRY – auch auf Handys, deren Browser PDFs sonst nur herunterladen. Mit − und + vergrößern, mit ⤓ die Originaldatei auf dem Gerät speichern, mit ✕ oder der Zurück-Taste schließen. PowerPoint-Dateien werden weiterhin an das Gerät übergeben; zum Lesen gibt es jeweils die PDF-Fassung.</li></ul><h4>BARRY 2.65 (Oktober 2026): alles per Du, Nacht, Trümmer für Helfende, Ufer</h4><ul><li><strong>Du-Form überall:</strong> Alle Übungstexte im Übungsrad, die Fachfragen und die Hinweise zu Freigaben sprechen dich jetzt mit „du“ an. Sätze an Betroffene und Angehörige sowie der Sprechfunk bleiben bewusst beim „Sie“.</li><li><strong>Neue Übungsthemen:</strong> R36 Suchen, Führen und Sichern bei Nacht · R37 Trümmer für Helfende (sichern, beobachten, dokumentieren, betreuen) · R38 Am Ufer und im flachen Wasser – mit dem Hinweis, dass bei uns die Wasserwacht Wassersuche und Wasserortung übernimmt.</li><li><strong>Lernen &amp; Forschung:</strong> neue Themen „Sehen in der Dämmerung“, „Dunkelanpassung des menschlichen Auges“, „Die Erwartung des Hundeführers riecht mit“, „Nasenarbeit macht optimistischer“ und „Kinder und Hunde: Regeln üben statt nur erklären“.</li></ul><h4>BARRY 2.62–2.64 (Oktober 2026): Unterlagen-Bibliothek, neue Übungen, Profil</h4><ul><li><strong>📚 Unterlagen-Bibliothek</strong> (Wissen &amp; Material, Startkachel „Unterlagen“, Unterlagen-Leiste in Ausbildung &amp; Team): alle Unterlagen der Staffel geordnet in zehn Ordnern – Prüfungsordnung, Qualifikation, Einsatz und Führung, Ausbildung, Orientierung, Erste Hilfe am Hund, Formulare u. a. –, jede Unterlage genau einmal, mit Suche. Die Dateien kommen aus dem <strong>Unterlagenpaket</strong> der Staffelleitung, das du einmal einliest; danach öffnen sie sich auch ohne Netz. Vordrucke stehen zusätzlich unter Organisation → Formulare. Doppelt abgelegtes Lehrmaterial wird markiert.</li><li><strong>🎡 Neue Übungen:</strong> Themen R32 Führungssystem und taktische Zeichen, R33 Alarm – die ersten 30 Minuten, R34 Erstversorgung und Übergabe der gefundenen Person, R35 Kinderbesuch und Suchvorführung sowie weitere Übungen zu Anzeigearten (Rück- und Freiverweiser), Gerätearbeit, Nasenarbeit, Wind und Qualifikation.</li><li><strong>👤 Mein Profil</strong> ist leichter zu finden (Menü, Mein Stand, Suche); dort trägst du auch die Anzeigeart deines Hundes ein.</li></ul><h4>BARRY 2.60–2.61</h4><ul><li><strong>🎡 Übungen</strong> (früher Übungsrad): Übungsausgabe wie im Team-Begleiter – Glücksrad, <strong>Trainingseinheit</strong> (3 bis 8 Übungen nach Schwerpunkt und Stufe, abhaken, ins Trainingstagebuch), <strong>Abenteuer-Spaziergang</strong> (6 Stationen) und <strong>Problem angehen</strong> (Alltagsthema wählen, passende Übungen übernehmen). Offene Einheiten erscheinen auf der Startseite.</li><li>Startseite mit Kacheln für Übungen, Prüfung &amp; Module und Unterlagen sowie „Alle Bereiche“; alle Reiter sind ohne Schieben sichtbar; Prüfungsordnung auch ohne eigenen Hund lesbar.</li></ul><h4>BARRY 2.56–2.59 (Oktober 2026): leichter finden, klarer nach Rolle</h4><ul><li><strong>🔍 Suche</strong> oben rechts bzw. in der Seitenleiste: findet Seiten, Qualifikationen, Lehrgänge, Übungen und Hilfeartikel (Leitung zusätzlich Personen).</li><li><strong>Zurück-Taste</strong> des Handys geht jetzt eine Ebene zurück, statt BARRY zu verlassen.</li><li><strong>Mein Stand:</strong> Sprungleiste am Seitenanfang; neue Karte <strong>Meine Einsatzfunktionen</strong> (Rettungshundeführer/-in, Rettungshundehelfer/-in, Sanitäter/-in, Funker/-in, Praktikant/-in – nach der Festlegung der Staffel vom 10.10.2026, Mindestalter 18 Jahre). Bei fehlenden Nachweisen helfen die Knöpfe „eintragen“ und „Kurswunsch“.</li><li><strong>Kurswünsche:</strong> die Lehrgänge der Rettungshundearbeit (EH, RKE, EKGA-E und -S, Datenschutz, RHd, BOS, SLG, Modulprüfung 2) stehen zuerst, weiterführende dahinter. Suche, Zeichen ✅ / ⬜ / ✓ in der Liste, „Als Nächstes möglich“ zum Antippen, sonstiger Lehrgang mit freiem Titel, Rückfrage bei doppelten Wünschen, Wunsch zurückziehen.</li><li><strong>Nachweis eintragen:</strong> Liste „Für dich“ mit dem, was fehlt oder bald abläuft; die Suche nach Kürzeln wie EH, DS oder TF ist genauer; Reihenfolge wahlweise nach Ausbildungsweg oder alphabetisch; neue Bereiche PSNV sowie Leitung &amp; Vorstand.</li><li><strong>Ausbildungsnachweis drucken</strong> (Mein Stand → Meine Nachweise) – z. B. für Lehrgangsanmeldungen.</li><li><strong>Wissen:</strong> Fachfragen zur Theorieprüfung jetzt unter Prüfungsordnungen; Anzeigeart-Programme unter Findewille &amp; Anzeigetraining; die Übungssuche zeigt auch Treffer aus dem Übungsrad.</li><li><strong>Hilfe</strong> zeigt zuerst die Artikel für deine Rolle („Alle Artikel“ zeigt alles).</li><li><strong>Für Ausbilder/-innen und Leitung:</strong> Verwaltung beginnt mit einer Übersicht; „Wer hat …?“ mit Suchfeld; Matrix wahlweise nach ★-Pflicht oder Zielprofil; Kurswünsche filtern, nach Lehrgang bündeln, Lehrgangstermin und Anmeldedatum eintragen, als Tabelle herunterladen; einen Nachweis für mehrere Personen gleichzeitig eintragen; Leitung: Vorschau „Ansicht als Mitglied/Ausbilder“ in der Seitenleiste.</li><li><strong>Neue Namen:</strong> Alltagstagebuch (Alltag &amp; Zuhause), Trainingsplanung, Auswertung &amp; Kurswünsche, Orte &amp; Gebiete pflegen, Formulare &amp; Meldungen pflegen.</li></ul>' + alt.map(a=>`<h4>${a.titel}</h4>${a.text}`).join('')});
   ['rh-tagebuch','mantrailing-tagebuch'].forEach(id=>{ const a=HILFE_ARTIKEL.find(x=>x.id===id); if(!a) return;
     a.titel += ' (frühere Tagebücher)';
     a.text = '<p><em>Hinweis: Diese Tagebuchform ist seit BARRY 2.1 ausgeblendet. Frühere Einträge stehen im Trainingstagebuch unter Ausbildung &amp; Team → Trainingstagebücher.</em></p>' + a.text; });
