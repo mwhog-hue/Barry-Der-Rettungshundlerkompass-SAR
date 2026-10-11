@@ -4115,8 +4115,8 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.66';
-const BARRY_APP_STAND = '10.10.2026';
+const BARRY_APP_VERSION = '2.67';
+const BARRY_APP_STAND = '11.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
 // Bei künftigen strukturellen Änderungen am state-Objekt: Versionsnummer hochzählen und
@@ -4682,7 +4682,7 @@ function sucheTreffer(s, person){
   const kurse = KURS_VORAUSSETZUNGEN.filter(k=>!k.frei && passt(kursLabel(k)+' '+k.code)).slice(0,5);
   if(kurse.length) gruppen.push({t:'Lehrgänge – Kurswunsch', l:kurse.map(k=>({t:kursLabel(k), go:{b:'ausbildung', a:'meinstand', sprung:'ms-kurs-karte', fn:()=>{ msKurs=k.code; msKursSuche=''; }}}))});
   const ulw = qeFalten(s).split(' ').filter(Boolean);
-  const ul = UNTERLAGEN_KATALOG.filter(e=>ulTreffer(e, ulw)).slice(0,6);
+  const ul = ulAlle().filter(e=>ulTreffer(e, ulw)).slice(0,6);
   if(ul.length) gruppen.push({t:'Unterlagen', l:ul.map(e=>({t:e.titel, u:ulOrdnerLabel(e.ordner), go:{b:'wissen', w:'unterlagen', sprung:'ul-'+e.id, fn:()=>{ ulSuche=''; ulArt=''; ulOffen.add(e.ordner); }}}))});
   const uem = uemSuchen(s).slice(0,5);
   if(uem.length) gruppen.push({t:'Übungsrad', l:uem.map(({u,m})=>({t:u.id+' '+u.titel, u:m.titel||'', go:{b:'uebungsrad', fn:()=>{ uemSprungZiel=u.id; }}}))});
@@ -8842,6 +8842,8 @@ document.addEventListener('click', e=>{ const b=e.target.closest && e.target.clo
 
 /* ---------- Zentraler Knopf „Datei einlesen“: erkennt jede BARRY-Datei und leitet weiter ---------- */
 function dateiArtErkennen(name, text, bytes){
+  // 2.67: Dokumente (PDF, Word, PowerPoint, Bilder) gehen in die Unterlagen-Bibliothek
+  if(UL_DOK_BIN.test(name||'') || (bytes && bytes[0]===0x25 && bytes[1]===0x50 && bytes[2]===0x44 && bytes[3]===0x46) || (bytes && bytes[0]===0xFF && bytes[1]===0xD8 && bytes[2]===0xFF) || (bytes && bytes[0]===0x89 && bytes[1]===0x50 && bytes[2]===0x4E && bytes[3]===0x47)) return 'dokument';
   if(bytes && bytes[0]===0x50 && bytes[1]===0x4B) return /zip$/i.test(name) ? 'zip' : 'xlsx';
   const t=String(text||'').replace(/^\uFEFF/,'').trim();
   if(t.startsWith('{')){
@@ -8856,13 +8858,14 @@ function dateiArtErkennen(name, text, bytes){
   }
   if(/^BEGIN:VCALENDAR/.test(t)) return 'ics';
   if(/[;,]/.test(t.split('\n')[0]||'') && /name/i.test(t.split('\n')[0]||'')) return 'csv';
+  if(UL_DOK_TEXT.test(name||'')) return 'dokument';
   return 'unbekannt';
 }
-const DATEI_ARTEN = {flaechenuebergabe:'Übergabe aus dem Flächensuchassistenten', terminplan:'Terminplan', standupdate:'Stand-Update', meldung:'Meldung eines Mitglieds', zugang:'Zugangspaket', sicherung:'Datensicherung', xlsx:'Selbstauskunft (Excel)', csv:'Mitglieder-Tabelle (CSV)', zip:'ZIP-Archiv', ics:'Kalenderdatei', rhs:'Team-Datenaustausch', unbekannt:'unbekannte Datei'};
+const DATEI_ARTEN = {flaechenuebergabe:'Übergabe aus dem Flächensuchassistenten', terminplan:'Terminplan', standupdate:'Stand-Update', meldung:'Meldung eines Mitglieds', zugang:'Zugangspaket', sicherung:'Datensicherung', xlsx:'Selbstauskunft (Excel)', csv:'Mitglieder-Tabelle (CSV)', zip:'ZIP-Archiv', ics:'Kalenderdatei', rhs:'Team-Datenaustausch', dokument:'Dokument für die Unterlagen-Bibliothek', unterlagenpaket:'Unterlagenpaket', unbekannt:'unbekannte Datei'};
 async function dateiEinlesenUniversal(files){
   const liste=Array.from(files||[]); if(!liste.length) return;
   const person=aktuellePerson(); const leitung=person && istLeitungOderAdmin(person);
-  const f=liste[0]; const buf=new Uint8Array(await f.arrayBuffer()); const text=(buf[0]===0x50&&buf[1]===0x4B)?'':new TextDecoder().decode(buf);
+  const f=liste[0]; const buf=new Uint8Array(await f.arrayBuffer()); const text=((buf[0]===0x50&&buf[1]===0x4B)||(buf[0]===0x25&&buf[1]===0x50)||UL_DOK_BIN.test(f.name))?'':new TextDecoder().decode(buf);
   const art=dateiArtErkennen(f.name, text, buf);
   const nurLeitung = msg=>alert(`„${f.name}“ ist ein(e) ${DATEI_ARTEN[art]}. ${msg}`);
   switch(art){
@@ -8891,7 +8894,11 @@ async function dateiEinlesenUniversal(files){
       if(!confirm(`Übergabe in das Einsatzprotokoll „${ziel.einsatzort||'Einsatz'}${ziel.alarmierungZeit?' ('+fmtDatum(ziel.alarmierungZeit)+')':''}“ übernehmen?`)) return;
       route={bereich:'einsatz',unter:null,id:ziel.id}; flUebergabeDateiEinlesen(ziel.id, f); break; }
     case 'ics': alert('Das ist eine Kalenderdatei für den Handy-Kalender – bitte in der Kalender-App öffnen, nicht in BARRY.'); break;
-    case 'zip': alert('Das ist ein ZIP-Archiv mit mehreren Dateien. Bitte zuerst entpacken und die einzelne Datei einlesen.'); break;
+    case 'dokument': ulHochladenStarten(liste.filter(x=>x===f || UL_DOK_BIN.test(x.name) || UL_DOK_TEXT.test(x.name))); break;
+    case 'zip': {
+      let paket=false; try{ paket=(await ulZipVerzeichnis(f)).some(z=>z.name==='barry-unterlagen.json'); }catch(e){}
+      if(paket){ route={bereich:'wissen',unter:null,id:null}; wissenTab='unterlagen'; modal=null; render(); window.scrollTo(0,0); ulPaketEinlesen(liste.filter(x=>/\.zip$/i.test(x.name))); break; }
+      alert('Das ist ein ZIP-Archiv mit mehreren Dateien. Bitte zuerst entpacken und die einzelne Datei einlesen.'); break; }
     default: alert(`„${f.name}“ konnte keiner BARRY-Funktion zugeordnet werden.`);
   }
 }
@@ -10272,7 +10279,7 @@ function renderOrganisationFormulare(person){
     </div>
     <div class="card card-pad" style="margin-bottom:14px">
       <h3 style="margin-top:0">Vordrucke</h3>
-      ${UNTERLAGEN_KATALOG.filter(e=>e.ordner==='form').map(e=>ulEintragHtml(e, true)).join('')}
+      ${ulAlle().filter(e=>e.ordner==='form').map(e=>ulEintragHtml(e, true)).join('')}
       ${UNTERLAGEN_KATALOG.some(e=>e.ordner==='form' && !ulEintragDa(e))?`<p class="hint" style="margin:6px 0 0">⤓ = noch nicht auf diesem Gerät. <a href="#" data-unterlage="unterlagen">Unterlagenpaket einlesen</a></p>`:''}
       ${vordrucke.length ? vordrucke.map(m=>renderLehrmaterialEintrag(m,false)).join('') : `<p class="hint">Noch keine Vordrucke hinterlegt.${leitung?' Ablage unter Wissen & Material → Lehrmaterial im Ordner „Formulare & Vordrucke“ (oder Art „Formular/Vordruck“) – sie erscheinen dann automatisch hier.':''}</p>`}
     </div>
@@ -12482,6 +12489,271 @@ let ulOffen = new Set();
 let ulArbeit = '';               // laufende Arbeit (Einlesen/Erstellen) – Text für die Fortschrittsanzeige
 let ulFehler = '';
 let ulSpeicher = null;           // {belegt, frei} aus navigator.storage.estimate()
+/* ============================== 2.67: Eigene Unterlagen hochladen ==============================
+   Jedes Mitglied kann einzelne Dateien in die Bibliothek legen – direkt hier oder über „📂 Datei einlesen“.
+   Die Datei liegt wie die Paket-Unterlagen im Gerätespeicher (IndexedDB, Schlüssel 'eigen-…|original');
+   Titel, Ordner, Art und „hochgeladen von“ stehen im Meta-Eintrag (Feld eigen).
+   BARRY schlägt den Ordner anhand von Dateiname, Titel und dem Text der ersten Seiten vor und erkennt gleiche
+   Dateien am SHA-256-Fingerabdruck – nichts wird doppelt abgelegt. Weitergabe über ein Unterlagenpaket (kein Server). */
+UNTERLAGEN_ORDNER.push({id:'eigen', label:'Sonstige hochgeladene Unterlagen'});
+const UL_EIGEN_ARTEN = ['Eigene Unterlage','Handout','Vortrag','Merkblatt','Checkliste','Formular','Ausbildungsunterlage','Übungsplan','Protokoll','Bild/Foto','Sonstiges'];
+const UL_DOK_BIN = /\.(pdf|docx?|pptx?|odt|odp|rtf|jpe?g|png|gif|webp|heic|heif)$/i;
+const UL_DOK_TEXT = /\.(txt|md)$/i;
+const UL_BILD = ['jpg','jpeg','png','gif','webp'];
+let ulEntwurf = null;          // {laedt, datei, sha, titel, ordner, art, kurz, grund, aehnlich, lehrmaterial} oder {bearbeiten:true, id, …}
+let ulWarteschlange = [];      // weitere Dateien, die nacheinander abgelegt werden
+function ulEigeneEintraege(){
+  if(!ulVorhanden) return [];
+  const r = [];
+  for(const [key, m] of ulVorhanden){
+    if(!m || !m.eigen) continue;
+    const [id, v] = key.split('|'), g = m.eigen;
+    r.push({id, ordner: UNTERLAGEN_ORDNER.some(o=>o.id===g.ordner) ? g.ordner : 'eigen', art: g.art||'Eigene Unterlage', titel: g.titel||m.name||'Unterlage',
+      hrsg: 'hochgeladen von '+(g.vonName||'unbekannt'), stand: m.stand ? fmtDatum(m.stand) : '–', kurz: g.kurz||'', sw: g.sw||'',
+      v:[{v, name: m.name||'Datei', orig: m.name||'', typ: g.typ||'', groesse: m.groesse||0, sha: m.sha||''}], eigen:true, vonId: g.vonId||''});
+  }
+  return r.sort((a,b)=>a.titel.localeCompare(b.titel,'de'));
+}
+function ulAlle(){ return UNTERLAGEN_KATALOG.concat(ulEigeneEintraege()); }
+function ulDarfEigenAendern(e, person){ return !!(e && e.eigen && person && (e.vonId===person.id || istLeitungOderAdmin(person))); }
+function ulEndung(name){ return (String(name||'').match(/\.(\w+)$/)||['',''])[1].toLowerCase(); }
+function ulHeute(){ return new Date().toISOString().slice(0,10); }
+function ulMetaSetzen(key, meta){ return ulDb().then(db=>new Promise((ok,nein)=>{ const tx = db.transaction('meta','readwrite'); tx.objectStore('meta').put(meta, key); tx.oncomplete=()=>ok(); tx.onerror=()=>nein(tx.error); })); }
+function ulEinzelnLoeschen(key){ return ulDb().then(db=>new Promise((ok,nein)=>{ const tx = db.transaction(['dateien','meta'],'readwrite'); tx.objectStore('dateien').delete(key); tx.objectStore('meta').delete(key); tx.oncomplete=()=>ok(); tx.onerror=()=>nein(tx.error); })); }
+/* Nur die Paket-Unterlagen entfernen – selbst hochgeladene bleiben */
+function ulPaketDateienLoeschen(){ return ulDb().then(db=>new Promise((ok,nein)=>{ const tx = db.transaction(['dateien','meta'],'readwrite'), meta = tx.objectStore('meta'), dat = tx.objectStore('dateien');
+  const c = meta.openCursor(); c.onsuccess = ()=>{ const cur = c.result; if(!cur) return; if(!(cur.value && cur.value.eigen)){ dat.delete(cur.key); cur.delete(); } cur.continue(); };
+  tx.oncomplete=()=>ok(); tx.onerror=()=>nein(tx.error); })); }
+/* Doppelt? – gleicher Fingerabdruck (SHA-256) wie eine Unterlage im Katalog oder auf dem Gerät; Lehrmaterial: gleiche Größe und gleicher Name */
+function ulDoppelSuchen(sha, groesse, name, ausserId){
+  if(sha){
+    if(ulVorhanden) for(const [key, m] of ulVorhanden){ const id = key.split('|')[0]; if(m && m.sha===sha && id!==ausserId) return {art:'gleich', e: ulEintrag(id) || {titel: m.name||id, ordner:'eigen', id}}; }
+    for(const e of UNTERLAGEN_KATALOG) for(const x of e.v) if(x.sha && x.sha===sha) return {art:'gleich', e};
+  }
+  if(name && groesse){ const lm = (state.lehrmaterial||[]).find(m=>m && m.typ!=='link' && m.groesse===groesse && ulNameFalten(m.dateiName)===ulNameFalten(name)); if(lm) return {art:'lehrmaterial', m: lm}; }
+  return null;
+}
+/* Ähnlich? – gleicher Titel oder gleicher Dateiname wie eine vorhandene Unterlage (nur Hinweis, keine Sperre) */
+function ulAehnlich(titel, name, ausserId){
+  const t = qeFalten(titel).replace(/[^a-z0-9]+/g,''), n = ulNameFalten(name);
+  return ulAlle().find(e=>e.id!==ausserId && ((t.length>5 && qeFalten(e.titel).replace(/[^a-z0-9]+/g,'')===t) || (n.length>4 && e.v.some(x=>ulNameFalten(x.name)===n || ulNameFalten(x.orig)===n)))) || null;
+}
+/* Text der ersten Seiten lesen (für Titel- und Ordnervorschlag) */
+async function ulTextProbe(datei){
+  const ext = ulEndung(datei.name); let text = '', titel = '';
+  const xmlText = x => String(x||'').replace(/<\/(w:p|a:p|text:p)>/g,'\n').replace(/<[^>]+>/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/[ \t]+/g,' ');
+  try{
+    if(ext==='pdf'){
+      const lib = await ulPdfLib();
+      const pdf = await lib.getDocument({data: new Uint8Array(await datei.arrayBuffer()), isEvalSupported:false}).promise;
+      try{ const md = await pdf.getMetadata(); titel = (md && md.info && md.info.Title) || ''; }catch(e){}
+      for(let n=1; n<=Math.min(3, pdf.numPages); n++){ const c = await (await pdf.getPage(n)).getTextContent(); text += c.items.map(i=>i.str).join(' ')+'\n'; }
+      try{ pdf.destroy(); }catch(e){}
+    } else if(['docx','pptx','odt','odp'].includes(ext)){
+      const t = await ulDocxTeile(datei);
+      if(ext==='docx') text = xmlText(await t.text('word/document.xml'));
+      else if(ext==='pptx'){ const folien = t.namen.filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a,b)=>parseInt(a.match(/\d+/))-parseInt(b.match(/\d+/))).slice(0,6); for(const n of folien) text += xmlText(await t.text(n))+'\n'; }
+      else text = xmlText(await t.text('content.xml'));
+      const core = await t.text('docProps/core.xml'); const m = core.match(/<dc:title>([^<]*)<\/dc:title>/); if(m) titel = xmlText(m[1]).trim();
+    } else if(UL_DOK_TEXT.test(datei.name)) text = (await datei.slice(0, 40000).text());
+  }catch(e){}
+  return {text: text.slice(0, 20000), titel};
+}
+function ulTitelAusName(name){
+  return String(name||'Unterlage').replace(/\.[a-z0-9]+$/i,'').replace(/^[0-9a-f]{8}-/i,'').replace(/[_]+/g,' ').replace(/\s*-\s*/g,' – ').replace(/\s+/g,' ').trim() || 'Unterlage';
+}
+function ulTitelVorschlag(name, metaTitel, text){
+  let t = String(metaTitel||'').replace(/^Microsoft (Word|PowerPoint|Excel) - /i,'').trim();
+  if(/\.(xlsx?|docx?|pptx?|pdf|odt|indd)$/i.test(t)) t = '';
+  if(t.length<5 || /^(untitled|unbenannt|dokument\d*|document\d*|präsentation\d*|presentation\d*|folie\s*\d*)$/i.test(t)) t = '';
+  if(!t){ const z = String(text||'').split('\n').map(x=>x.replace(/\s+/g,' ').trim()).find(x=>x.length>=5); if(z && z.length<=100) t = z; }
+  return t || ulTitelAusName(name);
+}
+const UL_ORDNER_STICHWORTE = {
+  po:['pruefungsordnung','pruefungs','pruefung','ausfuehrungsbestimmung','regelwerk','dienstanweisung','zulassung','pruefer','richtlinie'],
+  quali:['qualifikation','qualifizierung','fachausbildung','seminar','lehrgang','fortbildung','fuehrungskraft','fuehrungskraefte','leitungskraefte','satzung','mustersatzung','ordnung der bereitschaften','einsatzfunktion','kreisverband','landesverband','zertifikat','nachweis','funktionspostfach'],
+  einsatz:['einsatzleitung','einsatzabschnitt','einsatzbericht','alarmierung','fwdv','katsdv','kats dv','katastrophenschutz','fuehrungssystem','fuehrungsvorgang','taktische zeichen','sprechfunk','funkgeraet','betreuungszug','sanitaetszug','vermisst','lagekarte','einsatz'],
+  grund:['gehorsam','unterordnung','gewandtheit','geraetearbeit','geraetetraining','wippe','wackelsteg','tunnel','fussarbeit','rueckruf','ablage','begleithund','welpe','junghund','nasenarbeit','clicker','grundausbildung','grundgehorsam'],
+  suche:['flaechensuche','truemmersuche','truemmer','mantrail','verbell','rueckverweis','freiverweis','anzeigeverhalten','anzeige','geruch','witterung','wind','suchstrategie','suchgebiet','suchtechnik','suche'],
+  orient:['kompass','karte','kartenkunde','orientierung','koordinat','utm','mgrs','gps','navigation','marschzahl','massstab','topograf','topograph'],
+  eh:['erste hilfe','notfall','verletz','verband','vergiftung','hitzschlag','magendrehung','wiederbelebung','vitalwerte','tierarzt','pfote','zecke','hundeapotheke'],
+  gelaende:['impulskarte','theorie im gelaende','gelaendetheorie','lehrpaket'],
+  oeff:['oeffentlichkeitsarbeit','presse','kinder','schule','kita','ferienbetreuung','infostand','flyer','vorfuehrung','tag der offenen'],
+  form:['formular','vordruck','unfallanzeige','schadenanzeige','anwesenheitsliste','antrag','ausfuellen','unterschrift','meldebogen','checkliste']
+};
+function ulOrdnerVorschlag(name, titel, text){
+  const norm = t => ' '+qeFalten(t).replace(/[^a-z0-9]+/g,' ')+' ';
+  const vorn = norm(String(name).replace(/[_.]+/g,' ')+' '+titel), inhalt = norm(text);
+  const zaehle = (t, w) => { let n = 0, p = 0; const muster = ' '+w;
+    while((p = t.indexOf(muster, p)) >= 0 && n < 5){ n++; p += muster.length; } return n; };
+  let best = 'eigen', bestPunkte = 0, treffer = {};
+  for(const [o, worte] of Object.entries(UL_ORDNER_STICHWORTE)){
+    let pkt = 0; const tr = [];
+    for(const w of worte){ const a = zaehle(vorn, w), b = zaehle(inhalt, w); if(a||b){ pkt += a*4 + b; tr.push([w, a*4+b]); } }
+    // Ähnlichkeit zu den Katalog-Unterlagen dieses Ordners (Schlagworte)
+    const sw = new Set(UNTERLAGEN_KATALOG.filter(e=>e.ordner===o).flatMap(e=>qeFalten(e.sw).split(/\s+/)).filter(w=>w.length>=5));
+    for(const w of sw){ if(zaehle(vorn, w)) pkt += 2; else if(zaehle(inhalt, w)) pkt += 0.5; }
+    treffer[o] = tr.sort((x,y)=>y[1]-x[1]).slice(0,3).map(x=>x[0]);
+    if(pkt > bestPunkte){ bestPunkte = pkt; best = o; }
+  }
+  if(bestPunkte < 2) return {ordner:'eigen', grund:''};
+  return {ordner: best, grund: treffer[best].length ? 'erkannt an: '+treffer[best].join(', ') : 'ähnlich zu Unterlagen in diesem Ordner'};
+}
+function ulArtVorschlag(name, ordner, text){
+  const ext = ulEndung(name), t = qeFalten(name+' '+text.slice(0,2000));
+  if(['ppt','pptx','odp'].includes(ext)) return 'Vortrag';
+  if(UL_BILD.includes(ext) || ['heic','heif'].includes(ext)) return 'Bild/Foto';
+  if(/checkliste/.test(t)) return 'Checkliste';
+  if(ordner==='form' || /formular|vordruck/.test(t)) return 'Formular';
+  if(/handout/.test(t)) return 'Handout';
+  if(/merkblatt/.test(t)) return 'Merkblatt';
+  if(/protokoll/.test(qeFalten(name))) return 'Protokoll';
+  return 'Eigene Unterlage';
+}
+async function ulHochladenStarten(dateien){
+  const liste = [...(dateien||[])].filter(Boolean); if(!liste.length || !aktuellePerson()) return;
+  if(ulVorhanden===null) await ulIndexLaden();
+  modal = null; sidebarOffen = false;
+  route = {bereich:'wissen', unter:null, id:null}; wissenTab = 'unterlagen'; ulSuche = ''; ulArt = '';
+  if(ulEntwurf && !ulEntwurf.bearbeiten){ ulWarteschlange.push(...liste); render(); zeigeToast(`${liste.length} Datei${liste.length===1?'':'en'} vorgemerkt – nach der aktuellen Unterlage geht es weiter.`); return; }
+  ulWarteschlange = liste.slice(1);
+  await ulEntwurfVorbereiten(liste[0]);
+}
+function ulZumFormular(){ requestAnimationFrame(()=>{ const el = document.getElementById('ul-hochladen'); if(el) el.scrollIntoView({block:'start'}); }); }
+async function ulNaechsteDatei(){ const n = ulWarteschlange.shift(); if(n) await ulEntwurfVorbereiten(n); else { ulEntwurf = null; renderErhalteScroll(); } }
+async function ulEntwurfVorbereiten(datei){
+  if(datei.size > 200*1024*1024){ alert(`„${datei.name}“ ist größer als 200 MB und kann nicht abgelegt werden.`); return ulNaechsteDatei(); }
+  if(ulSpeicher && ulSpeicher.frei && datei.size > ulSpeicher.frei){ alert(`Zu wenig freier Gerätespeicher für „${datei.name}“ (${formatDateigroesse(datei.size)} nötig).`); return ulNaechsteDatei(); }
+  ulEntwurf = {laedt:true, datei}; render(); ulZumFormular();
+  const sha = await ulSha256(datei);
+  const d = ulDoppelSuchen(sha, datei.size, datei.name);
+  if(d && d.art==='gleich'){
+    alert(`„${datei.name}“ ist schon in der Unterlagen-Bibliothek:\n\n„${d.e.titel}“\nOrdner: ${ulOrdnerLabel(d.e.ordner)}\n\nSie wird nicht doppelt abgelegt.`);
+    ulOffen.add(d.e.ordner);
+    if(!ulWarteschlange.length){ ulEntwurf = null; sprungZiel = 'ul-'+d.e.id; render(); sprungAusfuehren(); return; }
+    return ulNaechsteDatei();
+  }
+  const probe = await ulTextProbe(datei);
+  const titel = ulTitelVorschlag(datei.name, probe.titel, probe.text);
+  const v = ulOrdnerVorschlag(datei.name, titel, probe.text);
+  if(!ulEntwurf || ulEntwurf.datei!==datei) return;   // inzwischen abgebrochen
+  ulEntwurf = {datei, sha, titel, ordner: v.ordner, grund: v.grund, art: ulArtVorschlag(datei.name, v.ordner, probe.text), kurz:'', sw: probe.text.replace(/\s+/g,' ').trim().slice(0, 2000),
+    lehrmaterial: d && d.art==='lehrmaterial' ? d.m : null, aehnlich: ulAehnlich(titel, datei.name)};
+  render(); ulZumFormular();
+}
+function ulEntwurfFelder(){
+  const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  if(!ulEntwurf) return;
+  ulEntwurf.titel = g('ul-h-titel'); ulEntwurf.ordner = g('ul-h-ordner') || ulEntwurf.ordner; ulEntwurf.art = g('ul-h-art'); ulEntwurf.kurz = g('ul-h-kurz');
+}
+async function ulEntwurfSpeichern(){
+  const e = ulEntwurf, person = aktuellePerson(); if(!e || e.laedt || !person) return;
+  ulEntwurfFelder();
+  const titel = String(e.titel||'').trim(); if(!titel){ alert('Bitte gib der Unterlage einen Titel.'); return; }
+  const angaben = {titel, ordner: e.ordner||'eigen', art: String(e.art||'').trim() || 'Eigene Unterlage', kurz: String(e.kurz||'').trim()};
+  try{
+    if(e.bearbeiten){
+      const key = e.id+'|original', m = ulVorhanden && ulVorhanden.get(key); if(!m || !m.eigen) return;
+      await ulMetaSetzen(key, Object.assign({}, m, {eigen: Object.assign({}, m.eigen, angaben)}));
+      ulEntwurf = null; await ulIndexLaden(); ulOffen.add(angaben.ordner); zeigeToast('Angaben gespeichert.');
+      sprungZiel = 'ul-'+e.id; render(); sprungAusfuehren(); return;
+    }
+    const aehnlich = ulAehnlich(titel, e.datei.name);
+    if(aehnlich && !confirm(`Es gibt schon eine ähnliche Unterlage:\n\n„${aehnlich.titel}“ (${ulOrdnerLabel(aehnlich.ordner)})\n\nDie Dateien sind nicht identisch. Ist „${titel}“ trotzdem eine eigene Unterlage (z. B. eine neuere Fassung)?`)) return;
+    let lmWeg = false;
+    if(e.lehrmaterial){
+      if(!confirm(`Diese Datei liegt schon unter Lehrmaterial („${e.lehrmaterial.titel}“).\n\nIn die Unterlagen-Bibliothek verschieben?${darfTrainingBearbeiten(person)?' Die Kopie unter Lehrmaterial wird dann gelöscht.':' Bitte danach Ausbilder oder Leitung bitten, die Kopie unter Lehrmaterial zu löschen.'}`)) return;
+      lmWeg = darfTrainingBearbeiten(person);
+    }
+    const id = 'eigen-'+uid().replace(/^id_/,''), key = id+'|original';
+    ulFortschritt('„'+e.datei.name+'“ wird abgelegt …');
+    await ulSpeichern(key, e.datei, {groesse: e.datei.size, sha: e.sha||'', stand: ulHeute(), am: nowIso(), name: e.datei.name,
+      eigen: Object.assign(angaben, {sw: e.sw||'', typ: e.datei.type||'', vonId: person.id, vonName: person.name})});
+    try{ if(navigator.storage && navigator.storage.persist) await navigator.storage.persist(); }catch(x){}
+    if(lmWeg){ state.lehrmaterial = (state.lehrmaterial||[]).filter(m=>m!==e.lehrmaterial); speichereState(); }
+    ulFortschritt(''); await ulIndexLaden(); ulOffen.add(angaben.ordner);
+    zeigeToast(`„${titel}“ liegt jetzt im Ordner „${ulOrdnerLabel(angaben.ordner)}“.`);
+    if(ulWarteschlange.length) return ulNaechsteDatei();
+    ulEntwurf = null; sprungZiel = 'ul-'+id; render(); sprungAusfuehren();
+  }catch(err){ ulFortschritt('Ablegen nicht möglich: '+(err && err.message || err), true); }
+}
+async function ulEigenLoeschen(id){
+  const e = ulEintrag(id), person = aktuellePerson(); if(!ulDarfEigenAendern(e, person)) return;
+  if(!confirm(`„${e.titel}“ von diesem Gerät löschen?${e.vonId!==person.id?`\n\nHochgeladen von ${e.hrsg.replace(/^hochgeladen von /,'')}.`:''}\n\nAuf anderen Geräten, die die Unterlage schon eingelesen haben, bleibt sie erhalten.`)) return;
+  await ulEinzelnLoeschen(id+'|original'); await ulIndexLaden(); zeigeToast('Unterlage gelöscht.'); renderErhalteScroll();
+}
+function ulEigenBearbeiten(id){
+  const e = ulEintrag(id); if(!ulDarfEigenAendern(e, aktuellePerson())) return;
+  ulWarteschlange = [];
+  ulEntwurf = {bearbeiten:true, id, titel:e.titel, ordner:e.ordner, art:e.art, kurz:e.kurz, name:e.v[0].name};
+  renderErhalteScroll(); ulZumFormular();
+}
+function renderUlHochladen(person){
+  const meine = ulEigeneEintraege().filter(e=>e.vonId===person.id).length;
+  const alleEigenen = ulEigeneEintraege().length;
+  const e = ulEntwurf;
+  if(!e) return `<div class="card card-pad" id="ul-hochladen" style="scroll-margin-top:84px;margin-bottom:12px">
+    <div class="spread" style="gap:10px;align-items:center">
+      <div><h3 style="margin:0">➕ Eigene Unterlage hochladen</h3>
+        <p class="hint" style="margin:4px 0 0">PDF, Word, PowerPoint, Bild oder Text. BARRY schlägt den passenden Ordner vor und prüft, ob die Datei schon in der Bibliothek liegt. Geht auch über „📂 Datei einlesen“.</p></div>
+      <div class="row" style="gap:6px">
+        <label class="btn btn-sm btn-primary" style="cursor:pointer">➕ Datei wählen<input type="file" id="ul-hoch-datei" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.odt,.odp,.rtf,.txt,.md,.jpg,.jpeg,.png,.gif,.webp,.heic,.heif,application/pdf,image/*" style="display:none"></label>
+        ${meine?`<button type="button" class="btn btn-sm btn-ghost" id="ul-meine-weitergeben" title="Deine hochgeladenen Unterlagen als Paket speichern, z. B. für die Staffelleitung">📤 Meine Unterlagen weitergeben</button>`:''}
+      </div>
+    </div>
+    ${alleEigenen?`<p class="hint" style="margin:8px 0 0">Auf diesem Gerät: ${alleEigenen} hochgeladene Unterlage${alleEigenen===1?'':'n'}${meine?`, davon ${meine} von dir`:''}. Sie stehen in den Ordnern unten (Kennzeichen 📤).</p>`:''}
+  </div>`;
+  if(e.laedt) return `<div class="card card-pad" id="ul-hochladen" style="scroll-margin-top:84px;margin-bottom:12px"><h3 style="margin:0">➕ Unterlage hochladen</h3><p class="hint" style="margin:6px 0 0">„${esc(e.datei.name)}“ wird geprüft und gelesen …</p></div>`;
+  const arten = [...new Set(UL_EIGEN_ARTEN.concat(ulAlle().map(x=>x.art)))].sort((a,b)=>a.localeCompare(b,'de'));
+  const name = e.bearbeiten ? e.name : e.datei.name;
+  return `<div class="card card-pad" id="ul-hochladen" style="scroll-margin-top:84px;margin-bottom:12px;border-color:var(--accent)">
+    <h3 style="margin:0 0 4px">${e.bearbeiten?'✎ Angaben zur Unterlage ändern':'➕ Unterlage hochladen'}</h3>
+    <p class="hint" style="margin:0 0 10px">📎 ${esc(name)}${e.bearbeiten?'':` · ${formatDateigroesse(e.datei.size)}`}${ulWarteschlange.length?` · danach noch ${ulWarteschlange.length} weitere Datei${ulWarteschlange.length===1?'':'en'}`:''}</p>
+    ${e.lehrmaterial?`<p class="hint" style="margin:0 0 8px;color:var(--accent-ink)">⚠️ Diese Datei liegt schon unter Lehrmaterial („${esc(e.lehrmaterial.titel)}“). Beim Ablegen fragt BARRY, ob sie in die Bibliothek umziehen soll.</p>`:''}
+    ${e.aehnlich?`<p class="hint" style="margin:0 0 8px;color:var(--accent-ink)">⚠️ Ähnlich: „${esc(e.aehnlich.titel)}“ (${esc(ulOrdnerLabel(e.aehnlich.ordner))}). Die Dateien sind nicht identisch – bitte prüfen, ob es dieselbe Unterlage ist.</p>`:''}
+    <div class="field"><label for="ul-h-titel">Titel</label>
+    <input type="text" id="ul-h-titel" value="${esc(e.titel)}"></div>
+    <div class="field"><label for="ul-h-ordner">Ordner${e.grund && !e.bearbeiten?` <span style="font-weight:400">· 🧭 Vorschlag von BARRY, ${esc(e.grund)}</span>`:(!e.bearbeiten && e.ordner==='eigen'?' <span style="font-weight:400">· 🧭 kein passender Ordner erkannt – bitte selbst wählen</span>':'')}</label>
+    <select id="ul-h-ordner">${UNTERLAGEN_ORDNER.map(o=>`<option value="${o.id}" ${o.id===e.ordner?'selected':''}>📁 ${esc(o.label)}</option>`).join('')}</select></div>
+    <div class="field"><label for="ul-h-art">Art</label>
+    <input type="text" id="ul-h-art" list="ul-h-arten" value="${esc(e.art)}"><datalist id="ul-h-arten">${arten.map(a=>`<option value="${esc(a)}">`).join('')}</datalist></div>
+    <div class="field"><label for="ul-h-kurz">Kurzbeschreibung (optional)</label>
+    <textarea id="ul-h-kurz" rows="2" placeholder="Worum geht es? Für wen ist die Unterlage gedacht?">${esc(e.kurz)}</textarea></div>
+    ${e.bearbeiten?'':`<p class="hint" style="margin:0 0 10px">Die Unterlage liegt zunächst nur auf diesem Gerät. Mit „📤 Meine Unterlagen weitergeben“ erstellst du ein Paket für die Staffelleitung oder andere Mitglieder. Bitte keine Dokumente mit persönlichen Daten anderer (z. B. Adresslisten, Gesundheitsdaten) hochladen.</p>`}
+    <div class="row" style="gap:6px">
+      <button type="button" class="btn btn-primary btn-sm" id="ul-h-speichern">${e.bearbeiten?'Speichern':'In die Bibliothek legen'}</button>
+      ${!e.bearbeiten && ulWarteschlange.length?`<button type="button" class="btn btn-ghost btn-sm" id="ul-h-ueberspringen">Diese überspringen</button>`:''}
+      <button type="button" class="btn btn-ghost btn-sm" id="ul-h-abbrechen">Abbrechen</button>
+    </div>
+  </div>`;
+}
+function ulEigenAktionenHtml(e, person){
+  if(!e.eigen) return '';
+  return `<div class="ul-ersetzen hint">📤 Selbst hochgeladen${ulDarfEigenAendern(e, person)?` · <a href="#" data-ul-eigen-aendern="${e.id}">Angaben ändern</a> · <a href="#" data-ul-eigen-weg="${e.id}">Löschen</a>`:''}</div>`;
+}
+function bindUlHochladen(person){
+  const d = document.getElementById('ul-hoch-datei'); if(d) d.onchange = ()=>{ const f=[...d.files]; d.value=''; if(f.length) ulHochladenStarten(f); };
+  const s = document.getElementById('ul-h-speichern'); if(s) s.onclick = ()=>ulEntwurfSpeichern();
+  const a = document.getElementById('ul-h-abbrechen'); if(a) a.onclick = ()=>{ ulEntwurf = null; ulWarteschlange = []; renderErhalteScroll(); };
+  const u = document.getElementById('ul-h-ueberspringen'); if(u) u.onclick = ()=>ulNaechsteDatei();
+  ['ul-h-titel','ul-h-ordner','ul-h-art','ul-h-kurz'].forEach(id=>{ const el = document.getElementById(id); if(el) el.addEventListener('input', ulEntwurfFelder); });
+  const w = document.getElementById('ul-meine-weitergeben'); if(w) w.onclick = ()=>ulPaketErstellen(person.id);
+}
+document.addEventListener('click', e=>{
+  const w = e.target.closest && e.target.closest('[data-ul-eigen-weg]'); if(w && session){ e.preventDefault(); ulEigenLoeschen(w.dataset.ulEigenWeg); return; }
+  const b = e.target.closest && e.target.closest('[data-ul-eigen-aendern]'); if(b && session){ e.preventDefault(); ulEigenBearbeiten(b.dataset.ulEigenAendern); return; }
+});
+/* Bild- und Textanzeige im eingebauten Betrachter */
+function ulBildAnzeigen(titel, blob, name, typMime){
+  const ziel = ulAnsichtOeffnen(titel, blob, name, typMime); const a = ulAnsicht; a.typ = 'bild';
+  const u = URL.createObjectURL(blob); a.urls.push(u);
+  ziel.innerHTML = `<div style="padding:8px;text-align:center"><img class="ul-bild" src="${u}" alt="${esc(titel)}" style="max-width:100%;height:auto;background:#fff"></div>`;
+  const img = ziel.querySelector('img'); img.onerror = ()=>{ ziel.innerHTML = `<div class="card card-pad" style="margin:16px"><p>Dieses Bildformat kann der Browser nicht anzeigen.</p><button type="button" class="btn btn-primary" data-ulv="speichern">⤓ Datei auf dem Gerät öffnen</button></div>`; };
+}
+async function ulTextAnzeigen(titel, blob, name){
+  const ziel = ulAnsichtOeffnen(titel, blob, name, 'text/plain'); ulAnsicht.typ = 'text';
+  ziel.innerHTML = `<pre class="ul-text" style="white-space:pre-wrap;word-break:break-word;padding:16px;margin:0;font-size:.9rem;background:#fff;color:#222">${esc(await blob.text())}</pre>`;
+}
 function ulDb(){ return new Promise((ok,nein)=>{ try{ const r = indexedDB.open(UL_DB, 1);
   r.onupgradeneeded = ()=>{ const db=r.result; if(!db.objectStoreNames.contains('dateien')) db.createObjectStore('dateien'); if(!db.objectStoreNames.contains('meta')) db.createObjectStore('meta'); };
   r.onsuccess = ()=> ok(r.result); r.onerror = ()=> nein(r.error); }catch(e){ nein(e); } }); }
@@ -12497,12 +12769,12 @@ function ulSpeichern(key, blob, meta){ return ulDb().then(db=>new Promise((ok,ne
   tx.objectStore('dateien').put(blob, key); tx.objectStore('meta').put(meta, key); tx.oncomplete = ()=>ok(); tx.onerror = ()=>nein(tx.error); tx.onabort = ()=>nein(tx.error||new Error('abgebrochen')); })); }
 function ulHolen(key){ return ulDb().then(db=>new Promise((ok,nein)=>{ const r = db.transaction('dateien','readonly').objectStore('dateien').get(key); r.onsuccess=()=>ok(r.result||null); r.onerror=()=>nein(r.error); })); }
 function ulAllesLoeschen(){ return ulDb().then(db=>new Promise((ok,nein)=>{ const tx = db.transaction(['dateien','meta'],'readwrite'); tx.objectStore('dateien').clear(); tx.objectStore('meta').clear(); tx.oncomplete=()=>ok(); tx.onerror=()=>nein(tx.error); })); }
-function ulEintrag(id){ return UNTERLAGEN_KATALOG.find(e=>e.id===id); }
+function ulEintrag(id){ return UNTERLAGEN_KATALOG.find(e=>e.id===id) || (String(id).startsWith('eigen-') ? ulEigeneEintraege().find(e=>e.id===id) : undefined); }
 function ulDa(id, v){ return !!(ulVorhanden && ulVorhanden.has(id+'|'+v)); }
 function ulEintragDa(e){ return e.v.some(x=>ulDa(e.id, x.v)); }
 function ulOrdnerLabel(id){ const o = UNTERLAGEN_ORDNER.find(x=>x.id===id); return o ? o.label : id; }
-function ulVarianteText(x){ const ext = (x.name.match(/\.(\w+)$/)||['',''])[1].toLowerCase(); return x.v==='pdf' ? 'PDF' : ext==='docx' ? 'Word' : ext==='pptx' ? 'PowerPoint' : ext==='pdf' ? 'PDF' : 'Datei'; }
-function ulVarianteIcon(x){ const t = ulVarianteText(x); return t==='PDF' ? '📄' : t==='Word' ? '📝' : t==='PowerPoint' ? '📊' : '📎'; }
+function ulVarianteText(x){ const ext = (x.name.match(/\.(\w+)$/)||['',''])[1].toLowerCase(); return x.v==='pdf' ? 'PDF' : ext==='docx' ? 'Word' : ext==='pptx' ? 'PowerPoint' : ext==='pdf' ? 'PDF' : ['doc','odt','rtf'].includes(ext) ? 'Word' : ['ppt','odp'].includes(ext) ? 'PowerPoint' : ['jpg','jpeg','png','gif','webp','heic','heif'].includes(ext) ? 'Bild' : ['txt','md'].includes(ext) ? 'Text' : 'Datei'; }
+function ulVarianteIcon(x){ const t = ulVarianteText(x); return t==='PDF' ? '📄' : t==='Word' ? '📝' : t==='PowerPoint' ? '📊' : t==='Bild' ? '🖼' : t==='Text' ? '📃' : '📎'; }
 /* Doppelt? – eine selbst hochgeladene Lehrmaterial-Datei entspricht einer Katalog-Unterlage (gleiche Größe bzw. gleicher Dateiname) */
 function ulNameFalten(n){ return String(n||'').toLowerCase().replace(/^[0-9a-f]{8}-/,'').replace(/\.[a-z0-9]+$/,'').replace(/[^a-z0-9]+/g,''); }
 function ulDoppeltZu(m){
@@ -12516,7 +12788,7 @@ function ulLehrmaterialDoppelt(e){ return (state.lehrmaterial||[]).filter(m=>{ c
 function ulTreffer(e, w){ const t = qeFalten([e.titel, e.kurz, e.sw, e.art, e.hrsg, e.stand, ulOrdnerLabel(e.ordner)].join(' ')); return w.every(x=>qeWortTreffer(t, x)); }
 function ulGefiltert(){
   const w = qeFalten(ulSuche).split(' ').filter(Boolean);
-  return UNTERLAGEN_KATALOG.filter(e=>(!ulArt || e.art===ulArt) && (!w.length || ulTreffer(e, w)));
+  return ulAlle().filter(e=>(!ulArt || e.art===ulArt) && (!w.length || ulTreffer(e, w)));
 }
 function ulEintragHtml(e, kompakt){
   const doppelt = ulLehrmaterialDoppelt(e);
@@ -12554,24 +12826,25 @@ function renderUnterlagenStatus(person){
 }
 function renderUnterlagen(person){
   const liste = ulGefiltert(), suchtAktiv = !!(ulSuche.trim() || ulArt);
-  const arten = [...new Set(UNTERLAGEN_KATALOG.map(e=>e.art))].sort((a,b)=>a.localeCompare(b,'de'));
+  const arten = [...new Set(ulAlle().map(e=>e.art))].sort((a,b)=>a.localeCompare(b,'de'));
   const leit = istLeitungOderAdmin(person);
   const ordnerHtml = UNTERLAGEN_ORDNER.map(o=>{
     const inhalt = liste.filter(e=>e.ordner===o.id); if(!inhalt.length) return '';
     const offen = suchtAktiv || ulOffen.has(o.id);
     return `<details class="card ul-ordner" data-ul-ordner="${o.id}" ${offen?'open':''}>
       <summary><span>📁 ${esc(o.label)}</span> <span class="chip muted">${inhalt.length}</span></summary>
-      ${inhalt.map(e=>ulEintragHtml(e) + (leit?`<div class="ul-ersetzen">${e.v.map(x=>`<label class="hint" style="cursor:pointer;text-decoration:underline">Fassung ersetzen (${ulVarianteText(x)})<input type="file" data-ul-ersetzen="${e.id}|${x.v}" style="display:none"></label>`).join(' · ')}</div>`:'')).join('')}
+      ${inhalt.map(e=>ulEintragHtml(e) + (e.eigen ? ulEigenAktionenHtml(e, person) : leit?`<div class="ul-ersetzen">${e.v.map(x=>`<label class="hint" style="cursor:pointer;text-decoration:underline">Fassung ersetzen (${ulVarianteText(x)})<input type="file" data-ul-ersetzen="${e.id}|${x.v}" style="display:none"></label>`).join(' · ')}</div>`:'')).join('')}
     </details>`;
   }).join('');
-  return `<p class="lead">Alle Unterlagen der Staffel an einem Ort – geordnet nach Thema, jede Unterlage genau einmal. Eigene Ablagen findest du unter <a href="#" data-wtab-link="material">Lehrmaterial</a>.</p>
+  return `<p class="lead">Alle Unterlagen der Staffel an einem Ort – geordnet nach Thema, jede Unterlage genau einmal. Eigene Dateien kannst du unten hochladen; BARRY ordnet sie dem passenden Ordner zu. Persönliche Ablagen der Ausbildung findest du unter <a href="#" data-wtab-link="material">Lehrmaterial</a>.</p>
     ${renderUnterlagenStatus(person)}
+    ${renderUlHochladen(person)}
     <div class="row" style="gap:6px;margin-bottom:10px">
       <input type="search" id="ul-suche" placeholder="Unterlagen durchsuchen, z. B. Kompass, Modul 1.2, Unfall" value="${esc(ulSuche)}" style="flex:1;min-width:200px">
       <select id="ul-art" style="width:auto"><option value="">Alle Arten</option>${arten.map(a=>`<option ${a===ulArt?'selected':''}>${esc(a)}</option>`).join('')}</select>
       ${suchtAktiv?`<button type="button" class="btn btn-sm btn-ghost" id="ul-zuruecksetzen">✕</button>`:''}
     </div>
-    ${suchtAktiv?`<p class="hint" style="margin:0 0 8px">${liste.length} von ${UNTERLAGEN_KATALOG.length} Unterlagen</p>`:''}
+    ${suchtAktiv?`<p class="hint" style="margin:0 0 8px">${liste.length} von ${ulAlle().length} Unterlagen</p>`:''}
     ${ordnerHtml || '<div class="card empty"><p>Keine Unterlage passt zur Suche.</p></div>'}`;
 }
 function ulFortschritt(t, fehler){ ulArbeit = fehler ? '' : t; ulFehler = fehler ? t : ''; const el = document.getElementById('ul-fortschritt'); if(el){ el.style.display = t ? '' : 'none'; el.textContent = t; el.style.color = fehler ? 'var(--accent-ink)' : ''; } }
@@ -12615,12 +12888,14 @@ async function ulPaketEinlesen(dateien){
       for(let i=0;i<liste.length;i++){
         const f = liste[i], key = f.id+'|'+f.v, z = verz.find(x=>x.name===f.pfad);
         if(!z) continue;
+        if(f.eigen){ const dd = ulDoppelSuchen(f.sha, 0, '', f.id); if(dd && dd.art==='gleich'){ gleich++; continue; } }   // 2.67: gleiche Datei liegt schon in der Bibliothek
         const alt = ulVorhanden && ulVorhanden.get(key);
         if(alt && f.sha && alt.sha===f.sha){ gleich++; continue; }
         ulFortschritt(`Lese ${i+1} von ${liste.length}: ${f.name}`);
         const blob = await ulBlobAusZip(datei, z);
-        await ulSpeichern(key, blob, {groesse: blob.size, sha: f.sha||'', stand: manifest.stand||'', am: nowIso(), name: f.name});
-        if(ulVorhanden) ulVorhanden.set(key, {groesse: blob.size, sha: f.sha||'', stand: manifest.stand||'', am: nowIso(), name: f.name});
+        const neuMeta = Object.assign({groesse: blob.size, sha: f.sha||'', stand: (f.eigen && f.stand) || manifest.stand||'', am: nowIso(), name: f.name}, f.eigen ? {eigen: f.eigen} : {});
+        await ulSpeichern(key, blob, neuMeta);
+        if(ulVorhanden) ulVorhanden.set(key, neuMeta);
         if(!ulEintrag(f.id)) unbekannt++; if(alt) ersetzt++; else neu++;
       }
     }
@@ -12639,22 +12914,23 @@ async function ulFassungErsetzen(key, datei){
   await ulSpeichern(key, datei, {groesse: datei.size, sha, stand: new Date().toISOString().slice(0,10), am: nowIso(), name: datei.name});
   await ulIndexLaden(); zeigeToast('Fassung ersetzt. Mit „Paket erstellen“ an die Staffel weitergeben.'); renderErhalteScroll();
 }
-async function ulPaketErstellen(){
+async function ulPaketErstellen(nurVon){   // nurVon = Personen-ID: nur die selbst hochgeladenen Unterlagen dieser Person (2.67)
   if(!ulVorhanden || !ulVorhanden.size){ zeigeToast('Auf diesem Gerät sind noch keine Unterlagen vorhanden.'); return; }
   try{
-    const keys = [...ulVorhanden.keys()], dateien = [], manifest = {format:'barry-unterlagenpaket', version:1, paket:'gesamt', stand:new Date().toISOString().slice(0,10), dateien:[]};
+    const keys = [...ulVorhanden.keys()].filter(k=>!nurVon || ((ulVorhanden.get(k)||{}).eigen||{}).vonId===nurVon), dateien = [], manifest = {format:'barry-unterlagenpaket', version:1, paket: nurVon ? 'eigene' : 'gesamt', stand:new Date().toISOString().slice(0,10), dateien:[]};
+    if(!keys.length){ zeigeToast('Du hast auf diesem Gerät noch keine Unterlagen hochgeladen.'); return; }
     for(let i=0;i<keys.length;i++){
       const key = keys[i], [id, v] = key.split('|'), m = ulVorhanden.get(key), blob = await ulHolen(key); if(!blob) continue;
       ulFortschritt(`Packe ${i+1} von ${keys.length}: ${m.name||id}`);
       const ext = (String(m.name||'').match(/\.\w+$/)||[''])[0].toLowerCase(), pfad = `dateien/${id}.${v}${ext}`;
       dateien.push({name: pfad, bytes: new Uint8Array(await blob.arrayBuffer())});
       const kv = (ulEintrag(id)||{v:[]}).v.find(x=>x.v===v);
-      manifest.dateien.push({pfad, id, v, name: m.name || (kv&&kv.name) || pfad, typ: (kv&&kv.typ) || blob.type || '', sha: m.sha||''});
+      manifest.dateien.push(Object.assign({pfad, id, v, name: m.name || (kv&&kv.name) || pfad, typ: (kv&&kv.typ) || blob.type || '', sha: m.sha||''}, m.eigen ? {eigen: m.eigen, stand: m.stand||''} : {}));
     }
     dateien.unshift({name:'barry-unterlagen.json', text: JSON.stringify(manifest, null, 1)});
     const zip = zipErstellen(dateien);
     ulFortschritt('');
-    { const url=URL.createObjectURL(zip), a=document.createElement('a'); a.href=url; a.download=`BARRY_Unterlagenpaket_${manifest.stand}.zip`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 120000); }
+    { const url=URL.createObjectURL(zip), a=document.createElement('a'); a.href=url; a.download = nurVon ? `BARRY_Unterlagen_von_${String((state.personen.find(p=>p.id===nurVon)||{}).name||'Mitglied').replace(/[^A-Za-z0-9ÄÖÜäöüß]+/g,'_')}_${manifest.stand}.zip` : `BARRY_Unterlagenpaket_${manifest.stand}.zip`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 120000); }
   }catch(e){ ulFortschritt('Paket konnte nicht erstellt werden: '+(e && e.message || e), true); }
 }
 /* ============================== 2.66: Unterlagen direkt in BARRY anzeigen ==============================
@@ -12740,6 +13016,8 @@ function ulAnsichtZoom(f){
   const relX = inhalt && inhalt.scrollWidth ? (inhalt.scrollLeft + inhalt.clientWidth/2) / inhalt.scrollWidth : 0.5;
   a.zoom = Math.max(0.6, Math.min(4, a.zoom * f));
   if(a.typ==='pdf') ulPdfLayout();
+  if(a.typ==='bild'){ const img = a.el.querySelector('.ul-bild'); if(img){ img.style.maxWidth = 'none'; img.style.width = (a.zoom*100)+'%'; } }
+  if(a.typ==='text'){ const pre = a.el.querySelector('.ul-text'); if(pre) pre.style.fontSize = (a.zoom*0.9)+'rem'; }
   if(inhalt){ inhalt.scrollTop = Math.max(0, relY*inhalt.scrollHeight - inhalt.clientHeight/2); inhalt.scrollLeft = Math.max(0, relX*inhalt.scrollWidth - inhalt.clientWidth/2); }
   else if(a.typ==='docx'){ const art = a.el.querySelector('.ul-docx'); if(art) art.style.fontSize = (a.zoom*100)+'%'; }
 }
@@ -12944,6 +13222,8 @@ async function ulOeffnen(key){
     // 2.66: PDF und Word direkt in BARRY anzeigen; PowerPoint und Sonstiges an das Gerät übergeben
     if(ext==='pdf') return ulPdfAnzeigen(e.titel, blob, name);
     if(ext==='docx') return ulDocxAnzeigen(e.titel, blob, name);
+    if(UL_BILD.includes(ext)) return ulBildAnzeigen(e.titel, blob, name, (x&&x.typ) || blob.type || ('image/'+(ext==='jpg'?'jpeg':ext)));
+    if(['txt','md'].includes(ext)) return ulTextAnzeigen(e.titel, blob, name);
     const pdfFassung = e.v.find(y=>y.v==='pdf' && y.v!==v);
     if(pdfFassung && ulDa(id, 'pdf')) zeigeToast('PowerPoint wird an das Gerät übergeben. Zum Ansehen in BARRY die PDF-Fassung öffnen.');
     ulDateiSpeichern(blob, name, (x&&x.typ) || blob.type);
@@ -12974,7 +13254,8 @@ function bindUnterlagen(person){
   document.querySelectorAll('[data-ul-ordner]').forEach(d=>d.addEventListener('toggle', ()=>{ if(d.open) ulOffen.add(d.dataset.ulOrdner); else ulOffen.delete(d.dataset.ulOrdner); }));
   const p = document.getElementById('ul-paket'); if(p) p.onchange = ()=>{ const f=[...p.files]; p.value=''; if(f.length) ulPaketEinlesen(f); };
   const pe = document.getElementById('ul-paket-erstellen'); if(pe) pe.onclick = ()=>ulPaketErstellen();
-  const l = document.getElementById('ul-leeren'); if(l) l.onclick = async ()=>{ if(!confirm('Alle Unterlagen aus dem Gerätespeicher entfernen? Der Katalog bleibt; zum Öffnen muss das Paket danach erneut eingelesen werden.')) return; await ulAllesLoeschen(); await ulIndexLaden(); zeigeToast('Unterlagen vom Gerät entfernt.'); renderErhalteScroll(); };
+  bindUlHochladen(person);
+  const l = document.getElementById('ul-leeren'); if(l) l.onclick = async ()=>{ if(!confirm('Alle Unterlagen aus dem Unterlagenpaket vom Gerät entfernen? Der Katalog bleibt; zum Öffnen muss das Paket danach erneut eingelesen werden.'+(ulEigeneEintraege().length?' Selbst hochgeladene Unterlagen bleiben erhalten.':''))) return; await ulPaketDateienLoeschen(); await ulIndexLaden(); zeigeToast('Unterlagen vom Gerät entfernt.'); renderErhalteScroll(); };
   document.querySelectorAll('[data-ul-ersetzen]').forEach(i=>{ i.onchange = ()=>{ const f=i.files[0]; i.value=''; if(f) ulFassungErsetzen(i.dataset.ulErsetzen, f); }; });
   document.querySelectorAll('[data-wtab-link]').forEach(x=>{ x.onclick = ev=>{ ev.preventDefault(); wissenTab = x.dataset.wtabLink; render(); window.scrollTo(0,0); }; });
   if(ulVorhanden===null) ulIndexLaden().then(()=>{ if(route.bereich==='wissen' && wissenTab==='unterlagen') renderErhalteScroll(); });
@@ -16137,7 +16418,7 @@ const HILFE_KATEGORIEN = [...new Set(HILFE_ARTIKEL.map(a=>a.kategorie))];
   const alt = ids.map(id=>HILFE_ARTIKEL.find(a=>a.id===id)).filter(Boolean);
   alt.forEach(a=>{ const i=HILFE_ARTIKEL.indexOf(a); if(i>=0) HILFE_ARTIKEL.splice(i,1); });
   HILFE_ARTIKEL.unshift({id:'was-ist-neu', kategorie:'Erste Schritte', titel:'Was ist neu?', rollen:['mitglied','ausbilder','leitung'],
-    text: '<p>Diese Übersicht fasst die Neuerungen zusammen – die neueste Version steht oben.</p><h4>BARRY 2.66 (Oktober 2026): Unterlagen direkt in BARRY lesen</h4><ul><li>PDF- und Word-Unterlagen aus der Unterlagen-Bibliothek öffnen sich jetzt in einer eigenen Ansicht in BARRY – auch auf Handys, deren Browser PDFs sonst nur herunterladen. Mit − und + vergrößern, mit ⤓ die Originaldatei auf dem Gerät speichern, mit ✕ oder der Zurück-Taste schließen. PowerPoint-Dateien werden weiterhin an das Gerät übergeben; zum Lesen gibt es jeweils die PDF-Fassung.</li></ul><h4>BARRY 2.65 (Oktober 2026): alles per Du, Nacht, Trümmer für Helfende, Ufer</h4><ul><li><strong>Du-Form überall:</strong> Alle Übungstexte im Übungsrad, die Fachfragen und die Hinweise zu Freigaben sprechen dich jetzt mit „du“ an. Sätze an Betroffene und Angehörige sowie der Sprechfunk bleiben bewusst beim „Sie“.</li><li><strong>Neue Übungsthemen:</strong> R36 Suchen, Führen und Sichern bei Nacht · R37 Trümmer für Helfende (sichern, beobachten, dokumentieren, betreuen) · R38 Am Ufer und im flachen Wasser – mit dem Hinweis, dass bei uns die Wasserwacht Wassersuche und Wasserortung übernimmt.</li><li><strong>Lernen &amp; Forschung:</strong> neue Themen „Sehen in der Dämmerung“, „Dunkelanpassung des menschlichen Auges“, „Die Erwartung des Hundeführers riecht mit“, „Nasenarbeit macht optimistischer“ und „Kinder und Hunde: Regeln üben statt nur erklären“.</li></ul><h4>BARRY 2.62–2.64 (Oktober 2026): Unterlagen-Bibliothek, neue Übungen, Profil</h4><ul><li><strong>📚 Unterlagen-Bibliothek</strong> (Wissen &amp; Material, Startkachel „Unterlagen“, Unterlagen-Leiste in Ausbildung &amp; Team): alle Unterlagen der Staffel geordnet in zehn Ordnern – Prüfungsordnung, Qualifikation, Einsatz und Führung, Ausbildung, Orientierung, Erste Hilfe am Hund, Formulare u. a. –, jede Unterlage genau einmal, mit Suche. Die Dateien kommen aus dem <strong>Unterlagenpaket</strong> der Staffelleitung, das du einmal einliest; danach öffnen sie sich auch ohne Netz. Vordrucke stehen zusätzlich unter Organisation → Formulare. Doppelt abgelegtes Lehrmaterial wird markiert.</li><li><strong>🎡 Neue Übungen:</strong> Themen R32 Führungssystem und taktische Zeichen, R33 Alarm – die ersten 30 Minuten, R34 Erstversorgung und Übergabe der gefundenen Person, R35 Kinderbesuch und Suchvorführung sowie weitere Übungen zu Anzeigearten (Rück- und Freiverweiser), Gerätearbeit, Nasenarbeit, Wind und Qualifikation.</li><li><strong>👤 Mein Profil</strong> ist leichter zu finden (Menü, Mein Stand, Suche); dort trägst du auch die Anzeigeart deines Hundes ein.</li></ul><h4>BARRY 2.60–2.61</h4><ul><li><strong>🎡 Übungen</strong> (früher Übungsrad): Übungsausgabe wie im Team-Begleiter – Glücksrad, <strong>Trainingseinheit</strong> (3 bis 8 Übungen nach Schwerpunkt und Stufe, abhaken, ins Trainingstagebuch), <strong>Abenteuer-Spaziergang</strong> (6 Stationen) und <strong>Problem angehen</strong> (Alltagsthema wählen, passende Übungen übernehmen). Offene Einheiten erscheinen auf der Startseite.</li><li>Startseite mit Kacheln für Übungen, Prüfung &amp; Module und Unterlagen sowie „Alle Bereiche“; alle Reiter sind ohne Schieben sichtbar; Prüfungsordnung auch ohne eigenen Hund lesbar.</li></ul><h4>BARRY 2.56–2.59 (Oktober 2026): leichter finden, klarer nach Rolle</h4><ul><li><strong>🔍 Suche</strong> oben rechts bzw. in der Seitenleiste: findet Seiten, Qualifikationen, Lehrgänge, Übungen und Hilfeartikel (Leitung zusätzlich Personen).</li><li><strong>Zurück-Taste</strong> des Handys geht jetzt eine Ebene zurück, statt BARRY zu verlassen.</li><li><strong>Mein Stand:</strong> Sprungleiste am Seitenanfang; neue Karte <strong>Meine Einsatzfunktionen</strong> (Rettungshundeführer/-in, Rettungshundehelfer/-in, Sanitäter/-in, Funker/-in, Praktikant/-in – nach der Festlegung der Staffel vom 10.10.2026, Mindestalter 18 Jahre). Bei fehlenden Nachweisen helfen die Knöpfe „eintragen“ und „Kurswunsch“.</li><li><strong>Kurswünsche:</strong> die Lehrgänge der Rettungshundearbeit (EH, RKE, EKGA-E und -S, Datenschutz, RHd, BOS, SLG, Modulprüfung 2) stehen zuerst, weiterführende dahinter. Suche, Zeichen ✅ / ⬜ / ✓ in der Liste, „Als Nächstes möglich“ zum Antippen, sonstiger Lehrgang mit freiem Titel, Rückfrage bei doppelten Wünschen, Wunsch zurückziehen.</li><li><strong>Nachweis eintragen:</strong> Liste „Für dich“ mit dem, was fehlt oder bald abläuft; die Suche nach Kürzeln wie EH, DS oder TF ist genauer; Reihenfolge wahlweise nach Ausbildungsweg oder alphabetisch; neue Bereiche PSNV sowie Leitung &amp; Vorstand.</li><li><strong>Ausbildungsnachweis drucken</strong> (Mein Stand → Meine Nachweise) – z. B. für Lehrgangsanmeldungen.</li><li><strong>Wissen:</strong> Fachfragen zur Theorieprüfung jetzt unter Prüfungsordnungen; Anzeigeart-Programme unter Findewille &amp; Anzeigetraining; die Übungssuche zeigt auch Treffer aus dem Übungsrad.</li><li><strong>Hilfe</strong> zeigt zuerst die Artikel für deine Rolle („Alle Artikel“ zeigt alles).</li><li><strong>Für Ausbilder/-innen und Leitung:</strong> Verwaltung beginnt mit einer Übersicht; „Wer hat …?“ mit Suchfeld; Matrix wahlweise nach ★-Pflicht oder Zielprofil; Kurswünsche filtern, nach Lehrgang bündeln, Lehrgangstermin und Anmeldedatum eintragen, als Tabelle herunterladen; einen Nachweis für mehrere Personen gleichzeitig eintragen; Leitung: Vorschau „Ansicht als Mitglied/Ausbilder“ in der Seitenleiste.</li><li><strong>Neue Namen:</strong> Alltagstagebuch (Alltag &amp; Zuhause), Trainingsplanung, Auswertung &amp; Kurswünsche, Orte &amp; Gebiete pflegen, Formulare &amp; Meldungen pflegen.</li></ul>' + alt.map(a=>`<h4>${a.titel}</h4>${a.text}`).join('')});
+    text: '<p>Diese Übersicht fasst die Neuerungen zusammen – die neueste Version steht oben.</p><h4>BARRY 2.67 (Oktober 2026): eigene Unterlagen hochladen</h4><ul><li><strong>Für alle Mitglieder:</strong> In der Unterlagen-Bibliothek gibt es „➕ Eigene Unterlage hochladen“. PDF, Word, PowerPoint, Bilder und Texte lassen sich ablegen und direkt in BARRY öffnen.</li><li><strong>Automatisch einsortiert:</strong> BARRY liest Dateiname, Titel und die ersten Seiten und schlägt den passenden Ordner vor. Du kannst den Vorschlag ändern. Das geht auch über „📂 Datei einlesen“.</li><li><strong>Nichts doppelt:</strong> Liegt dieselbe Datei schon in der Bibliothek (gleicher Fingerabdruck), wird sie nicht noch einmal abgelegt. Bei ähnlichem Titel oder Dateinamen fragt BARRY nach. Liegt die Datei schon unter Lehrmaterial, kann sie in die Bibliothek umziehen.</li><li><strong>Weitergeben:</strong> Hochgeladene Unterlagen bleiben zunächst auf deinem Gerät. Mit „📤 Meine Unterlagen weitergeben“ entsteht ein Paket, das die Leitung oder andere Mitglieder einlesen – auch über „📂 Datei einlesen“. „Paket erstellen“ der Leitung nimmt die hochgeladenen Unterlagen mit.</li></ul><h4>BARRY 2.66 (Oktober 2026): Unterlagen direkt in BARRY lesen</h4><ul><li>PDF- und Word-Unterlagen aus der Unterlagen-Bibliothek öffnen sich jetzt in einer eigenen Ansicht in BARRY – auch auf Handys, deren Browser PDFs sonst nur herunterladen. Mit − und + vergrößern, mit ⤓ die Originaldatei auf dem Gerät speichern, mit ✕ oder der Zurück-Taste schließen. PowerPoint-Dateien werden weiterhin an das Gerät übergeben; zum Lesen gibt es jeweils die PDF-Fassung.</li></ul><h4>BARRY 2.65 (Oktober 2026): alles per Du, Nacht, Trümmer für Helfende, Ufer</h4><ul><li><strong>Du-Form überall:</strong> Alle Übungstexte im Übungsrad, die Fachfragen und die Hinweise zu Freigaben sprechen dich jetzt mit „du“ an. Sätze an Betroffene und Angehörige sowie der Sprechfunk bleiben bewusst beim „Sie“.</li><li><strong>Neue Übungsthemen:</strong> R36 Suchen, Führen und Sichern bei Nacht · R37 Trümmer für Helfende (sichern, beobachten, dokumentieren, betreuen) · R38 Am Ufer und im flachen Wasser – mit dem Hinweis, dass bei uns die Wasserwacht Wassersuche und Wasserortung übernimmt.</li><li><strong>Lernen &amp; Forschung:</strong> neue Themen „Sehen in der Dämmerung“, „Dunkelanpassung des menschlichen Auges“, „Die Erwartung des Hundeführers riecht mit“, „Nasenarbeit macht optimistischer“ und „Kinder und Hunde: Regeln üben statt nur erklären“.</li></ul><h4>BARRY 2.62–2.64 (Oktober 2026): Unterlagen-Bibliothek, neue Übungen, Profil</h4><ul><li><strong>📚 Unterlagen-Bibliothek</strong> (Wissen &amp; Material, Startkachel „Unterlagen“, Unterlagen-Leiste in Ausbildung &amp; Team): alle Unterlagen der Staffel geordnet in zehn Ordnern – Prüfungsordnung, Qualifikation, Einsatz und Führung, Ausbildung, Orientierung, Erste Hilfe am Hund, Formulare u. a. –, jede Unterlage genau einmal, mit Suche. Die Dateien kommen aus dem <strong>Unterlagenpaket</strong> der Staffelleitung, das du einmal einliest; danach öffnen sie sich auch ohne Netz. Vordrucke stehen zusätzlich unter Organisation → Formulare. Doppelt abgelegtes Lehrmaterial wird markiert.</li><li><strong>🎡 Neue Übungen:</strong> Themen R32 Führungssystem und taktische Zeichen, R33 Alarm – die ersten 30 Minuten, R34 Erstversorgung und Übergabe der gefundenen Person, R35 Kinderbesuch und Suchvorführung sowie weitere Übungen zu Anzeigearten (Rück- und Freiverweiser), Gerätearbeit, Nasenarbeit, Wind und Qualifikation.</li><li><strong>👤 Mein Profil</strong> ist leichter zu finden (Menü, Mein Stand, Suche); dort trägst du auch die Anzeigeart deines Hundes ein.</li></ul><h4>BARRY 2.60–2.61</h4><ul><li><strong>🎡 Übungen</strong> (früher Übungsrad): Übungsausgabe wie im Team-Begleiter – Glücksrad, <strong>Trainingseinheit</strong> (3 bis 8 Übungen nach Schwerpunkt und Stufe, abhaken, ins Trainingstagebuch), <strong>Abenteuer-Spaziergang</strong> (6 Stationen) und <strong>Problem angehen</strong> (Alltagsthema wählen, passende Übungen übernehmen). Offene Einheiten erscheinen auf der Startseite.</li><li>Startseite mit Kacheln für Übungen, Prüfung &amp; Module und Unterlagen sowie „Alle Bereiche“; alle Reiter sind ohne Schieben sichtbar; Prüfungsordnung auch ohne eigenen Hund lesbar.</li></ul><h4>BARRY 2.56–2.59 (Oktober 2026): leichter finden, klarer nach Rolle</h4><ul><li><strong>🔍 Suche</strong> oben rechts bzw. in der Seitenleiste: findet Seiten, Qualifikationen, Lehrgänge, Übungen und Hilfeartikel (Leitung zusätzlich Personen).</li><li><strong>Zurück-Taste</strong> des Handys geht jetzt eine Ebene zurück, statt BARRY zu verlassen.</li><li><strong>Mein Stand:</strong> Sprungleiste am Seitenanfang; neue Karte <strong>Meine Einsatzfunktionen</strong> (Rettungshundeführer/-in, Rettungshundehelfer/-in, Sanitäter/-in, Funker/-in, Praktikant/-in – nach der Festlegung der Staffel vom 10.10.2026, Mindestalter 18 Jahre). Bei fehlenden Nachweisen helfen die Knöpfe „eintragen“ und „Kurswunsch“.</li><li><strong>Kurswünsche:</strong> die Lehrgänge der Rettungshundearbeit (EH, RKE, EKGA-E und -S, Datenschutz, RHd, BOS, SLG, Modulprüfung 2) stehen zuerst, weiterführende dahinter. Suche, Zeichen ✅ / ⬜ / ✓ in der Liste, „Als Nächstes möglich“ zum Antippen, sonstiger Lehrgang mit freiem Titel, Rückfrage bei doppelten Wünschen, Wunsch zurückziehen.</li><li><strong>Nachweis eintragen:</strong> Liste „Für dich“ mit dem, was fehlt oder bald abläuft; die Suche nach Kürzeln wie EH, DS oder TF ist genauer; Reihenfolge wahlweise nach Ausbildungsweg oder alphabetisch; neue Bereiche PSNV sowie Leitung &amp; Vorstand.</li><li><strong>Ausbildungsnachweis drucken</strong> (Mein Stand → Meine Nachweise) – z. B. für Lehrgangsanmeldungen.</li><li><strong>Wissen:</strong> Fachfragen zur Theorieprüfung jetzt unter Prüfungsordnungen; Anzeigeart-Programme unter Findewille &amp; Anzeigetraining; die Übungssuche zeigt auch Treffer aus dem Übungsrad.</li><li><strong>Hilfe</strong> zeigt zuerst die Artikel für deine Rolle („Alle Artikel“ zeigt alles).</li><li><strong>Für Ausbilder/-innen und Leitung:</strong> Verwaltung beginnt mit einer Übersicht; „Wer hat …?“ mit Suchfeld; Matrix wahlweise nach ★-Pflicht oder Zielprofil; Kurswünsche filtern, nach Lehrgang bündeln, Lehrgangstermin und Anmeldedatum eintragen, als Tabelle herunterladen; einen Nachweis für mehrere Personen gleichzeitig eintragen; Leitung: Vorschau „Ansicht als Mitglied/Ausbilder“ in der Seitenleiste.</li><li><strong>Neue Namen:</strong> Alltagstagebuch (Alltag &amp; Zuhause), Trainingsplanung, Auswertung &amp; Kurswünsche, Orte &amp; Gebiete pflegen, Formulare &amp; Meldungen pflegen.</li></ul>' + alt.map(a=>`<h4>${a.titel}</h4>${a.text}`).join('')});
   ['rh-tagebuch','mantrailing-tagebuch'].forEach(id=>{ const a=HILFE_ARTIKEL.find(x=>x.id===id); if(!a) return;
     a.titel += ' (frühere Tagebücher)';
     a.text = '<p><em>Hinweis: Diese Tagebuchform ist seit BARRY 2.1 ausgeblendet. Frühere Einträge stehen im Trainingstagebuch unter Ausbildung &amp; Team → Trainingstagebücher.</em></p>' + a.text; });
