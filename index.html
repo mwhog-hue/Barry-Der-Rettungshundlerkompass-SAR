@@ -4253,7 +4253,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.86';
+const BARRY_APP_VERSION = '2.92';
 const BARRY_APP_STAND = '11.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -5537,6 +5537,7 @@ const VERWALTUNG_TABS = [
   {id:'freigaben', label:'Freigaben & Einwilligungen', nur:'leitungAdmin', gruppe:'personen', schutz:true, icon:'✅', kurz:'Was Mitglieder teilen möchten'},
   {id:'qualifikationen', label:'Qualifikationen', nur:null, gruppe:'ausbildung', schutz:true, icon:'🎓', kurz:'Katalog und Nachweise'},
   {id:'fristen', label:'Fristen & Lücken', nur:null, gruppe:'ausbildung', schutz:true, icon:'⏳', kurz:'Abgelaufenes und Fehlendes'},
+  {id:'ausbildungsstand', label:'Ausbildungsstand & Jahresgespräche', nur:null, gruppe:'ausbildung', schutz:true, icon:'📋', kurz:'Excel für Teambesprechung und Jahresgespräche'}, // 2.87
   {id:'anwesenheit', label:'Anwesenheit & Dienstnachweise', nur:null, gruppe:'ausbildung', schutz:true, icon:'🗓️', kurz:'Teilnahme, Helferstunden'},
   {id:'austausch', label:'Pakete für Mitglieder', nur:'leitungAdmin', gruppe:'verteilen', schutz:true, icon:'📦', kurz:'Zugänge, Stand-Updates, Selbstauskunft'},
   {id:'datensicherung', label:'Datensicherung', nur:'leitungAdmin', gruppe:'verteilen', schutz:true, icon:'💾', kurz:'Bestand sichern und einspielen'},
@@ -5634,6 +5635,7 @@ function vwZustand(id, z){
     case 'datensicherung': return z.sich===null ? {t:'noch keine Sicherung', warn:true} : {t: z.sich===0 ? 'heute gesichert' : `letzte vor ${n(z.sich,'Tag','Tagen')}`, warn: z.sich>=30};
     case 'fahrzeuge': return {t:n((state.fahrzeuge||[]).length,'Fahrzeug','Fahrzeuge')};
     case 'orte': return {t:n((state.orte||[]).length,'Ort','Orte')};
+    case 'ausbildungsstand': return {t:`${n(z.hunde,'Hund','Hunde')} · Excel erstellen`};
     default: return null;
   }
 }
@@ -5643,6 +5645,527 @@ function vwKopfleiste(tab, sichtbareTabs){
   const geschw = sichtbareTabs.filter(x=>x.gruppe===t.gruppe);
   return `<div class="vw-leiste"><button type="button" class="btn btn-sm btn-ghost" data-vtab="uebersicht">◀ Übersicht</button><span class="hint vw-leiste-gruppe">${esc(g.label)}</span></div>
     ${geschw.length>1 ? `<div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px">${geschw.map(x=>`<button class="btn btn-sm ${tab===x.id?'btn-primary':'btn-ghost'}" data-vtab="${x.id}">${x.icon?x.icon+' ':''}${esc(x.label)}</button>`).join('')}</div>` : ''}`;
+}
+/* =========================================================
+   2.87: Excel-Export „Ausbildungsstand & Jahresgespräche“
+   Erstellt eine .xlsx-Arbeitsmappe mit den aktuellen Grunddaten aus BARRY
+   (Teams Mensch-Hund, Mitglieder, Prüfungstermine) und leeren Eingabefeldern
+   für die Bewertung der Ausbildungsbausteine, Bemerkungen, Prüfungsplanung
+   und Jahresgespräche. Läuft offline, ohne externe Bibliothek.
+   ========================================================= */
+const ASX_STUFEN = ['✔ sicher', '◐ im Aufbau', '✖ Baustelle', '○ noch nicht begonnen', '– nicht beurteilt'];
+const ASX_STUFEN_TEXT = ['Klappt zuverlässig, auch unter Ablenkung und an fremden Orten.', 'Grundsätzlich vorhanden, aber noch nicht stabil.', 'Deutliches Problem – braucht gezielten Plan.', 'Noch nicht trainiert.', 'Konnte (noch) nicht beurteilt werden.'];
+const ASX_HUND_BAUSTEINE = [
+  ['Sozialverhalten Menschen', 'Fremde, Kinder, Gruppen, Jogger; Personenhalbkreis (1.1)'],
+  ['Sozialverhalten Hunde', 'Begegnungen angeleint/frei, fremde Hunde im Training'],
+  ['Umwelt & Untergründe', 'optische/akustische Reize, Untergründe, Geräusche (1.1)'],
+  ['Sich tragen lassen / Handling', 'Tragen 2 × 10 m, Übergabe an Fremde, Maulkorb, Untersuchung'],
+  ['Gehorsam / Unterordnung', 'Freifolge, Sitz/Platz auf Distanz, Voraussenden, Ablage (1.2)'],
+  ['Führbarkeit / Distanzkontrolle', 'Lenkbarkeit im Gelände, Abruf, Richtungsanweisungen'],
+  ['Gewandtheit / Geräte', 'Bohle, Röhre, Wippe, Leiter, Trümmer (1.1 / 1.3)'],
+  ['Motivation & Spiel', 'Spieltrieb, Beuteverhalten, Futter, Arbeitsfreude'],
+  ['Suchverhalten / Nasenarbeit', 'selbstständige, systematische Suche, Witterung nutzen'],
+  ['Anzeigeverhalten', 'Verbellen / Bringsel / Freiverweisen – eindeutig, ausdauernd'],
+  ['Suchausdauer & Kondition', 'Arbeitsdauer, Kondition, Hitze/Kälte'],
+  ['Verhalten unter Stress', 'Lärm, Hektik, Einsatzsituation, Fahrzeug, fremde Umgebung'],
+  ['Wesen allgemein', 'Selbstsicherheit, Nervenstärke, Umgänglichkeit'],
+  ['Gesundheit', 'Bewegungsapparat, Gewicht, Impfungen – nur was das Team teilt'],
+];
+const ASX_HUND_TEXT = ['Was sitzt sicher', 'Probleme / Baustellen', 'Sonstiges'];
+const ASX_MENSCH_BAUSTEINE = [
+  ['Hundeführung (Timing, Körpersprache)', ''], ['Hund lesen / Verhaltensverständnis', ''], ['Eigentraining & Ausbildungsplanung', ''],
+  ['Theorie Fachdienstausbildung', 'FDA-Theorie, Fachfragen'], ['Orientierung (Karte, Kompass, GPS)', ''], ['Sprechfunk', ''],
+  ['Erste Hilfe / Sanitätsdienst', ''], ['Erste Hilfe am Hund', ''], ['Such- und Einsatztaktik', 'Suchgebiet, Wind, Meldung, Lage'],
+  ['Helfertätigkeit', 'Versteckperson, Suchtrupphelfer:in'], ['Teamarbeit & Kommunikation', ''], ['Zuverlässigkeit & Anwesenheit', ''],
+  ['Belastbarkeit & Kondition', ''], ['Führung / Verantwortung', 'Potenzial für Trupp-/Gruppenführung, Ausbildung'],
+];
+const ASX_MENSCH_TEXT = ['Stärken', 'Entwicklungsfelder', 'Ausbildung/Lehrgänge (Ziel)', 'Angestrebte Funktion/Aufgabe', 'Wünsche Mitglied an Staffel', 'Wünsche Staffel an Mitglied', 'Vereinbarungen (wer, bis wann)'];
+const ASX_ZIELE = ['Modul 1.1 Verhalten & Grundfertigkeiten', 'Modul 1.2 Grundgehorsam', 'Modul 1.3 Gewandtheit (Trümmer)', 'Module 1.1–1.3 (mehrere)', 'Suchprüfung Fläche (Erstprüfung)', 'Suchprüfung Fläche (Wiederholung)', 'Suchprüfung Trümmer', 'Suchprüfung Mantrailing', 'noch kein Prüfungsziel'];
+const ASX_REIFE = ['bereit', 'bis zum Termin erreichbar', 'fraglich', 'noch nicht absehbar'];
+const ASX_ROLLEN = ['Hundeführer:in', 'Helfer:in', 'Hundeführer:in und Helfer:in', 'Ausbilder:in', 'derzeit passiv'];
+const ASX_GRUPPEN = {A:'geprüft', B:'1.1 + 1.2', C:'ein Modul', D:'Anfang'};
+const ASX_FDA = [['rhd','FDA komplett (RHd 35 UE)'],['rhd_recht','Geschichte & Recht'],['rhd_orga','Organisation & Struktur'],['rhd_kyno','Kynologie'],['rhd_geruch','Geruch & Geruchs-ausbreitung'],['rhd_orient','Orientierung & Karte'],['rhd_taktik','Einsatztaktik'],['rhd_sk_fl','Spartenkunde Fläche'],['rhd_sk_tr','Spartenkunde Trümmer'],['rhd_sk_mt','Spartenkunde Mantrailing'],['rhd_truemmer','Trümmerkunde'],['rhd_ehhund','Erste Hilfe am Hund'],['rhd_transport','Transport von Hunden'],['rhd_uvv','UVV / Sicherheit'],['rhd_fb','FDA-Fortbildung / Wiederholung']];
+
+/* ---------- Grunddaten aus dem state ---------- */
+function asxIso(d){ return d ? String(d).slice(0,10) : ''; }
+function asxHeuteIso(){ const h=new Date(); return h.getFullYear()+'-'+String(h.getMonth()+1).padStart(2,'0')+'-'+String(h.getDate()).padStart(2,'0'); }
+function asxQ(code){ return state.qualifikationen.find(q=>q.code===code); }
+function asxNachweise(personId, code, hundId){
+  const q = asxQ(code); if(!q) return [];
+  return pqAlle().filter(pq=>pq.personId===personId && pq.qualifikationId===q.id && (hundId===undefined || (pq.hundId||'')===(hundId||'')))
+    .sort((a,b)=>String(b.datum||'').localeCompare(String(a.datum||'')));
+}
+function asxSparteText(h){ const m={flaeche:'Fläche', truemmer:'Trümmer', mantrailing:'Mantrailing', wasser:'Wasser'}; return (h.sparten||[]).map(s=>m[s]||s).join('/'); }
+function asxFda(personId){
+  if(asxNachweise(personId,'rhd').length) return 'ja';
+  const teil = state.qualifikationen.filter(q=>/^rhd_/.test(q.code||'')).some(q=>pqAlle().some(pq=>pq.personId===personId && pq.qualifikationId===q.id));
+  return teil ? 'teilw.' : '–';
+}
+function asxTeams(){
+  const teams = [];
+  const aktiveHunde = state.hunde.filter(h=>h.status!=='inaktiv');
+  aktiveHunde.forEach(h=>{
+    [h.hundefuehrerId, h.zweitHundefuehrerId].filter(Boolean).forEach(pid=>{
+      const p = state.personen.find(x=>x.id===pid); if(!p || p.status==='inaktiv') return;
+      const hinweise = [];
+      const eigeneHunde = aktiveHunde.filter(x=>hundGefuehrtVon(x, pid));
+      const modul = code=>{
+        let n = asxNachweise(pid, code, h.id)[0];
+        if(!n && eigeneHunde.length===1){ n = asxNachweise(pid, code, '')[0]; if(n) hinweise.push(`${code==='modul_11'?'Modul 1.1':code==='modul_12'?'Modul 1.2':'Modul 1.3'} ohne Hund eingetragen – Zuordnung prüfen`); }
+        if(n && code==='modul_12' && /begleithund|\bBH\b|\bVT\b/i.test([n.nachweis,n.anmerkung,n.thema,n.bemerkung].filter(Boolean).join(' '))) return asxIso(n.datum) + '|BH';
+        return n ? asxIso(n.datum) : '';
+      };
+      const m11 = modul('modul_11'), m12 = modul('modul_12'), m13 = modul('modul_13');
+      const sp = asxNachweise(pid, 'rh_pruef', h.id).filter(x=>!x.sparte || x.sparte==='flaeche' || x.sparte==='truemmer' || x.sparte==='mantrailing');
+      const spNeu = sp[0];
+      if(!spNeu && (h.plaketten||[]).some(x=>x.nummer)) hinweise.push('Plakette ' + h.plaketten.map(x=>x.nummer).filter(Boolean).join(', ') + ', Prüfungsdatum fehlt in BARRY');
+      if(h.zweitHundefuehrerId===pid) hinweise.push('Zweithundeführer:in');
+      if(spNeu && spNeu.sparte && spNeu.sparte!=='flaeche') hinweise.push('Suchprüfung Sparte ' + ({truemmer:'Trümmer', mantrailing:'Mantrailing'}[spNeu.sparte]||spNeu.sparte));
+      if(!h.geburtsdatum && !h.rasse) hinweise.push('Angaben zum Hund fehlen');
+      const heute = asxHeuteIso();
+      const gueltig = spNeu && (!spNeu.gueltigBis || spNeu.gueltigBis >= heute);
+      const anzahlModule = [m11, m12].filter(Boolean).length;
+      const wdhOffen = !gueltig && (!!spNeu || (h.plaketten||[]).some(x=>x.nummer));
+      const gruppe = (gueltig || wdhOffen) ? 'A' : anzahlModule===2 ? 'B' : (anzahlModule===1 || m13) ? 'C' : 'D';
+      if(wdhOffen) hinweise.unshift('Wiederholungsprüfung offen');
+      teams.push({ gruppe, wdhOffen, hf:p.name, hund:h.name, rasse:h.rasse||'', geb:asxIso(h.geburtsdatum), sparte:asxSparteText(h), m11, m12, m13,
+        spDatum: spNeu ? asxIso(spNeu.datum) : '', spBis: spNeu ? asxIso(spNeu.gueltigBis) : '', fda: asxFda(pid), hinweis: hinweise.join('; ') });
+    });
+  });
+  const ord = {A:0,B:1,C:2,D:3};
+  return teams.sort((a,b)=>ord[a.gruppe]-ord[b.gruppe] || a.hf.localeCompare(b.hf,'de') || a.hund.localeCompare(b.hund,'de'));
+}
+function asxMitglieder(){
+  const f = fristenAuswertung();
+  const kurz = q=>{ const l=(q.label||q.code||''); return l.split(' – ')[0].replace(/\s*\(.*\)\s*$/,''); };
+  const fristText = (liste, pid)=>[...new Set(liste.filter(x=>x.p.id===pid).map(x=>kurz(x.q)))].join(', ');
+  const stamm = pid=>(state.personStammdatenDrk||[]).find(s=>s.personId===pid) || {};
+  return state.personen.filter(p=>p.status!=='inaktiv' && p.name && !(p.rollen||[]).every(r=>r==='admin'||r==='leitung'))
+    .slice().sort((a,b)=>a.name.localeCompare(b.name,'de'))
+    .map(p=>{
+      const hunde = state.hunde.filter(h=>h.status!=='inaktiv' && hundGefuehrtVon(h, p.id)).map(h=>{
+        const teil = [];
+        if(asxNachweise(p.id,'modul_11',h.id).length) teil.push('1.1 ✓');
+        { const n12 = asxNachweise(p.id,'modul_12',h.id)[0]; if(n12) teil.push('1.2 ✓' + (/begleithund|\bBH\b/i.test([n12.nachweis,n12.anmerkung,n12.thema].filter(Boolean).join(' ')) ? ' (BH)' : '')); }
+        if(asxNachweise(p.id,'modul_13',h.id).length) teil.push('1.3 ✓');
+        const sp = asxNachweise(p.id,'rh_pruef',h.id)[0];
+        if(sp) teil.push('Suchprüfung ' + (sp.gueltigBis ? 'bis ' + fmtDatum(sp.gueltigBis) : 'am ' + fmtDatum(sp.datum)));
+        return h.name + ': ' + (teil.join(', ') || 'noch keine Module');
+      }).join('; ') || 'ohne Hund';
+      const funktion = (p.rollen||[]).filter(r=>r!=='mitglied' && r!=='admin' && r!=='leitung').map(r=>rolleInfo(r).label).join(', ') || 'Mitglied';
+      const fda = {}; ASX_FDA.forEach(([code])=>{ const n = asxNachweise(p.id, code)[0]; if(n && n.datum) fda[code] = asxIso(n.datum); });
+      return { name:p.name, seit: asxIso(p.mitgliedSeit || stamm(p.id).eintrittsdatum), funktion, hunde, fda,
+        abgelaufen: fristText(f.abgelaufen, p.id), bald: fristText(f.baldAblaufend, p.id) };
+    });
+}
+function asxTermine(){
+  const heute = asxHeuteIso();
+  return (state.termine||[]).filter(t=>t.kategorie==='pruefung' && asxIso(t.beginn) >= heute)
+    .sort((a,b)=>String(a.beginn).localeCompare(String(b.beginn)))
+    .map(t=>({ datum: asxIso(t.beginn), bis: asxIso(t.ende), titel: t.titel || 'Prüfung', ort: t.ort || '' }));
+}
+
+/* ---------- kleiner XLSX-Schreiber ---------- */
+function asxSpalte(i){ let s=''; i++; while(i>0){ const m=(i-1)%26; s=String.fromCharCode(65+m)+s; i=Math.floor((i-1)/26); } return s; } // 0-basiert
+function asxXml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function asxSerial(iso){ const [y,m,d] = iso.split('-').map(Number); return (Date.UTC(y,m-1,d) - Date.UTC(1899,11,30)) / 86400000; }
+// Stil-Indizes (cellXfs)
+const ASX_ST = { std:0, kopf:1, kopfQuer:2, grau:3, grauDatum:4, eingabe:5, eingabeDatum:6, formel:7, blockRot:8, titel:9, fett:10, umbruch:11, prozent:12, zahl:13,
+  grpA:14, grpB:15, grpC:16, grpD:17, blockGrau:18, blockBlau:19, blockGruen:20, st1:21, st2:22, st3:23, st4:24, st5:25, fettGross:26, datumFett:27, klein:28, fdaDatum:29, kopfOrange:30, kopfHellOrange:31, kopfLila:32, grauMitte:33 };
+function asxStyles(){
+  const fills = ['none','gray125','FF9B1C1C','FFEDEDED','FFFFF7D6','FFF4CCCC','FFE2EFDA','FFDDEBF7','FFFFF2CC','FFF2F2F2','FFD9D9D9','FFD9E1F2','FFC6EFCE','FFFFEB9C','FFFFC7CE','FFE26B0A','FFFAC090','FFB3A2C7'];
+  const fillXml = fills.map((f,i)=> i===0 ? '<fill><patternFill patternType="none"/></fill>' : i===1 ? '<fill><patternFill patternType="gray125"/></fill>' : `<fill><patternFill patternType="solid"><fgColor rgb="${f}"/><bgColor indexed="64"/></patternFill></fill>`).join('');
+  const fonts = ['<font><sz val="10"/><name val="Arial"/></font>', '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font>', '<font><i/><sz val="10"/><name val="Arial"/></font>',
+    '<font><b/><sz val="14"/><color rgb="FF9B1C1C"/><name val="Arial"/></font>', '<font><b/><sz val="10"/><name val="Arial"/></font>', '<font><b/><sz val="12"/><name val="Arial"/></font>', '<font><i/><sz val="9"/><name val="Arial"/></font>'];
+  const B = 'borderId="1" applyBorder="1"';
+  const al = (h,v,wrap,rot)=>`<alignment${h?` horizontal="${h}"`:''} vertical="${v||'top'}"${wrap?' wrapText="1"':''}${rot?` textRotation="${rot}"`:''}/>`;
+  const xf = (font, fill, numFmt, border, align)=>`<xf numFmtId="${numFmt||0}" fontId="${font}" fillId="${fill}" ${border?B:'borderId="0"'}${numFmt?' applyNumberFormat="1"':''} applyFont="1" applyFill="1" applyAlignment="1">${align}</xf>`;
+  const xfs = [
+    xf(0,0,0,0,al('', 'top', false)),            // std
+    xf(1,2,0,1,al('center','center',true)),      // kopf
+    xf(1,2,0,1,al('center','center',true,90)),   // kopfQuer
+    xf(0,3,0,1,al('','top',true)),               // grau
+    xf(0,3,164,1,al('left','top',true)),         // grauDatum
+    xf(0,4,0,1,al('','top',true)),               // eingabe
+    xf(0,4,164,1,al('left','top',true)),         // eingabeDatum
+    xf(2,0,0,1,al('','top',true)),               // formel
+    xf(4,5,0,1,al('center','center',false)),     // blockRot
+    xf(3,0,0,0,al('','top',false)),              // titel
+    xf(4,0,0,0,al('','top',true)),               // fett
+    xf(0,0,0,0,al('','top',true)),               // umbruch
+    xf(2,0,9,1,al('center','top',false)),        // prozent
+    xf(2,0,0,1,al('center','top',false)),        // zahl
+    xf(0,6,0,1,al('','top',true)), xf(0,7,0,1,al('','top',true)), xf(0,8,0,1,al('','top',true)), xf(0,9,0,1,al('','top',true)), // grpA–D
+    xf(4,10,0,1,al('center','center',false)), xf(4,11,0,1,al('center','center',false)), xf(4,6,0,1,al('center','center',false)), // Blockköpfe
+    xf(4,12,0,0,al('','top',true)), xf(4,13,0,0,al('','top',true)), xf(4,14,0,0,al('','top',true)), xf(4,7,0,0,al('','top',true)), xf(4,9,0,0,al('','top',true)), // Stufen
+    xf(5,0,0,0,al('','top',false)),              // fettGross
+    xf(4,4,164,1,al('left','top',false)),        // datumFett (Stichtag)
+    xf(6,0,0,0,al('','top',true)),               // klein
+    xf(0,3,165,1,al('center','top',false)),      // fdaDatum
+    xf(1,15,0,1,al('center','center',true)),     // kopfOrange
+    xf(4,16,0,1,al('center','center',true)),     // kopfHellOrange
+    xf(4,17,0,1,al('center','center',true)),     // kopfLila
+    xf(0,3,0,1,al('center','top',true)),         // grauMitte
+  ];
+  const dxf = c=>`<dxf><fill><patternFill patternType="solid"><fgColor rgb="${c}"/><bgColor rgb="${c}"/></patternFill></fill></dxf>`;
+  const dxfs = ['FFC6EFCE','FFFFEB9C','FFFFC7CE','FFDDEBF7','FFF2F2F2'].map(dxf).join('') +
+    '<dxf><font><b/><color rgb="FF9C0006"/></font><fill><patternFill patternType="solid"><fgColor rgb="FFFFC7CE"/><bgColor rgb="FFFFC7CE"/></patternFill></fill></dxf>' +
+    '<dxf><font><b/><color rgb="FF9C5700"/></font><fill><patternFill patternType="solid"><fgColor rgb="FFFFEB9C"/><bgColor rgb="FFFFEB9C"/></patternFill></fill></dxf>';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="2"><numFmt numFmtId="164" formatCode="DD.MM.YYYY"/><numFmt numFmtId="165" formatCode="DD.MM.YY"/></numFmts>
+<fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fillXml}</fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFBFBFBF"/></left><right style="thin"><color rgb="FFBFBFBF"/></right><top style="thin"><color rgb="FFBFBFBF"/></top><bottom style="thin"><color rgb="FFBFBFBF"/></bottom><diagonal/></border></borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>
+<cellStyles count="1"><cellStyle name="Standard" xfId="0" builtinId="0"/></cellStyles><dxfs count="7">${dxfs}</dxfs><tableStyles count="0"/></styleSheet>`;
+}
+class AsxBlatt {
+  constructor(name){ this.name=name; this.zellen=new Map(); this.hoehen={}; this.breiten={}; this.merges=[]; this.dv=[]; this.cf=[]; this.freeze=null; this.filter=null; this.druck=null; this.titel=null; this.gitter=true; }
+  set(r, c, wert, stil){ this.zellen.set(r+':'+c, {r, c, wert, stil}); } // r 1-basiert, c 0-basiert
+  xml(){
+    const reihen = new Map();
+    for(const z of this.zellen.values()){ if(!reihen.has(z.r)) reihen.set(z.r, []); reihen.get(z.r).push(z); }
+    const nrn = [...reihen.keys()].sort((a,b)=>a-b);
+    const zeilen = nrn.map(r=>{
+      const zs = reihen.get(r).sort((a,b)=>a.c-b.c).map(z=>{
+        const ref = asxSpalte(z.c)+r, s = ` s="${z.stil||0}"`; const v = z.wert;
+        if(v===null || v===undefined || v==='') return `<c r="${ref}"${s}/>`;
+        if(typeof v==='object' && v.f) return `<c r="${ref}"${s}${v.str?' t="str"':''}><f>${asxXml(v.f)}</f></c>`;
+        if(typeof v==='object' && v.datum) return `<c r="${ref}"${s}><v>${asxSerial(v.datum)}</v></c>`;
+        if(typeof v==='number') return `<c r="${ref}"${s}><v>${v}</v></c>`;
+        return `<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${asxXml(v)}</t></is></c>`;
+      }).join('');
+      const h = this.hoehen[r] ? ` ht="${this.hoehen[r]}" customHeight="1"` : '';
+      return `<row r="${r}"${h}>${zs}</row>`;
+    }).join('');
+    const cols = Object.keys(this.breiten).map(Number).sort((a,b)=>a-b).map(c=>`<col min="${c+1}" max="${c+1}" width="${this.breiten[c]}" customWidth="1"/>`).join('');
+    let pane = '';
+    if(this.freeze){ const [r,c] = this.freeze; const tl = asxSpalte(c)+(r+1);
+      pane = `<pane${c?` xSplit="${c}"`:''}${r?` ySplit="${r}"`:''} topLeftCell="${tl}" activePane="${r&&c?'bottomRight':r?'bottomLeft':'topRight'}" state="frozen"/><selection pane="${r&&c?'bottomRight':r?'bottomLeft':'topRight'}"/>`; }
+    const sheetPr = this.druck ? '<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>' : '';
+    const merges = this.merges.length ? `<mergeCells count="${this.merges.length}">${this.merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '';
+    let prio = 1;
+    const cf = this.cf.map(x=>`<conditionalFormatting sqref="${x.sqref}">${x.regeln.map(rg=>`<cfRule type="expression" dxfId="${rg.dxf}" priority="${prio++}"><formula>${asxXml(rg.formel)}</formula></cfRule>`).join('')}</conditionalFormatting>`).join('');
+    const dv = this.dv.length ? `<dataValidations count="${this.dv.length}">${this.dv.map(x=>`<dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="0" sqref="${x.sqref}"><formula1>${asxXml(x.formel)}</formula1></dataValidation>`).join('')}</dataValidations>` : '';
+    const druck = this.druck ? `<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.6" header="0.3" footer="0.3"/><pageSetup paperSize="${this.druck.papier}" orientation="${this.druck.quer?'landscape':'portrait'}" fitToWidth="${this.druck.breit}" fitToHeight="0"/><headerFooter><oddFooter>&amp;C${asxXml(this.druck.fuss||'')}</oddFooter></headerFooter>` : '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>';
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">${sheetPr}<sheetViews><sheetView workbookViewId="0"${this.gitter?'':' showGridLines="0"'}>${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="13.2"/>${cols?`<cols>${cols}</cols>`:''}<sheetData>${zeilen}</sheetData>${this.filter?`<autoFilter ref="${this.filter}"/>`:''}${merges}${cf}${dv}${druck}</worksheet>`;
+  }
+}
+function asxMappe(blaetter){
+  const quote = n=>`'${n.replace(/'/g,"''")}'`;
+  const namen = [];
+  blaetter.forEach((b,i)=>{
+    if(b.filter) namen.push(`<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">${asxXml(quote(b.name)+'!'+b.filter.replace(/([A-Z]+)(\d+)/g,'$$$1$$$2'))}</definedName>`);
+    if(b.titel) namen.push(`<definedName name="_xlnm.Print_Titles" localSheetId="${i}">${asxXml(b.titel.map(t=>quote(b.name)+'!'+t).join(','))}</definedName>`);
+  });
+  const dateien = [
+    {name:'[Content_Types].xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${blaetter.map((b,i)=>`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`},
+    {name:'_rels/.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {name:'xl/workbook.xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView activeTab="0"/></bookViews><sheets>${blaetter.map((b,i)=>`<sheet name="${asxXml(b.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets>${namen.length?`<definedNames>${namen.join('')}</definedNames>`:''}<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${blaetter.map((b,i)=>`<Relationship Id="rId${i+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${blaetter.length+1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/styles.xml', data:asxStyles()},
+    ...blaetter.map((b,i)=>({name:`xl/worksheets/sheet${i+1}.xml`, data:b.xml()})),
+  ];
+  return RHSKit.zip(dateien);
+}
+
+/* ---------- Arbeitsmappe aufbauen ---------- */
+
+/* 2.92: Ausbildungsübersicht je Mitglied (Vorlage Staffelleitung 12.11.2026)
+   art: 'min' = Mindestanforderung Einsatzfähigkeit (dunkelrot), 'plus' = zusätzlich für die Prüfungsreife (orange),
+        'zahl' = Anzahl Suchprüfungen (hellorange), 'fuehrung' = Führung und weitere Qualifikationen (lila) */
+const ASX_AUSB_SPALTEN = [
+  {t:'RK Einführungsseminar', c:['rke','rke_online'], art:'min'},
+  {t:'Erste Hilfe', c:['eh'], art:'min'},
+  {t:'EGA Einsatz', c:['ekga_e'], art:'min'},
+  {t:'EGA Sanität', c:['ekga_s'], art:'plus'},
+  {t:'EGA Technik', c:['ekga_t','tus'], art:'plus'},
+  {t:'EGA Betreuung', c:['ekga_b'], art:'plus'},
+  {t:'PSNV Grundlagen', c:['psnv_g'], art:'plus'},
+  {t:'BOS', c:['bos'], art:'plus'},
+  {t:'Truppführer', c:['tf'], art:'plus'},
+  {t:'Sanitäts-ausbildung', c:['slg'], art:'plus'},
+  {t:'Fortbildstd. 16Std/2J', c:['san_fb'], art:'plus', sanfb:true},
+  {t:'IFSG (online)', c:['ifsg'], art:'min'},
+  {t:'Datenschutz (online)', c:['ds','sonst_ds','ds_jaehrlich'], art:'min'},
+  {t:'UVV', c:['uvv_jaehrlich','lc_uvv','uvv_tus'], art:'plus'},
+  {t:'Sicherheit im Einsatz', c:['rhd_uvv'], art:'plus', fda:true},
+  {t:'Verh. Transport von Hunden', c:['rhd_transport'], art:'plus', fda:true},
+  {t:'EH-Hund', c:['rhd_ehhund','ehhund_fb'], art:'plus', fda:true},
+  {t:'Kynologie', c:['rhd_kyno'], art:'plus', fda:true},
+  {t:'Einsatztaktik Fläche', c:['rhd_taktik','rhd_sk_fl'], art:'plus', fda:true},
+  {t:'Orientierung und Kartenkunde', c:['rhd_orient'], art:'plus', fda:true},
+  {t:'Geruch & Wirkung', c:['rhd_geruch'], art:'plus', fda:true},
+  {t:'Strukur und Recht', c:['rhd_orga'], art:'plus', fda:true},
+  {t:'Geschichte', c:['rhd_recht'], art:'plus', fda:true},
+  {t:'Trümmerkunde', c:['rhd_truemmer'], art:'plus', fda:true},
+  {t:'Einsatztaktik Trümmer', c:['rhd_sk_tr'], art:'plus', fda:true},
+  {t:'MT-Kunde', c:['rhd_sk_mt'], art:'plus', fda:true},
+];
+const ASX_AUSB_ZUSATZ = [
+  {t:'Anzahl RH-Prüf. FlS', zahl:'flaeche', art:'zahl'}, {t:'Anzahl RH-Prüf. TrS', zahl:'truemmer', art:'zahl'}, {t:'Anzahl RH-Prüf. MT', zahl:'mantrailing', art:'zahl'},
+  {t:'Zugführer', c:['zfue'], art:'fuehrung'}, {t:'Verbandführer', c:['vfg'], art:'fuehrung'}, {t:'RK Aufbauseminar', c:['rkas'], art:'fuehrung'},
+  {t:'Teamentw. & Konfliktmanagement', c:['teukm'], art:'fuehrung'}, {t:'ERGU', c:['eug'], art:'fuehrung'}, {t:'RettSan', c:['rettsan'], art:'fuehrung'}, {t:'NofSan', c:['notsan'], art:'fuehrung'},
+];
+function asxAusbWert(p, sp){
+  if(sp.zahl) { const q = asxQ('rh_pruef'); if(!q) return ''; const n = pqAlle().filter(pq=>pq.personId===p.id && pq.qualifikationId===q.id && (pq.sparte||'flaeche')===sp.zahl).length; return n || ''; }
+  if(sp.sanfb){
+    const q = asxQ('san_fb'); if(q && typeof qualiFristEntfaellt==='function' && qualiFristEntfaellt(p.id, q)) return 'entfällt (Beruf)';
+    const st = typeof ueKontoStatus==='function' ? ueKontoStatus(p.id, 'san_fb') : null; if(!st) return '';
+    if(!st.gueltig) return 'abgelaufen';
+    return st.offen ? `${st.ist||0}/16 UE bis ${fmtDatum(st.stichtag)}` : `erfüllt bis ${fmtDatum(st.stichtag)}`;
+  }
+  // einmalige Ausbildungen: erster Nachweis; wiederkehrende (mit Frist): letzter Nachweis
+  const wiederkehrend = sp.c.some(code=>{ const q = asxQ(code); return q && q.intervallMonate; });
+  let best = null;
+  sp.c.forEach(code=>asxNachweise(p.id, code).forEach(n=>{ if(n.datum && (!best || (wiederkehrend ? n.datum > best.datum : n.datum < best.datum))) best = n; }));
+  if(best) return {datum: asxIso(best.datum)};
+  if(sp.fda && asxNachweise(p.id, 'rhd').length) return 'RHd ✓';
+  return '';
+}
+function asxAusbildungZeilen(mitglieder){
+  return mitglieder.map(m=>{ const p = state.personen.find(x=>x.name===m.name) || {id:''};
+    return { name:m.name, seit:m.seit, werte: ASX_AUSB_SPALTEN.map(sp=>asxAusbWert(p, sp)), zusatz: ASX_AUSB_ZUSATZ.map(sp=>asxAusbWert(p, sp)) }; });
+}
+function ausbildungsstandMappeErstellen(opt){
+  opt = opt || {};
+  const S = ASX_ST, L = asxSpalte;
+  const teams = asxTeams(), mitglieder = asxMitglieder(), termine = asxTermine();
+  const stand = asxHeuteIso();
+  const jahr = new Date().getFullYear();
+  const ampel = (blatt, bereich, linksOben)=>blatt.cf.push({sqref:bereich, regeln:['✔','◐','✖','○','–'].map((sym,i)=>({dxf:i, formel:`LEFT(${linksOben},1)="${sym}"`}))});
+  const D = iso=>iso ? {datum:iso} : '';
+
+  // ---- Anleitung
+  const an = new AsxBlatt('Anleitung'); an.gitter = false; an.breiten = {0:32, 1:95}; an.druck = {papier:9, quer:false, breit:1, fuss:'Vertraulich – Seite &P von &N'};
+  let r = 1;
+  an.set(1, 0, 'Ausbildungsstand Teams & Jahresgespräche – ' + ((state.organisation && state.organisation.name) || 'Rettungshundestaffel'), S.titel);
+  r = 3; an.set(r, 0, 'Stichtag für Alter und Fristen', S.fett); an.set(r, 1, {datum:stand}, S.datumFett); const STICHTAG = 'Anleitung!$B$3';
+  r = 5;
+  const z = (a, b, st)=>{ an.set(r, 0, a, st===undefined ? S.fett : st); an.set(r, 1, b, S.umbruch); r++; };
+  z('Vertraulich', 'Die Mappe enthält personenbezogene Daten und Beurteilungen. Nur innerhalb der Staffel- und Bereitschaftsleitung bzw. der Ausbildenden verwenden; nicht per Messenger verteilen. Notizen aus Jahresgesprächen nur mit Einverständnis des Mitglieds festhalten.');
+  z('Datenstand', `Aus BARRY erstellt am ${fmtDatum(stand)}. Grunddaten (grau) stammen aus BARRY; Bewertungen und Notizen werden nur in dieser Datei geführt und nicht nach BARRY zurückgespielt.`);
+  r++; an.set(r++, 0, 'Farben', S.fettGross);
+  z('grau', 'Grunddaten aus BARRY – bei Fehlern bitte in BARRY korrigieren und die Mappe neu erstellen.', S.grau);
+  z('hellgelb', 'Eingabefelder – hier wird in der Besprechung bzw. im Jahresgespräch ausgefüllt.', S.eingabe);
+  z('kursiv', 'Formeln (Alter, Fristen, Zählungen, Stand in den Notizblättern) – nicht überschreiben.', S.formel);
+  r++; an.set(r++, 0, 'Bewertungsstufen (Auswahlliste)', S.fettGross);
+  ASX_STUFEN.forEach((s,i)=>z(s, ASX_STUFEN_TEXT[i], S.st1+i));
+  r++; an.set(r++, 0, 'Die Tabellenblätter', S.fettGross);
+  z('Teams Mensch-Hund', 'Eine Zeile je Team: Grunddaten, Fristen, Ausbildungsbausteine (Stufe aus der Auswahlliste und/oder ein paar Sätze – am besten mit der Stufe beginnen, z. B. „◐ im Aufbau – …“, dann zählt die Auswertung mit), Freitext „sicher / Probleme / Sonstiges“ und Prüfungsplanung (Ziel, Termin, Ersatztermin, Prüfungsreife).');
+  z('Notizen Teams', 'Je Team und Baustein eine Zeile für ausführliche Bemerkungen, nächsten Trainingsschritt, Zuständigkeit und Termin. „Stand“ wird aus „Teams Mensch-Hund“ übernommen. Über den Filter in der Kopfzeile ein Team oder einen Baustein wählen.');
+  z('Mitglieder Mensch', 'Eine Zeile je Mitglied (Hundeführende und Helfende) zur Vorbereitung der Jahresgespräche: Grunddaten, Fristen, erreichte Bausteine der Fachdienstausbildung Rettungshunde mit Datum, Bewertung der Ausbildungsbausteine Mensch, Stärken, Entwicklungsfelder, Ziele, Wünsche, Vereinbarungen.');
+  z('Prüfungsreife Mensch', 'Je Mitglied die Grundausbildung und die Bausteine der Fachdienstausbildung mit Datum aus BARRY. Dunkelrot = Mindestanforderung für die Einsatzfähigkeit, orange = zusätzlich für die Prüfungsreife. „RHd ✓“ = über die abgeschlossene Fachdienstausbildung erfüllt.');
+  z('Notizen Mitglieder', 'Wie „Notizen Teams“, je Mitglied und Baustein.');
+  z('Übersicht Ausbild. Mitglieder', 'Wie „Prüfungsreife Mensch“, dazu Anzahl der Suchprüfungen je Sparte sowie Führung und weitere Qualifikationen (Zugführer, Verbandführer, RK-Aufbauseminar, Teamentwicklung, ERGU, RettSan, NotSan).');
+  z('Prüfungstermine', 'Prüfungstermine aus dem BARRY-Kalender (Kategorie „Prüfung“) und Platzhalter für das Folgejahr. Weitere Termine in die gelben Zeilen eintragen – sie erscheinen dann in der Auswahlliste. Zählt automatisch, wie viele Teams je Termin geplant sind.');
+  z('Auswertung', 'Zählt je Baustein, wie viele Teams bzw. Mitglieder „sicher“, „im Aufbau“ oder „Baustelle“ sind – zeigt, wo das Training ansetzen sollte.');
+  r++; an.set(r++, 0, 'Beispiel', S.fettGross);
+  z('Gehorsam / Unterordnung', '◐ im Aufbau');
+  z('Probleme / Baustellen', 'Ablage außer Sicht bricht nach ca. 1 Min. ab; Voraussenden nur bis 10 m.');
+  z('Prüfungsziel / Termin', 'Modul 1.2 Grundgehorsam · Termin aus der Auswahlliste · Ersatztermin · Prüfungsreife: bis zum Termin erreichbar');
+  z('Notiz (Notizen Teams)', 'Nächster Schritt: Ablage mit wechselnden Ablenkungen, HF geht außer Sicht; wer: Montagsgruppe; bis: Ende März');
+  const hinw = teams.filter(t=>t.hinweis).map(t=>`• ${t.hf} / ${t.hund}: ${t.hinweis}`);
+  if(hinw.length){ r++; an.set(r, 0, 'Hinweise zu den Daten', S.fett); an.set(r, 1, hinw.join('\n'), S.umbruch); an.hoehen[r] = Math.min(400, 14*hinw.length+6); r++; }
+
+  // ---- Prüfungstermine (+ Listen)
+  const pt = new AsxBlatt('Prüfungstermine'); pt.freeze = [1,0];
+  pt.breiten = {0:13, 1:13, 2:34, 3:26, 4:60, 5:13, 6:16, 8:36, 9:24, 10:28};
+  ['Datum (1. Tag)', 'bis', 'Prüfung', 'Ort', 'Auswahltext (für Listen)', 'Teams geplant', 'davon Ersatztermin'].forEach((h,i)=>pt.set(1, i, h, S.kopf));
+  const T_LETZTE = Math.max(40, termine.length + 20);
+  const T_SP = L(ASX_HUND_BAUSTEINE.length + 17 + 3 + 1), E_SP = L(ASX_HUND_BAUSTEINE.length + 17 + 3 + 2); // Spalten Termin / Ersatz in „Teams Mensch-Hund“
+  const platzhalter = [`${jahr+1} – Modulprüfung, Termin offen`, `${jahr+1} – Suchprüfung Fläche, Termin offen`, `${jahr+1} – Suchprüfung Trümmer, Termin offen`, `${jahr+2} – noch offen`];
+  for(let j=2; j<=T_LETZTE; j++){
+    const t = termine[j-2], ph = !t && platzhalter[j-2-termine.length];
+    const st = t || ph ? S.grau : S.eingabe, stD = t || ph ? S.grauDatum : S.eingabeDatum;
+    pt.set(j, 0, t ? D(t.datum) : '', stD); pt.set(j, 1, t && t.bis && t.bis!==t.datum ? D(t.bis) : '', stD);
+    pt.set(j, 2, t ? t.titel : ph || '', st); pt.set(j, 3, t ? (t.ort || '') : '', st);
+    pt.set(j, 4, {f:`IF(C${j}="","",IF(A${j}="",C${j},TEXT(A${j},"DD.MM.YYYY")&" "&C${j}&IF(D${j}="",""," ("&D${j}&")")))`, str:true}, S.formel);
+    pt.set(j, 5, {f:`IF(E${j}="","",COUNTIF('Teams Mensch-Hund'!$${T_SP}:$${T_SP},E${j}))`}, S.zahl);
+    pt.set(j, 6, {f:`IF(E${j}="","",COUNTIF('Teams Mensch-Hund'!$${E_SP}:$${E_SP},E${j}))`}, S.zahl);
+  }
+  pt.set(T_LETZTE+2, 0, 'Grau = aus dem BARRY-Kalender (Kategorie „Prüfung“, ab heute). Gelb = frei ergänzbar. Spalte E (Formel) liefert die Auswahlliste.', S.klein);
+  pt.set(1, 8, 'Prüfungsziele (Liste)', S.kopf); pt.set(1, 9, 'Prüfungsreife (Liste)', S.kopf); pt.set(1, 10, 'Rollen (Liste)', S.kopf);
+  ASX_ZIELE.forEach((x,i)=>pt.set(2+i, 8, x, S.eingabe)); ASX_REIFE.forEach((x,i)=>pt.set(2+i, 9, x, S.eingabe)); ASX_ROLLEN.forEach((x,i)=>pt.set(2+i, 10, x, S.eingabe));
+  for(let i=ASX_ZIELE.length; i<14; i++) pt.set(2+i, 8, '', S.eingabe);
+  for(let i=ASX_REIFE.length; i<8; i++) pt.set(2+i, 9, '', S.eingabe);
+  for(let i=ASX_ROLLEN.length; i<8; i++) pt.set(2+i, 10, '', S.eingabe);
+
+  // ---- Teams Mensch-Hund
+  const th = new AsxBlatt('Teams Mensch-Hund');
+  const GRUND = ['Nr', 'Gruppe', 'Team (HF / Hund)', 'Hundeführer:in', 'Hund', 'Rasse', 'Geburtsdatum', 'Alter', 'Sparte', 'Modul 1.1', 'Modul 1.2', 'Modul 1.3', 'Suchprüfung am', 'gültig bis', 'Frist', 'FDA-Theorie', 'Hinweise'];
+  const BEW = ASX_HUND_BAUSTEINE.map(b=>b[0]);
+  const PRUEF = ['Nächstes Prüfungsziel', 'Geplanter Termin', 'Ersatztermin', 'Prüfungsreife (Einschätzung)', 'Bemerkung Prüfung', 'Zuletzt besprochen am'];
+  const SP = [...GRUND, ...BEW, ...ASX_HUND_TEXT, ...PRUEF];
+  const c0 = GRUND.length, cZiel = c0 + BEW.length + ASX_HUND_TEXT.length;
+  if(L(cZiel+1)!==T_SP) throw new Error('Spaltenzuordnung Termine');
+  const blockkopf = (blatt, a, b, text, st)=>{ for(let i=a;i<=b;i++) blatt.set(1, i, i===a?text:'', st); blatt.merges.push(`${L(a)}1:${L(b)}1`); };
+  blockkopf(th, 0, c0-1, `Grunddaten aus BARRY (Stand ${fmtDatum(stand)})`, S.blockGrau);
+  blockkopf(th, c0, c0+BEW.length-1, 'Ausbildungsbausteine Hund – Bewertung (Auswahlliste)', S.blockRot);
+  blockkopf(th, c0+BEW.length, cZiel-1, 'Freitext', S.blockRot);
+  blockkopf(th, cZiel, SP.length-1, 'Prüfungsplanung', S.blockBlau);
+  SP.forEach((h,i)=>th.set(2, i, h, S.kopf)); th.hoehen[2] = 45;
+  const ERSTE = 3, LETZTE = ERSTE + teams.length - 1 + 10;
+  const altersF = j=>({f:`IF(G${j}="","",DATEDIF(G${j},${STICHTAG},"y")&" J. "&DATEDIF(G${j},${STICHTAG},"ym")&" M.")`, str:true});
+  const fristF = j=>({f:`IF(N${j}="","",IF(N${j}<${STICHTAG},"abgelaufen",IF(N${j}-${STICHTAG}<=183,"läuft in ≤ 6 Mon. ab","gültig")))`, str:true});
+  for(let j=ERSTE; j<=LETZTE; j++){
+    const t = teams[j-ERSTE];
+    if(t){
+      const g = S['grp'+t.gruppe];
+      [j-ERSTE+1, `${t.gruppe} – ${ASX_GRUPPEN[t.gruppe]}${t.wdhOffen?' (Wdh. offen)':''}`, `${t.hf} / ${t.hund}`, t.hf, t.hund, t.rasse, D(t.geb), null, t.sparte, D(t.m11), (t.m12||'').endsWith('|BH') ? fmtDatum(t.m12.slice(0,10))+' BH' : D(t.m12), D(t.m13), D(t.spDatum), D(t.spBis), null, t.fda, t.hinweis]
+        .forEach((v,i)=>{ if(i===7||i===14) return; th.set(j, i, v, i<2 ? g : (v && v.datum) || [6,9,10,11,12,13].includes(i) ? S.grauDatum : S.grau); });
+    } else {
+      th.set(j, 0, j-ERSTE+1, S.eingabe); th.set(j, 1, '', S.eingabe);
+      th.set(j, 2, {f:`IF(D${j}="","",D${j}&" / "&E${j})`, str:true}, S.formel);
+      [3,4,5,8,15,16].forEach(i=>th.set(j, i, '', S.eingabe)); [6,9,10,11,12,13].forEach(i=>th.set(j, i, '', S.eingabeDatum));
+    }
+    th.set(j, 7, altersF(j), S.formel); th.set(j, 14, fristF(j), S.formel);
+    for(let i=c0; i<SP.length; i++) th.set(j, i, '', i===SP.length-1 ? S.eingabeDatum : S.eingabe);
+  }
+  th.breiten = Object.fromEntries([4,12,26,18,12,18,12.5,10,12,12.5,12.5,12.5,12.5,12.5,13,8,30, ...BEW.map(()=>30), 30,30,24, 24,30,30,14,30,12.5].map((w,i)=>[i,w]));
+  for(let j=ERSTE; j<=LETZTE; j++) th.hoehen[j] = 75;
+  th.freeze = [2,3]; th.filter = `A2:${L(SP.length-1)}${LETZTE}`; th.titel = ['$A:$C', '$1:$2'];
+  th.druck = {papier:8, quer:true, breit:2, fuss:'Vertraulich – Seite &P von &N'};
+  th.dv.push({sqref:`${L(c0)}${ERSTE}:${L(c0+BEW.length-1)}${LETZTE}`, formel:'"' + ASX_STUFEN.join(',') + '"'});
+  th.dv.push({sqref:`${L(cZiel)}${ERSTE}:${L(cZiel)}${LETZTE}`, formel:`'Prüfungstermine'!$I$2:$I$15`});
+  th.dv.push({sqref:`${L(cZiel+1)}${ERSTE}:${L(cZiel+2)}${LETZTE}`, formel:`'Prüfungstermine'!$E$2:$E$${T_LETZTE}`});
+  th.dv.push({sqref:`${L(cZiel+3)}${ERSTE}:${L(cZiel+3)}${LETZTE}`, formel:`'Prüfungstermine'!$J$2:$J$9`});
+  ampel(th, `${L(c0)}${ERSTE}:${L(c0+BEW.length-1)}${LETZTE}`, `${L(c0)}${ERSTE}`);
+  th.cf.push({sqref:`O${ERSTE}:O${LETZTE}`, regeln:[{dxf:5, formel:`O${ERSTE}="abgelaufen"`}, {dxf:6, formel:`LEFT(O${ERSTE},5)="läuft"`}]});
+
+  // ---- Mitglieder Mensch
+  const mm = new AsxBlatt('Mitglieder Mensch');
+  const MG0 = ['Nr', 'Mitglied', 'Mitglied seit', 'Funktion (BARRY)', 'Rolle in der Staffel', 'Hund(e) und Stand', 'Fristen abgelaufen', 'bald fällig'];
+  const MG = [...MG0, ...ASX_FDA.map(x=>x[1]), 'FDA erreicht'];
+  const MB = ASX_MENSCH_BAUSTEINE.map(b=>b[0]);
+  const MJ = ['Jahresgespräch am', 'Gesprächsführende', 'Nächstes Gespräch', 'Mit Notizen einverstanden'];
+  const MS = [...MG, ...MB, ...ASX_MENSCH_TEXT, ...MJ];
+  const m0 = MG.length, mT = m0 + MB.length, mJ = mT + ASX_MENSCH_TEXT.length;
+  blockkopf(mm, 0, MG0.length-1, `Grunddaten aus BARRY (Stand ${fmtDatum(stand)})`, S.blockGrau);
+  blockkopf(mm, MG0.length, m0-1, 'Fachdienstausbildung Rettungshunde – erreichte Bausteine (Datum aus BARRY)', S.blockBlau);
+  blockkopf(mm, m0, mT-1, 'Ausbildungsbausteine Mensch – Bewertung (Auswahlliste)', S.blockRot);
+  blockkopf(mm, mT, mJ-1, 'Jahresgespräch: Einschätzung, Ziele, Wünsche', S.blockGruen);
+  blockkopf(mm, mJ, MS.length-1, 'Gespräch', S.blockBlau);
+  MS.forEach((h,i)=>mm.set(2, i, h, S.kopf)); mm.hoehen[2] = 48;
+  const MLETZTE = 3 + mitglieder.length - 1 + 8;
+  for(let j=3; j<=MLETZTE; j++){
+    const m = mitglieder[j-3];
+    if(m){ [j-2, m.name, D(m.seit), m.funktion, null, m.hunde, m.abgelaufen, m.bald].forEach((v,i)=>{ if(i===4) return; mm.set(j, i, v, i===2 ? S.grauDatum : S.grau); });
+      ASX_FDA.forEach(([code],k)=>mm.set(j, MG0.length+k, D(m.fda[code]||''), S.fdaDatum));
+      mm.set(j, m0-1, {f:`IF(${L(MG0.length)}${j}<>"","komplett",COUNT(${L(MG0.length+1)}${j}:${L(MG0.length+13)}${j})&" von 13")`, str:true}, S.zahl); }
+    else { mm.set(j, 0, j-2, S.eingabe); [1,3,5,6,7].forEach(i=>mm.set(j, i, '', S.eingabe)); mm.set(j, 2, '', S.eingabeDatum); ASX_FDA.forEach((x,k)=>mm.set(j, MG0.length+k, '', S.eingabeDatum)); mm.set(j, m0-1, '', S.eingabe); }
+    mm.set(j, 4, '', S.eingabe);
+    for(let i=m0; i<MS.length; i++) mm.set(j, i, '', (i===mJ || i===mJ+2) ? S.eingabeDatum : S.eingabe);
+  }
+  mm.breiten = Object.fromEntries([4,22,12.5,24,18,32,22,18, ...ASX_FDA.map(()=>11), 11, ...MB.map(()=>30), ...ASX_MENSCH_TEXT.map(()=>30), 12.5,20,12.5,12].map((w,i)=>[i,w]));
+  for(let j=3; j<=MLETZTE; j++) mm.hoehen[j] = 75;
+  mm.cf.push({sqref:`${L(m0-1)}3:${L(m0-1)}${MLETZTE}`, regeln:[{dxf:0, formel:`${L(m0-1)}3="komplett"`}]});
+  mm.freeze = [2,2]; mm.filter = `A2:${L(MS.length-1)}${MLETZTE}`; mm.titel = ['$A:$B', '$1:$2'];
+  mm.druck = {papier:8, quer:true, breit:2, fuss:'Vertraulich – Seite &P von &N'};
+  mm.dv.push({sqref:`${L(m0)}3:${L(mT-1)}${MLETZTE}`, formel:'"' + ASX_STUFEN.join(',') + '"'});
+  mm.dv.push({sqref:`E3:E${MLETZTE}`, formel:`'Prüfungstermine'!$K$2:$K$9`});
+  mm.dv.push({sqref:`${L(MS.length-1)}3:${L(MS.length-1)}${MLETZTE}`, formel:'"ja,nein,teilweise"'});
+  ampel(mm, `${L(m0)}3:${L(mT-1)}${MLETZTE}`, `${L(m0)}3`);
+
+  // ---- Notizblätter
+  const notiz = (name, quelle, schluesselSp, namen, bausteine, ersteSp, kopfname)=>{
+    const ws = new AsxBlatt(name);
+    [kopfname, 'Baustein', 'Stand (aus Übersicht)', 'Bemerkung', 'Nächster Schritt / Übung', 'Wer', 'Bis wann'].forEach((h,i)=>ws.set(1, i, h, S.kopf));
+    const bis = 300, a = L(ersteSp), e = L(ersteSp + bausteine.length - 1);
+    let j = 2;
+    namen.forEach(nm=>{ [...bausteine, 'Allgemein'].forEach(b=>{
+      ws.set(j, 0, nm, S.grau); ws.set(j, 1, b, S.grau);
+      ws.set(j, 2, b==='Allgemein' ? '' : {f:`IFERROR(INDEX('${quelle}'!$${a}$1:$${e}$${bis},MATCH(A${j},'${quelle}'!$${schluesselSp}$1:$${schluesselSp}$${bis},0),MATCH(B${j},'${quelle}'!$${a}$2:$${e}$2,0))&"","")`, str:true}, S.formel);
+      [3,4,5].forEach(i=>ws.set(j, i, '', S.eingabe)); ws.set(j, 6, '', S.eingabeDatum); j++; }); });
+    ws.breiten = {0:28, 1:32, 2:20, 3:50, 4:40, 5:16, 6:12.5}; ws.freeze = [1,2]; ws.filter = `A1:G${j-1}`; ws.titel = ['$1:$1'];
+    ws.druck = {papier:9, quer:true, breit:1, fuss:'Vertraulich – Seite &P von &N'};
+    ampel(ws, `C2:C${j-1}`, 'C2');
+    return ws;
+  };
+  const nt = notiz('Notizen Teams', 'Teams Mensch-Hund', 'C', teams.map(t=>`${t.hf} / ${t.hund}`), BEW, c0, 'Team (HF / Hund)');
+  const nm = notiz('Notizen Mitglieder', 'Mitglieder Mensch', 'B', mitglieder.map(m=>m.name), MB, m0, 'Mitglied');
+
+  // ---- Auswertung
+  const aw = new AsxBlatt('Auswertung'); aw.breiten = {0:40, 1:14, 2:14, 3:14, 4:14, 5:14, 6:14, 7:14};
+  aw.set(1, 0, 'Auswertung Ausbildungsbausteine (zählt automatisch)', S.titel);
+  const tabelle = (start, titel, blatt, ersteSp, bausteine, von, bis)=>{
+    aw.set(start, 0, titel, S.fettGross);
+    ['Baustein', ...ASX_STUFEN, 'bewertet', 'Anteil Baustelle'].forEach((h,i)=>aw.set(start+1, i, h, S.kopf));
+    bausteine.forEach((b,k)=>{ const j = start+2+k, sp = L(ersteSp+k);
+      aw.set(j, 0, b, S.grau);
+      ASX_STUFEN.forEach((s,si)=>aw.set(j, 1+si, {f:`COUNTIF('${blatt}'!$${sp}$${von}:$${sp}$${bis},LEFT(${L(1+si)}$${start+1},1)&"*")`}, S.zahl));
+      aw.set(j, 6, {f:`SUM(B${j}:D${j})`}, S.zahl); aw.set(j, 7, {f:`IF(G${j}=0,"",D${j}/G${j})`}, S.prozent); });
+    return start + 2 + bausteine.length;
+  };
+  let e1 = tabelle(3, 'Teams (Hund)', 'Teams Mensch-Hund', c0, BEW, ERSTE, LETZTE);
+  aw.set(e1, 0, '„bewertet“ = sicher + im Aufbau + Baustelle. „Anteil Baustelle“ zeigt, wo das Training ansetzen sollte.', S.klein);
+  const e2 = tabelle(e1+2, 'Mitglieder (Mensch)', 'Mitglieder Mensch', m0, MB, 3, MLETZTE);
+  const zz = e2 + 2;
+  aw.set(zz, 0, 'Prüfungsplanung', S.fettGross); aw.set(zz+1, 0, 'Prüfungsziel', S.kopf); aw.set(zz+1, 1, 'Teams', S.kopf);
+  ASX_ZIELE.forEach((x,k)=>{ const j = zz+2+k; aw.set(j, 0, x, S.grau); aw.set(j, 1, {f:`COUNTIF('Teams Mensch-Hund'!$${L(cZiel)}$${ERSTE}:$${L(cZiel)}$${LETZTE},A${j})`}, S.zahl); });
+  const jf = zz + 2 + ASX_ZIELE.length;
+  aw.set(jf, 0, 'Suchprüfungen abgelaufen / laufen in ≤ 6 Monaten ab', S.fett);
+  aw.set(jf, 1, {f:`COUNTIF('Teams Mensch-Hund'!$O$${ERSTE}:$O$${LETZTE},"abgelaufen")&" / "&COUNTIF('Teams Mensch-Hund'!$O$${ERSTE}:$O$${LETZTE},"läuft*")`, str:true}, S.zahl);
+  aw.set(jf+1, 0, 'Anzahl je Termin: siehe Blatt „Prüfungstermine“, Spalten F und G.', S.klein);
+
+
+  // ---- 2.92: Prüfungsreife Mensch / Übersicht Ausbild. Mitglieder
+  const ausb = asxAusbildungZeilen(mitglieder);
+  const ausbBlatt = (name, mitZusatz)=>{
+    const ws = new AsxBlatt(name);
+    const spalten = [...ASX_AUSB_SPALTEN, ...(mitZusatz ? ASX_AUSB_ZUSATZ : ASX_AUSB_ZUSATZ.slice(0,7).map(()=>({t:'', art:'leer'})))];
+    const stil = a=>a==='min' || a==='leer' ? S.kopf : a==='plus' ? S.kopfOrange : a==='zahl' ? S.kopfHellOrange : S.kopfLila;
+    ws.set(1, 0, 'Dunkelrot = Mindestanforderung für die Einsatzfähigkeit · Orange = zusätzlich für die Prüfungsreife' + (mitZusatz ? ' · Hellorange = Anzahl Suchprüfungen · Lila = Führung und weitere Qualifikationen' : '') + ` · Daten aus BARRY, Stand ${fmtDatum(stand)}`, S.klein);
+    ws.set(2, 0, 'Mitglied', S.kopf); ws.set(2, 1, 'Mitglied seit', S.kopf);
+    spalten.forEach((sp,i)=>ws.set(2, 2+i, sp.t, stil(sp.art))); ws.hoehen[2] = 48;
+    const letzte = 3 + ausb.length - 1 + 8;
+    for(let j=3; j<=letzte; j++){
+      const z = ausb[j-3];
+      ws.set(j, 0, z ? z.name : '', z ? S.grau : S.eingabe); ws.set(j, 1, z ? D(z.seit) : '', z ? S.grauDatum : S.eingabeDatum);
+      spalten.forEach((sp,i)=>{ const v = z ? (i < ASX_AUSB_SPALTEN.length ? z.werte[i] : (mitZusatz ? z.zusatz[i-ASX_AUSB_SPALTEN.length] : '')) : '';
+        ws.set(j, 2+i, v, v && v.datum ? S.fdaDatum : S.grauMitte); });
+    }
+    ws.breiten = Object.fromEntries([22, 12.5, ...spalten.map(()=>13)].map((w,i)=>[i,w]));
+    ws.freeze = [2,2]; ws.filter = `A2:${L(1+spalten.length)}${letzte}`; ws.titel = ['$A:$A', '$2:$2'];
+    ws.druck = {papier:8, quer:true, breit:1, fuss:'Vertraulich – Seite &P von &N'};
+    return ws;
+  };
+  const pr = ausbBlatt('Prüfungsreife Mensch', false);
+  const ua = ausbBlatt('Übersicht Ausbild. Mitglieder', true);
+  const daten = asxMappe([an, th, nt, pr, mm, nm, ua, pt, aw]);
+  return { daten, teams: teams.length, mitglieder: mitglieder.length, termine: termine.length, dateiname: `BARRY_Ausbildungsstand_Jahresgespraeche_${stand}.xlsx` };
+}
+function ausbildungsstandMappeHerunterladen(){
+  try{
+    const erg = ausbildungsstandMappeErstellen();
+    RHSKit.download(erg.dateiname, erg.daten, RHSKit.XLSX_MIME);
+    return erg;
+  }catch(e){ console.error(e); alert('Die Excel-Datei konnte nicht erstellt werden: ' + e.message); return null; }
+}
+
+function renderTabAusbildungsstand(){
+  const teams = asxTeams(), mitgl = asxMitglieder(), termine = asxTermine();
+  const n = g=>teams.filter(t=>t.gruppe===g).length;
+  return `<div class="card card-pad">
+    <h3 style="margin-top:0">📋 Ausbildungsstand & Jahresgespräche als Excel</h3>
+    <p class="hint">BARRY erstellt eine Arbeitsmappe für die Teambesprechung und die Jahresgespräche – jederzeit neu mit dem aktuellen Stand.</p>
+    <ul class="hint" style="margin:6px 0 10px 18px">
+      <li><strong>Teams Mensch-Hund</strong> (${teams.length}): Module, Suchprüfung mit Frist, FDA-Theorie – dazu Auswahllisten für 14 Ausbildungsbausteine (sicher · im Aufbau · Baustelle …), Freitext und Prüfungsplanung mit Termin und Ersatztermin.</li>
+      <li><strong>Mitglieder Mensch</strong> (${mitgl.length}): Funktion, Hunde, abgelaufene und bald fällige Nachweise, erreichte Bausteine der Fachdienstausbildung – dazu Bausteine für Hundeführende und Helfende, Stärken, Ziele, Wünsche und Vereinbarungen für das Jahresgespräch.</li>
+      <li><strong>Notizblätter</strong> je Team bzw. Mitglied und Baustein, <strong>Prüfungstermine</strong> mit Zählung und eine <strong>Auswertung</strong>, wo das Training ansetzen sollte.</li>
+    </ul>
+    <p class="hint">Gruppen: ${n('A')} geprüft · ${n('B')} mit 1.1 und 1.2 · ${n('C')} mit einem Modul · ${n('D')} am Anfang. Prüfungstermine aus dem Kalender (Kategorie „Prüfung“, ab heute): ${termine.length}${termine.length ? '' : ' – bitte die Termine unter Organisation & Termine eintragen, dann stehen sie in der Auswahlliste. In der Datei lassen sich Termine auch direkt ergänzen'}.</p>
+    <button class="btn btn-primary" id="btn-asx-export">📥 Excel-Datei erstellen</button>
+    <p class="hint" style="margin-top:10px">Bewertungen und Notizen werden nur in der Excel-Datei geführt, nicht in BARRY. Die Datei enthält personenbezogene Daten und Einschätzungen – nur im Kreis der Leitung und der Ausbildenden verwenden, nicht per Messenger verteilen.</p>
+  </div>`;
+}
+function bindTabAusbildungsstand(){
+  const b = document.getElementById('btn-asx-export');
+  if(b) b.onclick = ()=>{ const erg = ausbildungsstandMappeHerunterladen(); if(erg) zeigeToast(`Excel-Datei erstellt: ${erg.teams} Teams, ${erg.mitglieder} Mitglieder.`); };
 }
 function renderTabUebersicht(person){
   const z = vwZahlen(person);
@@ -5668,6 +6191,7 @@ function renderVerwaltungTab(tab, person){
     case 'hunde': return renderTabHunde();
     case 'qualifikationen': return renderTabQualifikationen();
     case 'fristen': return renderTabFristen();
+    case 'ausbildungsstand': return renderTabAusbildungsstand();
     case 'anwesenheit': return renderTabAnwesenheit();
     case 'orte': return renderTabOrte();
     case 'fahrzeuge': return renderTabFahrzeuge();
@@ -5706,6 +6230,7 @@ function bindVerwaltungTab(tab, person){
   else if(tab==='hunde') bindTabHunde();
   else if(tab==='qualifikationen') bindTabQualifikationen();
   else if(tab==='fristen') bindTabFristen();
+  else if(tab==='ausbildungsstand') bindTabAusbildungsstand();
   else if(tab==='anwesenheit') bindTabAnwesenheit();
   else if(tab==='orte') bindTabOrte();
   else if(tab==='fahrzeuge') bindTabFahrzeuge();
@@ -17950,6 +18475,7 @@ const HILFE_ARTIKEL = [
   {id:"funk-spickzettel", kategorie:"Wissen & Material", titel:"Funk-Spickzettel", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Unter <strong>Wissen &amp; Material → 📻 Funk</strong> (oder über die Startseite) stehen – durchsuchbar und offline – Statusmeldungen Fahrzeug → Leitstelle (0–9, *) mit Merkhilfe „3 AUS · 4 AN · 1 AB · 2 EIN“, Meldungen der Leitstelle, wen man anfunkt (Suchtrupp → Einsatzleitung; Leitstelle über Status 5), Grundregeln, Betriebswörter, Lage- und Fundmeldung, Mustermeldungen im Suchdienst, Bedienung des Motorola MTP 850 (Gruppe einstellen, TMO/DMO, Notruf, GPS), Sprechgruppen einschließlich DMO-Gruppen der Gemeinden im Raum Kassel, Koordinaten, unsere Funkrufnamen, Buchstabieralphabet, Checkliste und Störungshilfe.</p>\n<p>Grundlage ist die Ausbildungsunterlage „Sprechfunk im BOS-Digitalfunk“ des DRK Kassel (Entwurf zur fachlichen Prüfung, 09/2026). Mit ⚠ markierte Punkte sind noch mit Leitstelle bzw. Servicepoint abzustimmen; verbindlich sind die Weisungen der Leitstelle.</p>\n"},
   {id:"mein-stand", kategorie:"Ausbildung & Team", titel:"Mein Ausbildungsstand, Lehrgänge und Kurswünsche", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Unter <strong>Ausbildung &amp; Team → 🎓 Mein Stand</strong> (oder über die Karte auf der Startseite) sieht jedes Mitglied seine <strong>Fristen</strong> (abgelaufen bzw. in den nächsten 90 Tagen fällig), <strong>was noch fehlt</strong> (z. B. für die Zulassung zur Rettungshundeprüfung oder die Einsatzfähigkeit), die eigenen Nachweise und die Lehrgänge, für die die Voraussetzungen erfüllt sind.</p>\n<p><strong>Kurswunsch:</strong> Lehrgang wählen – BARRY zeigt die Voraussetzungen laut Seminarbroschüre LV Hessen 2025 (mit Seitenangabe) und was noch fehlt. „Kurswunsch an die Leitung senden“ öffnet das Teilen-Menü. Die Leitung erfasst den Wunsch unter Auswertung → Kurswünsche und setzt den Status.</p>\n<p><strong>Selbst pflegen:</strong> Unter „✏️ Nachweis ergänzen“ → „Nachweis eintragen“ (Schritt für Schritt: Bereich, Qualifikation, Angaben) trägt das Mitglied neue Ausbildungen ein – auch die UVV-Unterweisung online und freie Kurse aus dem DRK-Lerncampus (⏳ bis zur Bestätigung) und schickt sie mit „📤 Meine Angaben an die Leitung senden“ als Datei. Die Leitung liest sie unter Verwaltung → Pakete für Mitglieder → 🔑 Zugänge &amp; Selbstauskunft → „Meldungen der Mitglieder einlesen“ ein, bestätigt je Eintrag und schickt ein Stand-Update zurück.</p>\n<p><strong>Aktuell halten:</strong> Die Leitung erstellt unter Verwaltung → Pakete für Mitglieder → 🔑 Zugänge &amp; Selbstauskunft „Stand-Updates für alle (ZIP)“ und schickt jeder Person ihre Datei. Einlesen unter 🎓 Mein Stand → „Stand-Update einlesen“ – Passwort und übrige Daten bleiben unverändert.</p>\n<p><strong>Kalender aufs Handy:</strong> Organisation &amp; Termine → Kalender → „📅 Kalenderdatei (.ics)“ – die Datei in Google-, Apple- oder Outlook-Kalender importieren.</p>\n"},
   {id:"neu-2-0", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.0", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p><strong>📂 Datei einlesen</strong> (Menü und Startseite) erkennt jede BARRY-Datei selbst: Terminplan, Stand-Update, Zugangspaket, Datensicherung, Meldung, Selbstauskunft, Mitglieder-Tabelle und die Übergabe aus dem Flächensuchassistenten.</p><p><strong>⚙️ Bereiche auswählen</strong> (Anmeldeseite oder Menü): nicht benötigte Bereiche ausblenden; die Daten bleiben erhalten.</p><p><strong>📧 Per E-Mail:</strong> Kurswünsche und Trainingskarten öffnen eine fertige E-Mail an die Staffelleitung. Bei Meldungen neuer Nachweise wird die Datei gespeichert bzw. über „Teilen“ angehängt; die Adresse wird dabei in die Zwischenablage kopiert.</p><p><strong>🚨 Einsatzbereit heute</strong> (Startseite, Leitung/Ausbildung): Teams mit gültiger Modulprüfung 2 je Sparte; „eingeschränkt“, wenn bei der Hundeführerin bzw. dem Hundeführer ein ★-Nachweis fehlt oder abgelaufen ist. Keine Einsatzfreigabe.</p><p><strong>📝 Vorprüfung</strong> (Trainingsplanung): staffelinterner Beobachtungsbogen je Sparte; das Ergebnis wird als Einschätzung gespeichert, offene Punkte auf Wunsch als Ziele.</p><p><strong>🎯 Übergabe Flächensuchassistent</strong> (Einsatzprotokoll → Karten &amp; Tracking oder „Datei einlesen“): legt einen Suchtrupp mit Gebiet, Zeiten und Ergebnis an, übernimmt Ereignisse, Funde, Weg und Suchgebiet. Dieselbe Übergabe wird nicht doppelt eingelesen.</p><p><strong>📍 Trainingsorte</strong> (Organisation &amp; Termine): je Ort die eigene Entfernung eintragen oder online berechnen lassen; BARRY schlägt daraus die gefahrenen Kilometer (Hin- und Rückfahrt) bei der Zusage und die Entfernung im Trainingstagebuch vor. Die Orte (mit Adresse) pflegt die Leitung unter Verwaltung → Orte &amp; Gebiete; sie gehen mit dem Terminplan an alle.</p><p><strong>🚗 Fahrzeuge</strong> (Verwaltung → Fahrzeuge): Einsatzfahrzeuge mit Funkrufnamen und Fahrzeugeinweisungen. Fahren darf nur, wer auf das Fahrzeug eingewiesen ist; mit Sonder- und Wegerechten zusätzlich mit gültiger SuWR. Die Übersicht steht in „Einsatzbereit heute“, die eigenen Einweisungen unter Mein Stand.</p><p><strong>⚙️ Bereiche</strong> lassen sich schon auf der Anmeldeseite auswählen; ohne Auswahl wird alles angezeigt.</p><p><strong>💾 Sicherungserinnerung:</strong> Liegt die letzte Datensicherung mehr als 30 Tage zurück, erinnert die Startseite der Leitung daran.</p>\n"},
+  {id:"ausbildungsstand-excel", kategorie:"Daten sichern & teilen", titel:"Ausbildungsstand & Jahresgespräche als Excel", rollen:["ausbilder","leitung"], text:"<p>Unter <strong>Verwaltung → Ausbildung &amp; Nachweise → 📋 Ausbildungsstand &amp; Jahresgespräche</strong> erstellt BARRY mit „📥 Excel-Datei erstellen“ eine Arbeitsmappe mit dem aktuellen Stand.</p><ul><li><strong>Grau</strong> sind Daten aus BARRY (Module, Suchprüfung, Fristen, Funktion). Fehler bitte in BARRY berichtigen und die Datei neu erstellen.</li><li><strong>Hellgelb</strong> sind Eingabefelder: Bewertung der Ausbildungsbausteine per Auswahlliste, Freitext, Prüfungsziel, Termin und Ersatztermin, Notizen zum Jahresgespräch.</li><li>Die Termine der Auswahlliste kommen aus dem Kalender (Kategorie „Prüfung“, ab heute); weitere lassen sich im Blatt „Prüfungstermine“ ergänzen.</li><li>Die Datei enthält personenbezogene Daten und Einschätzungen – nur im Kreis der Leitung und der Ausbildenden verwenden. Notizen aus Jahresgesprächen nur mit Einverständnis des Mitglieds festhalten.</li></ul>"},
   {id:"datensicherung", kategorie:"Daten sichern & teilen", titel:"Backup exportieren und einspielen", rollen:["leitung"], text:"\n<p>Unter <strong>Verwaltung \u2192 Datensicherung</strong> l\u00e4sst sich der komplette Datenbestand als eine\neinzelne Datei <strong>exportieren</strong> \u2013 das sollte regelm\u00e4\u00dfig geschehen, am besten vor gr\u00f6\u00dferen\n\u00c4nderungen. Beim <strong>Import</strong> einer solchen Datei zeigt BARRY vorher eine Vorschau (Inhalt,\nHerkunft, Datum) und legt automatisch eine Sicherheitskopie des bisherigen Standes an, die sich bei\nBedarf mit einem Klick wiederherstellen l\u00e4sst. Eine Datei ohne anmeldef\u00e4hige Admin-Person wird\ngrunds\u00e4tzlich abgelehnt, damit sich niemand versehentlich aussperrt.</p>\n<p><strong>Teilsicherung (seit 2.86):</strong> Unter <strong>Auswahl sichern</strong> hakst du an, was in die Datei soll: Ausbildungsplan &amp; Trainingsorte, Personen &amp; Hunde (Stammdaten), Ausbildungs- und Nachweisdaten, Ausbildungsunterlagen oder Sonstiges – oder einfach <strong>Alles</strong>. Beim Einlesen zeigt BARRY vorher, welche Teile mit wie vielen Einträgen enthalten sind, legt eine Sicherheitskopie an und ersetzt <strong>nur diese Teile</strong>; alles andere bleibt unverändert. Die Stammdaten enthalten personenbezogene Daten – nur im nötigen Kreis weitergeben. Die Tankkarten-PIN ist nur bei Sonstiges bzw. Alles dabei. Bei den Ausbildungsunterlagen kommen die Dateien der Unterlagen-Bibliothek als zweite Datei (ZIP) dazu.</p>\n"},
   {id:"keine-automatische-sync", kategorie:"Daten sichern & teilen", titel:"Wichtig: Keine automatische Synchronisation zwischen Ger\u00e4ten", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>BARRY speichert alle Daten <strong>ausschlie\u00dflich lokal auf dem jeweiligen Ger\u00e4t</strong>. Es gibt\nkeinen Server im Hintergrund, der die Daten automatisch zwischen mehreren Handys oder Tablets abgleicht.\nMeldet sich jemand auf einem <em>anderen</em> Ger\u00e4t an, sieht diese Person eine eigenst\u00e4ndige,\nunabh\u00e4ngige Kopie \u2013 neue Eintr\u00e4ge auf dem einen Ger\u00e4t erscheinen nicht von selbst auf dem anderen.</p>\n<p><strong>F\u00fcr die Praxis bedeutet das:</strong> BARRY funktioniert am besten auf einem\n<strong>gemeinsam genutzten Ger\u00e4t</strong> (z. B. ein Staffel-Tablet), auf dem sich alle mit dem\neigenen Login anmelden. Soll BARRY auf mehreren eigenen Handys parallel genutzt werden, m\u00fcssen Daten\nbewusst per Export/Import \u00fcbertragen werden \u2013 siehe Artikel \u201eBackup exportieren und einspielen\".</p>\n"},
   {id:"austauschpaket", kategorie:"Daten sichern & teilen", titel:"Team-Stammdaten mit eigenst\u00e4ndigen Apps austauschen", rollen:["ausbilder", "leitung"], text:"\n<p>F\u00fcr einzelne Hundeteams l\u00e4sst sich unter <strong>Verwaltung \u2192 Hunde \u2192 Teamdaten</strong> eine kleine\nTeamdaten-Datei (Name, Rasse, Geburtsdatum, Sparten, Anzeigeart) exportieren und in eine der\neigenst\u00e4ndigen RHS-Apps (z. B. Tr\u00fcmmersuchassistent) importieren, und umgekehrt. Es handelt sich\nbewusst nur um Stammdaten, nicht um Trainings- oder Einsatzdaten; ein Import zeigt vorher immer eine\nVorschau inklusive Warnung, falls Name oder Hundef\u00fchrer/-in nicht zum gew\u00e4hlten Team passen.</p>\n"},
@@ -17963,7 +18489,7 @@ const HILFE_KATEGORIEN = [...new Set(HILFE_ARTIKEL.map(a=>a.kategorie))];
   const alt = ids.map(id=>HILFE_ARTIKEL.find(a=>a.id===id)).filter(Boolean);
   alt.forEach(a=>{ const i=HILFE_ARTIKEL.indexOf(a); if(i>=0) HILFE_ARTIKEL.splice(i,1); });
   HILFE_ARTIKEL.unshift({id:'was-ist-neu', kategorie:'Erste Schritte', titel:'Was ist neu?', rollen:['mitglied','ausbilder','leitung'],
-    text: '<p>Diese Übersicht fasst die Neuerungen zusammen – die neueste Version steht oben.</p><h4>BARRY 2.86 (November 2026): Ganz ohne Passwort und Sicherung nach Wahl</h4><ul><li><strong>Keine Passwortabfrage mehr:</strong> Auch auf Geräten der Staffelleitung öffnet die Verwaltung alle Bereiche direkt. Die Schloss-Symbole und der Hinweis zum Entsperren sind weg, Namen stehen in der Verwaltung vollständig da.</li><li>Zugangspakete und Stand-Updates bleiben verschlüsselt – das Startpasswort wird beim Einlesen weiter gebraucht.</li><li><strong>Auswahl sichern:</strong> Unter Verwaltung → Datensicherung kannst du jetzt einzelne Teile sichern: Ausbildungsplan &amp; Trainingsorte, Stammdaten, Ausbildungs- und Nachweisdaten, Ausbildungsunterlagen, Sonstiges oder alles.</li><li><strong>Teilsicherung einlesen:</strong> BARRY zeigt vorher, was enthalten ist, legt eine Sicherheitskopie an und ersetzt nur diese Teile – alles andere bleibt, wie es ist.</li><li>Die Tankkarten-PIN steckt nur in Sonstiges bzw. Alles. Stammdaten enthalten personenbezogene Daten – bitte nur im nötigen Kreis weitergeben.</li></ul><h4>BARRY 2.85 (November 2026): Ohne Passwort</h4><ul><li><strong>Kein Anmeldepasswort mehr:</strong> Nach dem Einlesen des Zugangspakets ist BARRY auf dem Gerät sofort und dauerhaft geöffnet. Ein eigenes Passwort festlegen oder sich merken ist nicht mehr nötig.</li><li><strong>Startpasswort nur einmal:</strong> Zugangspakete und Stand-Updates bleiben verschlüsselt, weil sie über Teams, E-Mail oder Messenger verschickt werden. Das Startpasswort wird beim ersten Einlesen gebraucht; Stand-Updates öffnet BARRY danach ohne erneute Eingabe.</li><li>Wer schon ein eigenes Passwort hat, ist ab sofort ebenfalls ohne Passwort angemeldet. Nach „Abmelden“ genügt „Weiter als …“.</li><li><strong>Schutz der Personendaten</strong> in der Verwaltung fragt nur noch auf Geräten der Staffelleitung nach dem Passwort.</li><li>Bitte jedes Handy mit der Bildschirmsperre schützen: Wer das Gerät in der Hand hat, sieht BARRY.</li></ul><h4>BARRY 2.84 (November 2026): Verwaltung aufgeräumt</h4><ul><li><strong>Neue Ordnung:</strong> Personen &amp; Hunde · Ausbildung &amp; Nachweise · Verteilen &amp; Sichern · Meldungen &amp; Listen · Einsatzmittel &amp; Orte. Kein Bereich ist weggefallen, Rechte und Passwortschutz bleiben wie bisher.</li><li><strong>Übersicht mit Kacheln:</strong> Oben steht, was gerade ansteht; jede Kachel zeigt kurz ihren Zustand, z. B. „3 mit Abgelaufenem“ oder „letzte vor 12 Tagen“. In einem Bereich führt „◀ Übersicht“ zurück.</li><li><strong>Pakete für Mitglieder</strong> (bisher „Mitglieder &amp; Austausch“) mit Prüfliste: Startpasswörter, Zugangspakete, Fragenpakete und Unterlagenpaket auf einen Blick.</li><li>Kürzere Namen: „Formulare &amp; Meldungen“, „Orte &amp; Gebiete“.</li></ul><h4>BARRY 2.83 (Oktober 2026): Neue Fragenpakete und Berichtigungen</h4><ul><li><strong>Zwei neue Themenbereiche</strong> für Fragenpakete: „Unterordnung &amp; Gewandtheit“ und „Geruch &amp; Nasenarbeit“.</li><li><strong>Pakete wählen:</strong> Unter Fachfragen üben legst du fest, welche Fragenpakete zu „Alle Fragen“ gehören (nur auf deinem Gerät). Pakete zur Vertiefung fließen nicht in die Probeprüfung ein.</li><li><strong>Erste Hilfe am Hund berichtigt</strong> nach dem Handout der Staffel (Stand Oktober 2026, RECOVER 2026): Hitzschlag – sofort mit fließendem Wasser kühlen, auch kaltes Wasser ist erlaubt; Verbrennung – mindestens 20 Minuten kühl und fließend; Ersticken – zuerst bis zu fünf Rückenschläge, nie blind ins Maul greifen; Maulschutz nur bei freier Atmung; Normalwerte für Atmung und Puls mit Quellen.</li></ul><h4>BARRY 2.82 (Oktober 2026): Übungen für Staffelteams auslosen</h4><ul><li><strong>Glücksrad für Ausbilder:</strong> Neben den eigenen Hunden können Ausbilder (und Personen mit Ausbildungsrecht) im Glücksrad und in der Übungsausgabe jedes Staffelteam wählen. Die Anzeigeart des gewählten Teams bestimmt die Auswahl.</li><li><strong>Überraschung für ein Staffelteam:</strong> Ein Knopf wählt zufällig ein Staffelteam, stellt „mit Hund, Helfer und Ausbilder dabei“ ein und dreht das Rad. Der eigene Stand (erledigte Übungen) bleibt unberührt.</li><li>Die Team-Auswahl in der Übungsausgabe ist in „Meine Hunde“ und „Staffelteams“ gegliedert.</li></ul><h4>BARRY 2.81 (Oktober 2026): Fachfragen erweitert</h4><ul><li><strong>Fragenpakete mit Abbildungen:</strong> Fragen können jetzt Bilder (z. B. Kartenausschnitte, taktische Zeichen) und Bildantworten enthalten; Fragen ohne Erklärung werden korrekt angezeigt.</li><li><strong>Neue Themenbereiche:</strong> „DRK &amp; Einsatzorganisation“, „Prüfungsordnung &amp; Ausbildung“ und „Sanitätsdienst &amp; MTF-Behandlungsplatz“. Bereiche ohne Fragen werden ausgeblendet.</li><li>Die bisherigen Übungsfragen bleiben unverändert erhalten.</li></ul><h4>BARRY 2.80 (Oktober 2026): Nachtragsdateien</h4><ul><li><strong>Nachträge ohne komplette Datensicherung:</strong> Neue Nachweise – etwa aus dem drkserver – können als kleine Nachtragsdatei über „Datei einlesen“ übernommen werden. BARRY zeigt jede Zeile zur Bestätigung, erkennt bereits vorhandene Nachweise und lässt den übrigen Bestand unverändert. So gehen zwischenzeitliche Änderungen in BARRY nicht verloren.</li></ul><h4>BARRY 2.79 (Oktober 2026): HLW/AED im Sanitätslehrgang</h4><ul><li>HLW und AED werden in der Prüfung des Sanitätslehrgangs mitgemacht. Ein bestandener Sanitätslehrgang zählt deshalb ab seinem Datum als HLW/AED-Nachweis; danach gilt wie gewohnt die jährliche Auffrischung.</li><li><strong>Sanitätsfortbildung:</strong> Der Sanitätslehrgang enthält die 16 UE nicht. Nach dem Lehrgang läuft der erste Zweijahreszeitraum; bis zu seinem Ende sind 16 UE Fortbildung nachzuweisen. BARRY zeigt, wie viele UE noch fehlen und bis wann.</li></ul><h4>BARRY 2.78 (Oktober 2026): Rettungs- und Notfallsanitäter/-innen</h4><ul><li>Wer als <strong>Rettungs- oder Notfallsanitäter/-in</strong> erfasst ist, erfüllt die sanitätsbezogenen Anforderungen über die Berufsqualifikation und die Fortbildungspflicht im Rettungsdienst: Erste Hilfe, Sanitätslehrgang, EKGA-S, HLW/AED und Sanitätsfortbildung gelten als erfüllt und erscheinen nicht mehr als fehlend oder abgelaufen.</li><li>Andere Nachweise wie EKGA-E, RKE, Datenschutz oder UVV bleiben wie bisher erforderlich.</li></ul><h4>BARRY 2.77 (Oktober 2026): Stärkemeldung, Erfassungslisten und Ausstattung</h4><ul><li><strong>Stärkemeldung &amp; Listen</strong> (Verwaltung → Dienstbetrieb &amp; Meldungen): Die Erfassung Personal und Material für den Staffelverbund und die Alamos-Erfassung erstellt BARRY jederzeit neu als Excel-Datei – mit Übersicht, Formeln und Auswahllisten wie in der Vorlage. Geprüfte Teams, Teams in Ausbildung, Helfer, Sprechfunk, Sanitätsausbildung, Führungsqualifikation, Ausbilderrolle und Plaketten kommen aus dem Bestand.</li><li>Was BARRY nicht selbst ableiten kann – Ortsverein, tagsüber verfügbar, angestrebte Führungsqualifikation, Bemerkung, Alamos-Angaben – trägt die Leitung je Person ein.</li><li><strong>Ausstattung &amp; Material</strong> (Verwaltung → Stammdaten): Fahrzeugangaben für die Liste, Sanitätsmaterial, BOS-Funkgeräte, Material Einsatzleitung und allgemeines Einsatzmaterial.</li><li>Zurückgeschickte Listen liest du über „Datei einlesen“ wieder ein: BARRY ergänzt nur, was noch fehlt, und überschreibt nichts.</li><li><strong>Fragenpakete:</strong> Zusätzliche Fachfragen – etwa der DRK-Fachfragenkatalog nach Genehmigung – kann die Leitung als Fragenpaket einlesen. Sie liegen nur im Bestand, gehen verschlüsselt mit den Zugangspaketen an die Mitglieder und tragen den Hinweis „Nur für den Dienstgebrauch“. Beim Üben wählst du, aus welcher Sammlung die Fragen kommen.</li><li><strong>🎓 DRK-Lerncampus:</strong> Unter Fachfragen üben führt ein Knopf direkt zu den Fachfragen im Lerncampus; die Leitung kann den Link anpassen.</li></ul><h4>BARRY 2.76 (Oktober 2026): Fachfragen üben und Probeprüfung</h4><ul><li><strong>🎯 249 Übungsfragen mit Antworten A bis D</strong> zu allen zehn Themenbereichen der Theorie (Modul 1.0): Erste Hilfe, Erste Hilfe am Hund, Kynologie, Orientierung &amp; Kartenarbeit, Einsatztaktik Trümmer und Fläche, Sprechfunk, Trümmerkunde, Unfallverhütung und Transport. Zu jeder Frage gibt es eine kurze Erklärung.</li><li><strong>📝 Probeprüfung:</strong> 25 Fragen für deine Sparte (Fläche, Trümmer oder beides) – zusammengestellt nach der Fragenverteilung der Prüfung. Die Auflösung kommt am Ende, mit Auswertung je Themenbereich. Dein letztes Ergebnis merkt sich BARRY auf deinem Gerät.</li><li><strong>Nach Themen üben</strong> mit sofortiger Rückmeldung, <strong>falsch beantwortete Fragen wiederholen</strong> und alle Fragen mit Lösung zum Nachlesen und Durchsuchen – unter Wissen &amp; Material → Prüfungsordnungen.</li><li><strong>❓ Fachfrage des Tages</strong> zieht jetzt aus allen Fragen: Bei Multiple-Choice-Fragen tippst du deine Antwort an und siehst gleich, ob sie stimmt.</li><li>Die Fragen sind von der Staffel selbst formuliert und folgen dem aktuellen Lehrstand (z. B. Wiederbelebung beim Hund nach den RECOVER-Leitlinien). Wo ältere Unterlagen etwas anderes lehren, steht ein Hinweis. Geprüft wird mit dem offiziellen DRK-Fachfragenkatalog.</li></ul><h4>BARRY 2.75 (Oktober 2026): Qualifikationen abgeglichen</h4><ul><li><strong>Abgleich</strong> mit der Übersicht „Notwendige Qualifikation für Position“ (Fachausbildung, Stand 31.08.2023) und den Festlegungen der Staffel vom 11.10.2026.</li><li><strong>Rettungshundehelfer/in – Ausbildung komplett:</strong> Truppführer (TF) ist jetzt Teil des Profils. BOS-Sprechfunk bleibt Pflicht.</li><li><strong>Einsatz-Fachberater/in:</strong> Die Rettungshundeprüfung ist empfohlen statt Pflicht – die geprüften Hundeführenden suchen im Einsatz selbst; die Einsatzleitung berät dann eine erfahrene Helferin bzw. ein erfahrener Helfer.</li><li><strong>Katalog:</strong> PSNV-E1 mit 20 UE; RHd bleibt bei 35 UE (die Übersicht von 2023 nennt 32).</li></ul><h4>BARRY 2.74 (Oktober 2026): aufgeräumtes Seitenmenü</h4><ul><li><strong>Weniger im Seitenmenü:</strong> Die Rollen-Etiketten (Mitglied, Ausbilder, Leitung …) stehen nur noch unter „Mein Profil“. Die übrigen Knöpfe sind kleiner und stehen zu zweit nebeneinander.</li><li><strong>Am Handy</strong> scrollt das ganze Menü in einem Stück – die Bereiche sind sofort zu sehen, ohne in einem kleinen Fenster scrollen zu müssen.</li></ul><h4>BARRY 2.72–2.73 (Oktober 2026): Fachfrage des Tages, Kontakte, Startseite</h4><ul><li><strong>❓ Fachfrage des Tages</strong> auf der Startseite: jeden Tag eine Fachfrage zur Theorie (Modul 1.0) – erst selbst überlegen, dann die Antwort aufdecken; weitere oder zufällige Fragen mit einem Tipp.</li><li><strong>Kontakte</strong> unter Organisation &amp; Termine: <em>Staffelkontakte</em> pflegt die Leitung, sie gehen mit dem Zugangspaket an alle. <em>Meine Kontakte</em> (z. B. Tierarztpraxis, Tierklinik) speichert jede Person nur auf ihrem Gerät – sie bleiben auch nach einem neuen Zugangspaket erhalten. Direkt anrufen, E-Mail schreiben oder mit „📲 Ins Handy“ in die Kontakte des Telefons übernehmen.</li><li><strong>🌲 Flächensuchassistent</strong> im Seitenmenü: springt direkt in den RH-Flächensuchassistenten. Auf Android öffnet sich meist die installierte App; auf dem iPhone öffnen Links immer Safari – dort weist BARRY vorher darauf hin, den Assistenten besser über sein eigenes Symbol zu öffnen.</li><li><strong>Startseite neu geordnet:</strong> Unten stehen Fachfrage des Tages, Übungen und Taschenkarten gemeinsam in einer Reihe; „📂 Datei einlesen“ steht unter den Unterlagen – jetzt für alle Mitglieder, denn darüber lassen sich auch eigene Dokumente in die Unterlagen-Bibliothek legen; BARRY erkennt Format und Ziel selbst.</li></ul><h4>BARRY 2.71 (Oktober 2026): Comic-Taschenkarten</h4><ul><li><strong>Neue Gestaltung:</strong> Die sieben Taschenkarten sind jetzt die Comic-Karten der Staffel – Vorderseite mit sechs Comic-Bildern, Rückseite kompakt. Erste Hilfe am Hund, Helfer &amp; Versteckpersonen, Einsatz · erste 30 Minuten, Funk · Fahrzeug &amp; HRT, Fahrzeugcheck &amp; UTA, Orientierung &amp; Kartenkunde, Geruch &amp; Suchtaktik.</li><li><strong>Wie bisher:</strong> am Handy lesen, auf DIN A5 drucken oder als PDF speichern, leere Vorlage drucken, Eingaben nur kurzzeitig und „⤓ Ausgefüllt herunterladen“ als Datei auf dem Gerät.</li><li><strong>Tankkarten-PIN:</strong> steht nicht im Programm, sondern kommt aus der Einstellung der Leitung (Fahrzeugcheck-Karte, Rückseite).</li></ul><h4>BARRY 2.70 (Oktober 2026): Taschenkarten</h4><ul><li><strong>Sieben Taschenkarten</strong> unter Wissen &amp; Material → Taschenkarten und über die neue Kachel 🗂️ auf der Startseite: Erste Hilfe am Hund, Helfer &amp; Versteckperson, Alarm – die ersten 30 Minuten, Funk im Suchdienst, Fahrzeug-Check &amp; Tanken, Orientierung &amp; Kartenkunde, Geruch &amp; Suchtaktik.</li><li><strong>Am Handy lesen, auf DIN A5 drucken oder als PDF speichern:</strong> je Karte eine Vorder- und eine Rückseite, auf Wunsch eine Ausfüllseite zum Laminieren.</li><li><strong>Ausfüllfelder:</strong> Eingaben bleiben nur, solange BARRY geöffnet ist. Mit „⤓ Ausgefüllt herunterladen“ wird die Karte als Datei auf dem Gerät gespeichert – in BARRY bleibt nichts liegen.</li><li><strong>Tankkarten-PIN:</strong> Die Leitung hinterlegt sie auf der Fahrzeug-Karte. Sie steht nicht im Programm, sondern geht nur mit den verschlüsselten Zugangspaketen an die Mitglieder und wird nur auf Wunsch mitgedruckt.</li></ul><h4>BARRY 2.69 (Oktober 2026): Passwort und Wiederfinden</h4><ul><li><strong>Neues Passwort wird geprüft:</strong> Nach dem Festlegen kontrolliert BARRY, ob das Passwort wirklich im Gerätespeicher steht. Klappt das nicht (z. B. im privaten Fenster), sagt BARRY es sofort, statt dass man später von vorne beginnen muss. Bei Tippfehlern bleiben die Eingaben stehen.</li><li><strong>Anmelden verzeiht mehr:</strong> Ein automatischer Großbuchstabe am Anfang und Leerzeichen am Rand führen nicht mehr zu „Passwort falsch“. Wer versehentlich noch das Startpasswort eingibt, bekommt einen klaren Hinweis.</li><li><strong>BARRY wiederfinden:</strong> Die Willkommensseite zeigt das App-Symbol. Nach dem Installieren sagt BARRY, dass es über dieses Symbol weitergeht. Nach der Einrichtung erscheint auf der Startseite einmalig eine Karte: wie du dich künftig anmeldest und wo du BARRY findest.</li><li><strong>iPhone/iPad:</strong> Wer das Zugangspaket noch in Safari statt in der installierten App öffnen will, wird vorher gewarnt.</li></ul><h4>BARRY 2.68 (Oktober 2026): leichter starten auf einem neuen Gerät</h4><ul><li><strong>Willkommensseite:</strong> Auf einem neuen Gerät führt BARRY in drei Schritten durch die Einrichtung: als App installieren, Zugangspaket öffnen, eigenes Passwort festlegen. Wo der Browser es erlaubt, gibt es einen Knopf „📲 BARRY installieren“.</li><li><strong>Weniger tippen:</strong> Nach dem Öffnen des Zugangspakets mit dem Startpasswort geht es direkt zum eigenen Passwort. Name und Startpasswort müssen nicht noch einmal eingegeben werden, und die Rückfrage „Bestand ersetzen?“ entfällt auf einem neuen Gerät.</li><li><strong>Datei leichter auswählbar:</strong> Zugangspakete, die aus Teams, E-Mail oder Messengern gespeichert wurden, lassen sich auswählen, auch wenn das Gerät sie nicht als .json erkennt.</li><li><strong>Startpasswort robuster:</strong> Ein automatischer Großbuchstabe am Anfang (Handy-Tastatur) oder ein mitkopiertes Leerzeichen führen beim Öffnen des Zugangspakets nicht mehr zu „Passwort falsch“. Kurze Startpasswörter mit 4 oder 5 Zeichen lassen sich jetzt ebenfalls eingeben – bisher verlangte das Eingabefenster mindestens 6 Zeichen.</li><li><strong>Passwort anzeigen:</strong> Mit 👁 ist beim Tippen sichtbar, was eingegeben wurde. „Angemeldet bleiben“ lässt sich schon beim Festlegen des eigenen Passworts wählen.</li><li><strong>Für die Leitung:</strong> Das normale Anmeldeformular mit dem Erstzugang „Admin“ ist auf einem neuen Gerät über „Ich richte BARRY für die Staffel ein“ erreichbar.</li></ul><h4>BARRY 2.67 (Oktober 2026): eigene Unterlagen hochladen</h4><ul><li><strong>Für alle Mitglieder:</strong> In der Unterlagen-Bibliothek gibt es „➕ Eigene Unterlage hochladen“. PDF, Word, PowerPoint, Bilder und Texte lassen sich ablegen und direkt in BARRY öffnen.</li><li><strong>Automatisch einsortiert:</strong> BARRY liest Dateiname, Titel und die ersten Seiten und schlägt den passenden Ordner vor. Du kannst den Vorschlag ändern. Das geht auch über „📂 Datei einlesen“.</li><li><strong>Nichts doppelt:</strong> Liegt dieselbe Datei schon in der Bibliothek (gleicher Fingerabdruck), wird sie nicht noch einmal abgelegt. Bei ähnlichem Titel oder Dateinamen fragt BARRY nach. Liegt die Datei schon unter Lehrmaterial, kann sie in die Bibliothek umziehen.</li><li><strong>Weitergeben:</strong> Hochgeladene Unterlagen bleiben zunächst auf deinem Gerät. Mit „📤 Meine Unterlagen weitergeben“ entsteht ein Paket, das die Leitung oder andere Mitglieder einlesen – auch über „📂 Datei einlesen“. „Paket erstellen“ der Leitung nimmt die hochgeladenen Unterlagen mit.</li></ul><h4>BARRY 2.66 (Oktober 2026): Unterlagen direkt in BARRY lesen</h4><ul><li>PDF- und Word-Unterlagen aus der Unterlagen-Bibliothek öffnen sich jetzt in einer eigenen Ansicht in BARRY – auch auf Handys, deren Browser PDFs sonst nur herunterladen. Mit − und + vergrößern, mit ⤓ die Originaldatei auf dem Gerät speichern, mit ✕ oder der Zurück-Taste schließen. PowerPoint-Dateien werden weiterhin an das Gerät übergeben; zum Lesen gibt es jeweils die PDF-Fassung.</li></ul><h4>BARRY 2.65 (Oktober 2026): alles per Du, Nacht, Trümmer für Helfende, Ufer</h4><ul><li><strong>Du-Form überall:</strong> Alle Übungstexte im Übungsrad, die Fachfragen und die Hinweise zu Freigaben sprechen dich jetzt mit „du“ an. Sätze an Betroffene und Angehörige sowie der Sprechfunk bleiben bewusst beim „Sie“.</li><li><strong>Neue Übungsthemen:</strong> R36 Suchen, Führen und Sichern bei Nacht · R37 Trümmer für Helfende (sichern, beobachten, dokumentieren, betreuen) · R38 Am Ufer und im flachen Wasser – mit dem Hinweis, dass bei uns die Wasserwacht Wassersuche und Wasserortung übernimmt.</li><li><strong>Lernen &amp; Forschung:</strong> neue Themen „Sehen in der Dämmerung“, „Dunkelanpassung des menschlichen Auges“, „Die Erwartung des Hundeführers riecht mit“, „Nasenarbeit macht optimistischer“ und „Kinder und Hunde: Regeln üben statt nur erklären“.</li></ul><h4>BARRY 2.62–2.64 (Oktober 2026): Unterlagen-Bibliothek, neue Übungen, Profil</h4><ul><li><strong>📚 Unterlagen-Bibliothek</strong> (Wissen &amp; Material, Startkachel „Unterlagen“, Unterlagen-Leiste in Ausbildung &amp; Team): alle Unterlagen der Staffel geordnet in zehn Ordnern – Prüfungsordnung, Qualifikation, Einsatz und Führung, Ausbildung, Orientierung, Erste Hilfe am Hund, Formulare u. a. –, jede Unterlage genau einmal, mit Suche. Die Dateien kommen aus dem <strong>Unterlagenpaket</strong> der Staffelleitung, das du einmal einliest; danach öffnen sie sich auch ohne Netz. Vordrucke stehen zusätzlich unter Organisation → Formulare. Doppelt abgelegtes Lehrmaterial wird markiert.</li><li><strong>🎡 Neue Übungen:</strong> Themen R32 Führungssystem und taktische Zeichen, R33 Alarm – die ersten 30 Minuten, R34 Erstversorgung und Übergabe der gefundenen Person, R35 Kinderbesuch und Suchvorführung sowie weitere Übungen zu Anzeigearten (Rück- und Freiverweiser), Gerätearbeit, Nasenarbeit, Wind und Qualifikation.</li><li><strong>👤 Mein Profil</strong> ist leichter zu finden (Menü, Mein Stand, Suche); dort trägst du auch die Anzeigeart deines Hundes ein.</li></ul><h4>BARRY 2.60–2.61</h4><ul><li><strong>🎡 Übungen</strong> (früher Übungsrad): Übungsausgabe wie im Team-Begleiter – Glücksrad, <strong>Trainingseinheit</strong> (3 bis 8 Übungen nach Schwerpunkt und Stufe, abhaken, ins Trainingstagebuch), <strong>Abenteuer-Spaziergang</strong> (6 Stationen) und <strong>Problem angehen</strong> (Alltagsthema wählen, passende Übungen übernehmen). Offene Einheiten erscheinen auf der Startseite.</li><li>Startseite mit Kacheln für Übungen, Prüfung &amp; Module und Unterlagen sowie „Alle Bereiche“; alle Reiter sind ohne Schieben sichtbar; Prüfungsordnung auch ohne eigenen Hund lesbar.</li></ul><h4>BARRY 2.56–2.59 (Oktober 2026): leichter finden, klarer nach Rolle</h4><ul><li><strong>🔍 Suche</strong> oben rechts bzw. in der Seitenleiste: findet Seiten, Qualifikationen, Lehrgänge, Übungen und Hilfeartikel (Leitung zusätzlich Personen).</li><li><strong>Zurück-Taste</strong> des Handys geht jetzt eine Ebene zurück, statt BARRY zu verlassen.</li><li><strong>Mein Stand:</strong> Sprungleiste am Seitenanfang; neue Karte <strong>Meine Einsatzfunktionen</strong> (Rettungshundeführer/-in, Rettungshundehelfer/-in, Sanitäter/-in, Funker/-in, Praktikant/-in – nach der Festlegung der Staffel vom 10.10.2026, Mindestalter 18 Jahre). Bei fehlenden Nachweisen helfen die Knöpfe „eintragen“ und „Kurswunsch“.</li><li><strong>Kurswünsche:</strong> die Lehrgänge der Rettungshundearbeit (EH, RKE, EKGA-E und -S, Datenschutz, RHd, BOS, SLG, Modulprüfung 2) stehen zuerst, weiterführende dahinter. Suche, Zeichen ✅ / ⬜ / ✓ in der Liste, „Als Nächstes möglich“ zum Antippen, sonstiger Lehrgang mit freiem Titel, Rückfrage bei doppelten Wünschen, Wunsch zurückziehen.</li><li><strong>Nachweis eintragen:</strong> Liste „Für dich“ mit dem, was fehlt oder bald abläuft; die Suche nach Kürzeln wie EH, DS oder TF ist genauer; Reihenfolge wahlweise nach Ausbildungsweg oder alphabetisch; neue Bereiche PSNV sowie Leitung &amp; Vorstand.</li><li><strong>Ausbildungsnachweis drucken</strong> (Mein Stand → Meine Nachweise) – z. B. für Lehrgangsanmeldungen.</li><li><strong>Wissen:</strong> Fachfragen zur Theorieprüfung jetzt unter Prüfungsordnungen; Anzeigeart-Programme unter Findewille &amp; Anzeigetraining; die Übungssuche zeigt auch Treffer aus dem Übungsrad.</li><li><strong>Hilfe</strong> zeigt zuerst die Artikel für deine Rolle („Alle Artikel“ zeigt alles).</li><li><strong>Für Ausbilder/-innen und Leitung:</strong> Verwaltung beginnt mit einer Übersicht; „Wer hat …?“ mit Suchfeld; Matrix wahlweise nach ★-Pflicht oder Zielprofil; Kurswünsche filtern, nach Lehrgang bündeln, Lehrgangstermin und Anmeldedatum eintragen, als Tabelle herunterladen; einen Nachweis für mehrere Personen gleichzeitig eintragen; Leitung: Vorschau „Ansicht als Mitglied/Ausbilder“ in der Seitenleiste.</li><li><strong>Neue Namen:</strong> Alltagstagebuch (Alltag &amp; Zuhause), Trainingsplanung, Auswertung &amp; Kurswünsche, Orte &amp; Gebiete, Formulare &amp; Meldungen.</li></ul>' + alt.map(a=>`<h4>${a.titel}</h4>${a.text}`).join('')});
+    text: '<p>Diese Übersicht fasst die Neuerungen zusammen – die neueste Version steht oben.</p><h4>BARRY 2.92 (November 2026): Prüfungsreife und Ausbildungsübersicht</h4><ul><li><strong>Zwei neue Blätter im Excel-Export</strong> nach der Vorlage der Staffelleitung: „Prüfungsreife Mensch“ und „Übersicht Ausbild. Mitglieder“ – je Mitglied Grundausbildung, Sanitätsausbildung, Fortbildungsstunden und die Bausteine der Fachdienstausbildung mit Datum.</li><li>Dunkelrot = Mindestanforderung für die Einsatzfähigkeit, orange = zusätzlich für die Prüfungsreife. Die Übersicht zeigt außerdem die Anzahl der Suchprüfungen je Sparte und Führungs- und weitere Qualifikationen.</li></ul><h4>BARRY 2.91 (November 2026): Excel-Export wie 2.89</h4><ul><li>Das Blatt „Teams Mensch-Hund“ hat wieder waagerechte Überschriften und breite Felder zum Schreiben (Rücknahme von 2.90).</li></ul><h4>BARRY 2.89 (November 2026): Excel-Export erweitert</h4><ul><li><strong>Fachdienstausbildung je Mitglied:</strong> Im Blatt „Mitglieder Mensch“ stehen alle Bausteine der Fachdienstausbildung Rettungshunde mit Datum und „x von 13“ bzw. „komplett“.</li><li><strong>Mehr Platz:</strong> Die Ausbildungsbausteine haben waagerechte Überschriften und breite, hohe Felder für ein paar Sätze. Die Auswertung zählt auch Felder, die mit der Stufe beginnen und Text enthalten.</li><li>Begleithundeprüfung als Modul 1.2 erscheint mit dem Vermerk „BH“; Teams mit offener Wiederholungsprüfung stehen bei den Geprüften mit „Wdh. offen“.</li></ul><h4>BARRY 2.88 (November 2026): Excel-Export berichtigt</h4><ul><li>Datumsspalten im Excel „Ausbildungsstand &amp; Jahresgespräche“ sind breiter – Daten erscheinen nicht mehr als ####.</li></ul><h4>BARRY 2.87 (November 2026): Ausbildungsstand & Jahresgespräche als Excel</h4><ul><li><strong>Neu unter Verwaltung → Ausbildung &amp; Nachweise → 📋 Ausbildungsstand &amp; Jahresgespräche:</strong> BARRY erstellt jederzeit eine Excel-Arbeitsmappe mit dem aktuellen Stand aller Teams und Mitglieder.</li><li><strong>Teams Mensch-Hund:</strong> Module, Suchprüfung mit Frist und FDA-Theorie aus BARRY; dazu Auswahllisten für 14 Ausbildungsbausteine (z. B. Sozialverhalten, Gehorsam, Tragen lassen, Gewandtheit, Motivation, Anzeige, Suchausdauer, Stress, Wesen), Freitext „sicher / Probleme / Sonstiges“ und Prüfungsplanung mit Termin, Ersatztermin und Prüfungsreife.</li><li><strong>Mitglieder Mensch:</strong> Grunddaten und Fristen für die Jahresgespräche, Bausteine für Hundeführende und Helfende, Stärken, Ziele, Wünsche und Vereinbarungen.</li><li>Notizblätter je Team bzw. Mitglied und Baustein, Prüfungstermine aus dem Kalender (Kategorie „Prüfung“) mit Zählung und eine Auswertung, wo das Training ansetzen sollte.</li><li>Bewertungen und Notizen bleiben in der Excel-Datei – BARRY selbst ändert sich dadurch nicht.</li></ul><h4>BARRY 2.86 (November 2026): Ganz ohne Passwort und Sicherung nach Wahl</h4><ul><li><strong>Keine Passwortabfrage mehr:</strong> Auch auf Geräten der Staffelleitung öffnet die Verwaltung alle Bereiche direkt. Die Schloss-Symbole und der Hinweis zum Entsperren sind weg, Namen stehen in der Verwaltung vollständig da.</li><li>Zugangspakete und Stand-Updates bleiben verschlüsselt – das Startpasswort wird beim Einlesen weiter gebraucht.</li><li><strong>Auswahl sichern:</strong> Unter Verwaltung → Datensicherung kannst du jetzt einzelne Teile sichern: Ausbildungsplan &amp; Trainingsorte, Stammdaten, Ausbildungs- und Nachweisdaten, Ausbildungsunterlagen, Sonstiges oder alles.</li><li><strong>Teilsicherung einlesen:</strong> BARRY zeigt vorher, was enthalten ist, legt eine Sicherheitskopie an und ersetzt nur diese Teile – alles andere bleibt, wie es ist.</li><li>Die Tankkarten-PIN steckt nur in Sonstiges bzw. Alles. Stammdaten enthalten personenbezogene Daten – bitte nur im nötigen Kreis weitergeben.</li></ul><h4>BARRY 2.85 (November 2026): Ohne Passwort</h4><ul><li><strong>Kein Anmeldepasswort mehr:</strong> Nach dem Einlesen des Zugangspakets ist BARRY auf dem Gerät sofort und dauerhaft geöffnet. Ein eigenes Passwort festlegen oder sich merken ist nicht mehr nötig.</li><li><strong>Startpasswort nur einmal:</strong> Zugangspakete und Stand-Updates bleiben verschlüsselt, weil sie über Teams, E-Mail oder Messenger verschickt werden. Das Startpasswort wird beim ersten Einlesen gebraucht; Stand-Updates öffnet BARRY danach ohne erneute Eingabe.</li><li>Wer schon ein eigenes Passwort hat, ist ab sofort ebenfalls ohne Passwort angemeldet. Nach „Abmelden“ genügt „Weiter als …“.</li><li><strong>Schutz der Personendaten</strong> in der Verwaltung fragt nur noch auf Geräten der Staffelleitung nach dem Passwort.</li><li>Bitte jedes Handy mit der Bildschirmsperre schützen: Wer das Gerät in der Hand hat, sieht BARRY.</li></ul><h4>BARRY 2.84 (November 2026): Verwaltung aufgeräumt</h4><ul><li><strong>Neue Ordnung:</strong> Personen &amp; Hunde · Ausbildung &amp; Nachweise · Verteilen &amp; Sichern · Meldungen &amp; Listen · Einsatzmittel &amp; Orte. Kein Bereich ist weggefallen, Rechte und Passwortschutz bleiben wie bisher.</li><li><strong>Übersicht mit Kacheln:</strong> Oben steht, was gerade ansteht; jede Kachel zeigt kurz ihren Zustand, z. B. „3 mit Abgelaufenem“ oder „letzte vor 12 Tagen“. In einem Bereich führt „◀ Übersicht“ zurück.</li><li><strong>Pakete für Mitglieder</strong> (bisher „Mitglieder &amp; Austausch“) mit Prüfliste: Startpasswörter, Zugangspakete, Fragenpakete und Unterlagenpaket auf einen Blick.</li><li>Kürzere Namen: „Formulare &amp; Meldungen“, „Orte &amp; Gebiete“.</li></ul><h4>BARRY 2.83 (Oktober 2026): Neue Fragenpakete und Berichtigungen</h4><ul><li><strong>Zwei neue Themenbereiche</strong> für Fragenpakete: „Unterordnung &amp; Gewandtheit“ und „Geruch &amp; Nasenarbeit“.</li><li><strong>Pakete wählen:</strong> Unter Fachfragen üben legst du fest, welche Fragenpakete zu „Alle Fragen“ gehören (nur auf deinem Gerät). Pakete zur Vertiefung fließen nicht in die Probeprüfung ein.</li><li><strong>Erste Hilfe am Hund berichtigt</strong> nach dem Handout der Staffel (Stand Oktober 2026, RECOVER 2026): Hitzschlag – sofort mit fließendem Wasser kühlen, auch kaltes Wasser ist erlaubt; Verbrennung – mindestens 20 Minuten kühl und fließend; Ersticken – zuerst bis zu fünf Rückenschläge, nie blind ins Maul greifen; Maulschutz nur bei freier Atmung; Normalwerte für Atmung und Puls mit Quellen.</li></ul><h4>BARRY 2.82 (Oktober 2026): Übungen für Staffelteams auslosen</h4><ul><li><strong>Glücksrad für Ausbilder:</strong> Neben den eigenen Hunden können Ausbilder (und Personen mit Ausbildungsrecht) im Glücksrad und in der Übungsausgabe jedes Staffelteam wählen. Die Anzeigeart des gewählten Teams bestimmt die Auswahl.</li><li><strong>Überraschung für ein Staffelteam:</strong> Ein Knopf wählt zufällig ein Staffelteam, stellt „mit Hund, Helfer und Ausbilder dabei“ ein und dreht das Rad. Der eigene Stand (erledigte Übungen) bleibt unberührt.</li><li>Die Team-Auswahl in der Übungsausgabe ist in „Meine Hunde“ und „Staffelteams“ gegliedert.</li></ul><h4>BARRY 2.81 (Oktober 2026): Fachfragen erweitert</h4><ul><li><strong>Fragenpakete mit Abbildungen:</strong> Fragen können jetzt Bilder (z. B. Kartenausschnitte, taktische Zeichen) und Bildantworten enthalten; Fragen ohne Erklärung werden korrekt angezeigt.</li><li><strong>Neue Themenbereiche:</strong> „DRK &amp; Einsatzorganisation“, „Prüfungsordnung &amp; Ausbildung“ und „Sanitätsdienst &amp; MTF-Behandlungsplatz“. Bereiche ohne Fragen werden ausgeblendet.</li><li>Die bisherigen Übungsfragen bleiben unverändert erhalten.</li></ul><h4>BARRY 2.80 (Oktober 2026): Nachtragsdateien</h4><ul><li><strong>Nachträge ohne komplette Datensicherung:</strong> Neue Nachweise – etwa aus dem drkserver – können als kleine Nachtragsdatei über „Datei einlesen“ übernommen werden. BARRY zeigt jede Zeile zur Bestätigung, erkennt bereits vorhandene Nachweise und lässt den übrigen Bestand unverändert. So gehen zwischenzeitliche Änderungen in BARRY nicht verloren.</li></ul><h4>BARRY 2.79 (Oktober 2026): HLW/AED im Sanitätslehrgang</h4><ul><li>HLW und AED werden in der Prüfung des Sanitätslehrgangs mitgemacht. Ein bestandener Sanitätslehrgang zählt deshalb ab seinem Datum als HLW/AED-Nachweis; danach gilt wie gewohnt die jährliche Auffrischung.</li><li><strong>Sanitätsfortbildung:</strong> Der Sanitätslehrgang enthält die 16 UE nicht. Nach dem Lehrgang läuft der erste Zweijahreszeitraum; bis zu seinem Ende sind 16 UE Fortbildung nachzuweisen. BARRY zeigt, wie viele UE noch fehlen und bis wann.</li></ul><h4>BARRY 2.78 (Oktober 2026): Rettungs- und Notfallsanitäter/-innen</h4><ul><li>Wer als <strong>Rettungs- oder Notfallsanitäter/-in</strong> erfasst ist, erfüllt die sanitätsbezogenen Anforderungen über die Berufsqualifikation und die Fortbildungspflicht im Rettungsdienst: Erste Hilfe, Sanitätslehrgang, EKGA-S, HLW/AED und Sanitätsfortbildung gelten als erfüllt und erscheinen nicht mehr als fehlend oder abgelaufen.</li><li>Andere Nachweise wie EKGA-E, RKE, Datenschutz oder UVV bleiben wie bisher erforderlich.</li></ul><h4>BARRY 2.77 (Oktober 2026): Stärkemeldung, Erfassungslisten und Ausstattung</h4><ul><li><strong>Stärkemeldung &amp; Listen</strong> (Verwaltung → Dienstbetrieb &amp; Meldungen): Die Erfassung Personal und Material für den Staffelverbund und die Alamos-Erfassung erstellt BARRY jederzeit neu als Excel-Datei – mit Übersicht, Formeln und Auswahllisten wie in der Vorlage. Geprüfte Teams, Teams in Ausbildung, Helfer, Sprechfunk, Sanitätsausbildung, Führungsqualifikation, Ausbilderrolle und Plaketten kommen aus dem Bestand.</li><li>Was BARRY nicht selbst ableiten kann – Ortsverein, tagsüber verfügbar, angestrebte Führungsqualifikation, Bemerkung, Alamos-Angaben – trägt die Leitung je Person ein.</li><li><strong>Ausstattung &amp; Material</strong> (Verwaltung → Stammdaten): Fahrzeugangaben für die Liste, Sanitätsmaterial, BOS-Funkgeräte, Material Einsatzleitung und allgemeines Einsatzmaterial.</li><li>Zurückgeschickte Listen liest du über „Datei einlesen“ wieder ein: BARRY ergänzt nur, was noch fehlt, und überschreibt nichts.</li><li><strong>Fragenpakete:</strong> Zusätzliche Fachfragen – etwa der DRK-Fachfragenkatalog nach Genehmigung – kann die Leitung als Fragenpaket einlesen. Sie liegen nur im Bestand, gehen verschlüsselt mit den Zugangspaketen an die Mitglieder und tragen den Hinweis „Nur für den Dienstgebrauch“. Beim Üben wählst du, aus welcher Sammlung die Fragen kommen.</li><li><strong>🎓 DRK-Lerncampus:</strong> Unter Fachfragen üben führt ein Knopf direkt zu den Fachfragen im Lerncampus; die Leitung kann den Link anpassen.</li></ul><h4>BARRY 2.76 (Oktober 2026): Fachfragen üben und Probeprüfung</h4><ul><li><strong>🎯 249 Übungsfragen mit Antworten A bis D</strong> zu allen zehn Themenbereichen der Theorie (Modul 1.0): Erste Hilfe, Erste Hilfe am Hund, Kynologie, Orientierung &amp; Kartenarbeit, Einsatztaktik Trümmer und Fläche, Sprechfunk, Trümmerkunde, Unfallverhütung und Transport. Zu jeder Frage gibt es eine kurze Erklärung.</li><li><strong>📝 Probeprüfung:</strong> 25 Fragen für deine Sparte (Fläche, Trümmer oder beides) – zusammengestellt nach der Fragenverteilung der Prüfung. Die Auflösung kommt am Ende, mit Auswertung je Themenbereich. Dein letztes Ergebnis merkt sich BARRY auf deinem Gerät.</li><li><strong>Nach Themen üben</strong> mit sofortiger Rückmeldung, <strong>falsch beantwortete Fragen wiederholen</strong> und alle Fragen mit Lösung zum Nachlesen und Durchsuchen – unter Wissen &amp; Material → Prüfungsordnungen.</li><li><strong>❓ Fachfrage des Tages</strong> zieht jetzt aus allen Fragen: Bei Multiple-Choice-Fragen tippst du deine Antwort an und siehst gleich, ob sie stimmt.</li><li>Die Fragen sind von der Staffel selbst formuliert und folgen dem aktuellen Lehrstand (z. B. Wiederbelebung beim Hund nach den RECOVER-Leitlinien). Wo ältere Unterlagen etwas anderes lehren, steht ein Hinweis. Geprüft wird mit dem offiziellen DRK-Fachfragenkatalog.</li></ul><h4>BARRY 2.75 (Oktober 2026): Qualifikationen abgeglichen</h4><ul><li><strong>Abgleich</strong> mit der Übersicht „Notwendige Qualifikation für Position“ (Fachausbildung, Stand 31.08.2023) und den Festlegungen der Staffel vom 11.10.2026.</li><li><strong>Rettungshundehelfer/in – Ausbildung komplett:</strong> Truppführer (TF) ist jetzt Teil des Profils. BOS-Sprechfunk bleibt Pflicht.</li><li><strong>Einsatz-Fachberater/in:</strong> Die Rettungshundeprüfung ist empfohlen statt Pflicht – die geprüften Hundeführenden suchen im Einsatz selbst; die Einsatzleitung berät dann eine erfahrene Helferin bzw. ein erfahrener Helfer.</li><li><strong>Katalog:</strong> PSNV-E1 mit 20 UE; RHd bleibt bei 35 UE (die Übersicht von 2023 nennt 32).</li></ul><h4>BARRY 2.74 (Oktober 2026): aufgeräumtes Seitenmenü</h4><ul><li><strong>Weniger im Seitenmenü:</strong> Die Rollen-Etiketten (Mitglied, Ausbilder, Leitung …) stehen nur noch unter „Mein Profil“. Die übrigen Knöpfe sind kleiner und stehen zu zweit nebeneinander.</li><li><strong>Am Handy</strong> scrollt das ganze Menü in einem Stück – die Bereiche sind sofort zu sehen, ohne in einem kleinen Fenster scrollen zu müssen.</li></ul><h4>BARRY 2.72–2.73 (Oktober 2026): Fachfrage des Tages, Kontakte, Startseite</h4><ul><li><strong>❓ Fachfrage des Tages</strong> auf der Startseite: jeden Tag eine Fachfrage zur Theorie (Modul 1.0) – erst selbst überlegen, dann die Antwort aufdecken; weitere oder zufällige Fragen mit einem Tipp.</li><li><strong>Kontakte</strong> unter Organisation &amp; Termine: <em>Staffelkontakte</em> pflegt die Leitung, sie gehen mit dem Zugangspaket an alle. <em>Meine Kontakte</em> (z. B. Tierarztpraxis, Tierklinik) speichert jede Person nur auf ihrem Gerät – sie bleiben auch nach einem neuen Zugangspaket erhalten. Direkt anrufen, E-Mail schreiben oder mit „📲 Ins Handy“ in die Kontakte des Telefons übernehmen.</li><li><strong>🌲 Flächensuchassistent</strong> im Seitenmenü: springt direkt in den RH-Flächensuchassistenten. Auf Android öffnet sich meist die installierte App; auf dem iPhone öffnen Links immer Safari – dort weist BARRY vorher darauf hin, den Assistenten besser über sein eigenes Symbol zu öffnen.</li><li><strong>Startseite neu geordnet:</strong> Unten stehen Fachfrage des Tages, Übungen und Taschenkarten gemeinsam in einer Reihe; „📂 Datei einlesen“ steht unter den Unterlagen – jetzt für alle Mitglieder, denn darüber lassen sich auch eigene Dokumente in die Unterlagen-Bibliothek legen; BARRY erkennt Format und Ziel selbst.</li></ul><h4>BARRY 2.71 (Oktober 2026): Comic-Taschenkarten</h4><ul><li><strong>Neue Gestaltung:</strong> Die sieben Taschenkarten sind jetzt die Comic-Karten der Staffel – Vorderseite mit sechs Comic-Bildern, Rückseite kompakt. Erste Hilfe am Hund, Helfer &amp; Versteckpersonen, Einsatz · erste 30 Minuten, Funk · Fahrzeug &amp; HRT, Fahrzeugcheck &amp; UTA, Orientierung &amp; Kartenkunde, Geruch &amp; Suchtaktik.</li><li><strong>Wie bisher:</strong> am Handy lesen, auf DIN A5 drucken oder als PDF speichern, leere Vorlage drucken, Eingaben nur kurzzeitig und „⤓ Ausgefüllt herunterladen“ als Datei auf dem Gerät.</li><li><strong>Tankkarten-PIN:</strong> steht nicht im Programm, sondern kommt aus der Einstellung der Leitung (Fahrzeugcheck-Karte, Rückseite).</li></ul><h4>BARRY 2.70 (Oktober 2026): Taschenkarten</h4><ul><li><strong>Sieben Taschenkarten</strong> unter Wissen &amp; Material → Taschenkarten und über die neue Kachel 🗂️ auf der Startseite: Erste Hilfe am Hund, Helfer &amp; Versteckperson, Alarm – die ersten 30 Minuten, Funk im Suchdienst, Fahrzeug-Check &amp; Tanken, Orientierung &amp; Kartenkunde, Geruch &amp; Suchtaktik.</li><li><strong>Am Handy lesen, auf DIN A5 drucken oder als PDF speichern:</strong> je Karte eine Vorder- und eine Rückseite, auf Wunsch eine Ausfüllseite zum Laminieren.</li><li><strong>Ausfüllfelder:</strong> Eingaben bleiben nur, solange BARRY geöffnet ist. Mit „⤓ Ausgefüllt herunterladen“ wird die Karte als Datei auf dem Gerät gespeichert – in BARRY bleibt nichts liegen.</li><li><strong>Tankkarten-PIN:</strong> Die Leitung hinterlegt sie auf der Fahrzeug-Karte. Sie steht nicht im Programm, sondern geht nur mit den verschlüsselten Zugangspaketen an die Mitglieder und wird nur auf Wunsch mitgedruckt.</li></ul><h4>BARRY 2.69 (Oktober 2026): Passwort und Wiederfinden</h4><ul><li><strong>Neues Passwort wird geprüft:</strong> Nach dem Festlegen kontrolliert BARRY, ob das Passwort wirklich im Gerätespeicher steht. Klappt das nicht (z. B. im privaten Fenster), sagt BARRY es sofort, statt dass man später von vorne beginnen muss. Bei Tippfehlern bleiben die Eingaben stehen.</li><li><strong>Anmelden verzeiht mehr:</strong> Ein automatischer Großbuchstabe am Anfang und Leerzeichen am Rand führen nicht mehr zu „Passwort falsch“. Wer versehentlich noch das Startpasswort eingibt, bekommt einen klaren Hinweis.</li><li><strong>BARRY wiederfinden:</strong> Die Willkommensseite zeigt das App-Symbol. Nach dem Installieren sagt BARRY, dass es über dieses Symbol weitergeht. Nach der Einrichtung erscheint auf der Startseite einmalig eine Karte: wie du dich künftig anmeldest und wo du BARRY findest.</li><li><strong>iPhone/iPad:</strong> Wer das Zugangspaket noch in Safari statt in der installierten App öffnen will, wird vorher gewarnt.</li></ul><h4>BARRY 2.68 (Oktober 2026): leichter starten auf einem neuen Gerät</h4><ul><li><strong>Willkommensseite:</strong> Auf einem neuen Gerät führt BARRY in drei Schritten durch die Einrichtung: als App installieren, Zugangspaket öffnen, eigenes Passwort festlegen. Wo der Browser es erlaubt, gibt es einen Knopf „📲 BARRY installieren“.</li><li><strong>Weniger tippen:</strong> Nach dem Öffnen des Zugangspakets mit dem Startpasswort geht es direkt zum eigenen Passwort. Name und Startpasswort müssen nicht noch einmal eingegeben werden, und die Rückfrage „Bestand ersetzen?“ entfällt auf einem neuen Gerät.</li><li><strong>Datei leichter auswählbar:</strong> Zugangspakete, die aus Teams, E-Mail oder Messengern gespeichert wurden, lassen sich auswählen, auch wenn das Gerät sie nicht als .json erkennt.</li><li><strong>Startpasswort robuster:</strong> Ein automatischer Großbuchstabe am Anfang (Handy-Tastatur) oder ein mitkopiertes Leerzeichen führen beim Öffnen des Zugangspakets nicht mehr zu „Passwort falsch“. Kurze Startpasswörter mit 4 oder 5 Zeichen lassen sich jetzt ebenfalls eingeben – bisher verlangte das Eingabefenster mindestens 6 Zeichen.</li><li><strong>Passwort anzeigen:</strong> Mit 👁 ist beim Tippen sichtbar, was eingegeben wurde. „Angemeldet bleiben“ lässt sich schon beim Festlegen des eigenen Passworts wählen.</li><li><strong>Für die Leitung:</strong> Das normale Anmeldeformular mit dem Erstzugang „Admin“ ist auf einem neuen Gerät über „Ich richte BARRY für die Staffel ein“ erreichbar.</li></ul><h4>BARRY 2.67 (Oktober 2026): eigene Unterlagen hochladen</h4><ul><li><strong>Für alle Mitglieder:</strong> In der Unterlagen-Bibliothek gibt es „➕ Eigene Unterlage hochladen“. PDF, Word, PowerPoint, Bilder und Texte lassen sich ablegen und direkt in BARRY öffnen.</li><li><strong>Automatisch einsortiert:</strong> BARRY liest Dateiname, Titel und die ersten Seiten und schlägt den passenden Ordner vor. Du kannst den Vorschlag ändern. Das geht auch über „📂 Datei einlesen“.</li><li><strong>Nichts doppelt:</strong> Liegt dieselbe Datei schon in der Bibliothek (gleicher Fingerabdruck), wird sie nicht noch einmal abgelegt. Bei ähnlichem Titel oder Dateinamen fragt BARRY nach. Liegt die Datei schon unter Lehrmaterial, kann sie in die Bibliothek umziehen.</li><li><strong>Weitergeben:</strong> Hochgeladene Unterlagen bleiben zunächst auf deinem Gerät. Mit „📤 Meine Unterlagen weitergeben“ entsteht ein Paket, das die Leitung oder andere Mitglieder einlesen – auch über „📂 Datei einlesen“. „Paket erstellen“ der Leitung nimmt die hochgeladenen Unterlagen mit.</li></ul><h4>BARRY 2.66 (Oktober 2026): Unterlagen direkt in BARRY lesen</h4><ul><li>PDF- und Word-Unterlagen aus der Unterlagen-Bibliothek öffnen sich jetzt in einer eigenen Ansicht in BARRY – auch auf Handys, deren Browser PDFs sonst nur herunterladen. Mit − und + vergrößern, mit ⤓ die Originaldatei auf dem Gerät speichern, mit ✕ oder der Zurück-Taste schließen. PowerPoint-Dateien werden weiterhin an das Gerät übergeben; zum Lesen gibt es jeweils die PDF-Fassung.</li></ul><h4>BARRY 2.65 (Oktober 2026): alles per Du, Nacht, Trümmer für Helfende, Ufer</h4><ul><li><strong>Du-Form überall:</strong> Alle Übungstexte im Übungsrad, die Fachfragen und die Hinweise zu Freigaben sprechen dich jetzt mit „du“ an. Sätze an Betroffene und Angehörige sowie der Sprechfunk bleiben bewusst beim „Sie“.</li><li><strong>Neue Übungsthemen:</strong> R36 Suchen, Führen und Sichern bei Nacht · R37 Trümmer für Helfende (sichern, beobachten, dokumentieren, betreuen) · R38 Am Ufer und im flachen Wasser – mit dem Hinweis, dass bei uns die Wasserwacht Wassersuche und Wasserortung übernimmt.</li><li><strong>Lernen &amp; Forschung:</strong> neue Themen „Sehen in der Dämmerung“, „Dunkelanpassung des menschlichen Auges“, „Die Erwartung des Hundeführers riecht mit“, „Nasenarbeit macht optimistischer“ und „Kinder und Hunde: Regeln üben statt nur erklären“.</li></ul><h4>BARRY 2.62–2.64 (Oktober 2026): Unterlagen-Bibliothek, neue Übungen, Profil</h4><ul><li><strong>📚 Unterlagen-Bibliothek</strong> (Wissen &amp; Material, Startkachel „Unterlagen“, Unterlagen-Leiste in Ausbildung &amp; Team): alle Unterlagen der Staffel geordnet in zehn Ordnern – Prüfungsordnung, Qualifikation, Einsatz und Führung, Ausbildung, Orientierung, Erste Hilfe am Hund, Formulare u. a. –, jede Unterlage genau einmal, mit Suche. Die Dateien kommen aus dem <strong>Unterlagenpaket</strong> der Staffelleitung, das du einmal einliest; danach öffnen sie sich auch ohne Netz. Vordrucke stehen zusätzlich unter Organisation → Formulare. Doppelt abgelegtes Lehrmaterial wird markiert.</li><li><strong>🎡 Neue Übungen:</strong> Themen R32 Führungssystem und taktische Zeichen, R33 Alarm – die ersten 30 Minuten, R34 Erstversorgung und Übergabe der gefundenen Person, R35 Kinderbesuch und Suchvorführung sowie weitere Übungen zu Anzeigearten (Rück- und Freiverweiser), Gerätearbeit, Nasenarbeit, Wind und Qualifikation.</li><li><strong>👤 Mein Profil</strong> ist leichter zu finden (Menü, Mein Stand, Suche); dort trägst du auch die Anzeigeart deines Hundes ein.</li></ul><h4>BARRY 2.60–2.61</h4><ul><li><strong>🎡 Übungen</strong> (früher Übungsrad): Übungsausgabe wie im Team-Begleiter – Glücksrad, <strong>Trainingseinheit</strong> (3 bis 8 Übungen nach Schwerpunkt und Stufe, abhaken, ins Trainingstagebuch), <strong>Abenteuer-Spaziergang</strong> (6 Stationen) und <strong>Problem angehen</strong> (Alltagsthema wählen, passende Übungen übernehmen). Offene Einheiten erscheinen auf der Startseite.</li><li>Startseite mit Kacheln für Übungen, Prüfung &amp; Module und Unterlagen sowie „Alle Bereiche“; alle Reiter sind ohne Schieben sichtbar; Prüfungsordnung auch ohne eigenen Hund lesbar.</li></ul><h4>BARRY 2.56–2.59 (Oktober 2026): leichter finden, klarer nach Rolle</h4><ul><li><strong>🔍 Suche</strong> oben rechts bzw. in der Seitenleiste: findet Seiten, Qualifikationen, Lehrgänge, Übungen und Hilfeartikel (Leitung zusätzlich Personen).</li><li><strong>Zurück-Taste</strong> des Handys geht jetzt eine Ebene zurück, statt BARRY zu verlassen.</li><li><strong>Mein Stand:</strong> Sprungleiste am Seitenanfang; neue Karte <strong>Meine Einsatzfunktionen</strong> (Rettungshundeführer/-in, Rettungshundehelfer/-in, Sanitäter/-in, Funker/-in, Praktikant/-in – nach der Festlegung der Staffel vom 10.10.2026, Mindestalter 18 Jahre). Bei fehlenden Nachweisen helfen die Knöpfe „eintragen“ und „Kurswunsch“.</li><li><strong>Kurswünsche:</strong> die Lehrgänge der Rettungshundearbeit (EH, RKE, EKGA-E und -S, Datenschutz, RHd, BOS, SLG, Modulprüfung 2) stehen zuerst, weiterführende dahinter. Suche, Zeichen ✅ / ⬜ / ✓ in der Liste, „Als Nächstes möglich“ zum Antippen, sonstiger Lehrgang mit freiem Titel, Rückfrage bei doppelten Wünschen, Wunsch zurückziehen.</li><li><strong>Nachweis eintragen:</strong> Liste „Für dich“ mit dem, was fehlt oder bald abläuft; die Suche nach Kürzeln wie EH, DS oder TF ist genauer; Reihenfolge wahlweise nach Ausbildungsweg oder alphabetisch; neue Bereiche PSNV sowie Leitung &amp; Vorstand.</li><li><strong>Ausbildungsnachweis drucken</strong> (Mein Stand → Meine Nachweise) – z. B. für Lehrgangsanmeldungen.</li><li><strong>Wissen:</strong> Fachfragen zur Theorieprüfung jetzt unter Prüfungsordnungen; Anzeigeart-Programme unter Findewille &amp; Anzeigetraining; die Übungssuche zeigt auch Treffer aus dem Übungsrad.</li><li><strong>Hilfe</strong> zeigt zuerst die Artikel für deine Rolle („Alle Artikel“ zeigt alles).</li><li><strong>Für Ausbilder/-innen und Leitung:</strong> Verwaltung beginnt mit einer Übersicht; „Wer hat …?“ mit Suchfeld; Matrix wahlweise nach ★-Pflicht oder Zielprofil; Kurswünsche filtern, nach Lehrgang bündeln, Lehrgangstermin und Anmeldedatum eintragen, als Tabelle herunterladen; einen Nachweis für mehrere Personen gleichzeitig eintragen; Leitung: Vorschau „Ansicht als Mitglied/Ausbilder“ in der Seitenleiste.</li><li><strong>Neue Namen:</strong> Alltagstagebuch (Alltag &amp; Zuhause), Trainingsplanung, Auswertung &amp; Kurswünsche, Orte &amp; Gebiete, Formulare &amp; Meldungen.</li></ul>' + alt.map(a=>`<h4>${a.titel}</h4>${a.text}`).join('')});
   ['rh-tagebuch','mantrailing-tagebuch'].forEach(id=>{ const a=HILFE_ARTIKEL.find(x=>x.id===id); if(!a) return;
     a.titel += ' (frühere Tagebücher)';
     a.text = '<p><em>Hinweis: Diese Tagebuchform ist seit BARRY 2.1 ausgeblendet. Frühere Einträge stehen im Trainingstagebuch unter Ausbildung &amp; Team → Trainingstagebücher.</em></p>' + a.text; });
