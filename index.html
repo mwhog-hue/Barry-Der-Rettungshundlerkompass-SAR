@@ -287,11 +287,15 @@ body.ff-offen{overflow:hidden}
 .suche-treffer small{color:var(--muted);font-size:.78rem}
 
 .quick-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:14px 0 4px}
-@media (max-width:640px){.quick-tiles{grid-template-columns:repeat(3,1fr)}.quick-tile-mitte:nth-child(3n+1){grid-column:1 / -1;justify-self:center;width:calc((100% - 16px) / 3)}}
+@media (max-width:640px){.quick-tiles{grid-template-columns:repeat(3,minmax(0,1fr))}.quick-tile-mitte:nth-child(3n+1){grid-column:1 / -1;justify-self:center;width:calc((100% - 16px) / 3)}}
 .quick-tiles.quick-tiles-unten{margin-top:8px;grid-template-columns:repeat(3,1fr)}
 @media (min-width:641px){.quick-tiles.quick-tiles-unten{grid-template-columns:repeat(3,minmax(96px,160px))}}
 .quick-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:10px 6px;min-height:70px;border:1px solid var(--line);border-radius:14px;background:var(--card,#fff);font:inherit;font-size:.8rem;font-weight:600;color:inherit;cursor:pointer;text-align:center;line-height:1.2}
 .quick-tile span{font-size:1.35rem}
+.quick-tile{min-width:0;overflow-wrap:anywhere;hyphens:auto}
+.grid-2>*,.grid-3>*,.grid-4>*{min-width:0}
+.card,.hint{overflow-wrap:break-word;hyphens:auto}
+select{max-width:100%}
 .quick-tile:first-child{border-color:var(--accent,#b3202a)}
 .chip{
   display:inline-flex;align-items:center;gap:6px;
@@ -2786,6 +2790,7 @@ function personalHinweiseHtml(cardKey, hund){
 
 const TERMIN_KATEGORIEN = [
   { id:'rhs_ausbildung', label:'RHS-Ausbildung' },
+  { id:'zusatztraining', label:'Zusatztraining (freiwillig)' },
   { id:'sanitaetsausbildung', label:'Sanitätsausbildung' },
   { id:'pruefung', label:'Prüfung' },
   { id:'einsatzuebung', label:'Einsatzübung' },
@@ -2797,6 +2802,7 @@ const TERMIN_KATEGORIEN = [
 function terminKategorieLabel(id){ return (TERMIN_KATEGORIEN.find(k=>k.id===id)||{label:id}).label; }
 // Ordnet die RHSKit-Klassifizierung (aus dem Jahresplan-Excel) den BARRY-Terminkategorien zu.
 function jahresplanTypZuKategorie(type, detail){
+  if(/zusatz/i.test((type||'')+' '+(detail||''))) return 'zusatztraining';
   if(type==='Bereitschaftsabend') return 'einsatzbereitschaft';
   if(type==='Prüfung') return 'pruefung';
   if(type==='Gemeinschaftsabend') return 'versammlung';
@@ -4272,7 +4278,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.95';
+const BARRY_APP_VERSION = '2.96';
 const BARRY_APP_STAND = '11.10.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -5192,10 +5198,12 @@ function renderStart(person){
     <div class="quick-tiles">
       ${eigeneHunde.length?`<button class="quick-tile" id="btn-start-trainingskarte"><span>🐾</span>Mein heutiges Training</button>`:''}
       <button class="quick-tile" data-goto-meinstand><span>🎓</span>Mein Stand</button>
-      <button class="quick-tile" data-rhs-buch-start><span>📖</span>Ausbildungshandbuch</button>
+      <button class="quick-tile" data-rhs-buch-start><span>📖</span>Ausbildungs&shy;handbuch</button>
       <button class="quick-tile" data-start-sprung="nachweis"><span>✏️</span>Nachweis eintragen</button>
       <button class="quick-tile" data-start-sprung="kurs"><span>📝</span>Kurswunsch</button>
-      <button class="quick-tile" data-unterlage="pruefung"><span>📜</span>Prüfung & Module</button>
+      <button class="quick-tile" data-unterlage="pruefung" data-unterlage-sprung="pf-module"><span>🐕</span>Module 1.1–1.3 üben</button>
+      <button class="quick-tile" data-unterlage="pruefung" data-unterlage-sprung="pf-modul10"><span>🎯</span>Fachfragen &amp; Probeprüfung</button>
+      <button class="quick-tile" data-unterlage="pruefung"><span>📜</span>Prüfung &amp; Module</button>
       <button class="quick-tile" data-unterlage="unterlagen"><span>📚</span>Unterlagen</button>
       <button class="quick-tile" data-goto-inline="organisation"><span>📅</span>Termine</button>
       <button class="quick-tile" id="btn-start-funk"><span>📻</span>Funk</button>
@@ -9966,6 +9974,7 @@ function dateiArtErkennen(name, text, bytes){
       if(d.rhsFormat) return 'rhs';
       if(d.bridgeFormat==='rhs-taktik-assistent-export') return 'flaechenuebergabe';
       if(f==='barry-fragenpaket') return 'fragenpaket';
+      if(d.format==='rhs-buch') return 'buch';
     }catch(e){}
     return 'unbekannt';
   }
@@ -9974,7 +9983,7 @@ function dateiArtErkennen(name, text, bytes){
   if(UL_DOK_TEXT.test(name||'')) return 'dokument';
   return 'unbekannt';
 }
-const DATEI_ARTEN = {nachtrag:'Nachtragsdatei', fragenpaket:'Fragenpaket', flaechenuebergabe:'Übergabe aus dem Flächensuchassistenten', terminplan:'Terminplan', standupdate:'Stand-Update', meldung:'Meldung eines Mitglieds', zugang:'Zugangspaket', sicherung:'Datensicherung', teilsicherung:'Teilsicherung', xlsx:'Selbstauskunft (Excel)', csv:'Mitglieder-Tabelle (CSV)', zip:'ZIP-Archiv', ics:'Kalenderdatei', rhs:'Team-Datenaustausch', dokument:'Dokument für die Unterlagen-Bibliothek', unterlagenpaket:'Unterlagenpaket', unbekannt:'unbekannte Datei'};
+const DATEI_ARTEN = {nachtrag:'Nachtragsdatei', fragenpaket:'Fragenpaket', flaechenuebergabe:'Übergabe aus dem Flächensuchassistenten', terminplan:'Terminplan', standupdate:'Stand-Update', meldung:'Meldung eines Mitglieds', zugang:'Zugangspaket', sicherung:'Datensicherung', teilsicherung:'Teilsicherung', xlsx:'Selbstauskunft (Excel)', csv:'Mitglieder-Tabelle (CSV)', zip:'ZIP-Archiv', ics:'Kalenderdatei', rhs:'Team-Datenaustausch', dokument:'Dokument für die Unterlagen-Bibliothek', unterlagenpaket:'Unterlagenpaket', buch:'Buchpaket (Ausbildungshandbuch)', unbekannt:'unbekannte Datei'};
 async function dateiEinlesenUniversal(files){
   const liste=Array.from(files||[]); if(!liste.length) return;
   const person=aktuellePerson(); const leitung=person && istLeitungOderAdmin(person);
@@ -9995,6 +10004,7 @@ async function dateiEinlesenUniversal(files){
       if(tTs===null) return;
       try{ teilsicherungEinlesen(JSON.parse(tTs)); }catch(err){ alert('Diese Datei konnte nicht gelesen werden: '+err.message); }
       break; }
+    case 'buch': if(window.RHSBuch) RHSBuch.importieren(liste); break;
     case 'zugang': case 'sicherung':
       if(!confirm(art==='zugang' ? 'Das ist ein Zugangspaket. Es ersetzt den gesamten Bestand auf diesem Gerät, und das Passwort wird auf das Startpasswort zurückgesetzt. Nur einlesen, wenn die Leitung es dir neu geschickt hat. Fortfahren?' : 'Das ist eine vollständige Datensicherung. Sie ersetzt den gesamten Bestand auf diesem Gerät. Fortfahren?')) return;
       bestandAusDateiImportieren(f); break;
@@ -12344,6 +12354,7 @@ function ortVorschlagAusText(text, datum){
 }
 function hiorgKategorie(typ, titel){
   const x = (typ+' '+titel).toLowerCase();
+  if(/zusatztraining|zusatz-training|freiwillig/.test(x)) return 'zusatztraining';
   if(/einsatz/.test(typ.toLowerCase())) return 'einsatzbereitschaft';
   if(/sanitätsdienst/.test(x)) return 'einsatzbereitschaft';
   if(/prüfung|pruefung/.test(x)) return 'pruefung';
@@ -12578,7 +12589,7 @@ const HUNDETYPEN = [{"typ": "Unsicher / ängstlich", "tipps": ["Neue Orte zuerst
 const THEMENPFADE = [{"titel": "Die richtige Dosis: Zuwendung und Struktur", "fuer": "Teams, die im Alltag und im Training mehr Klarheit und Verlässlichkeit aufbauen möchten – und für Ausbilder/-innen, die das begleiten.", "text": "Ein Lernweg in kleinen Schritten: erst hinschauen, dann im Alltag Klarheit schaffen, Geduld üben und die Motivation fürs Training sichern. Zuwendung bleibt erlaubt und erwünscht.", "stufen": [{"titel": "1 · Hinschauen", "ids": ["MK-01", "MK-11", "MK-06"]}, {"titel": "2 · Klar und freundlich im Alltag", "ids": ["MK-02", "MK-03", "MK-05", "TB-AL-01", "BK-05"]}, {"titel": "3 · Vorhersehbare Abläufe", "ids": ["MK-04", "TB-AL-02", "DH-08", "MK-12"]}, {"titel": "4 · Geduld und Selbstkontrolle", "ids": ["BK-08", "IJ-03", "DH-09"]}, {"titel": "5 · Motivation fürs Training sichern", "ids": ["MK-13", "MK-14", "ER-BK-05", "BL-01"]}, {"titel": "6 · Bedürfnisse ernst nehmen", "ids": ["TB-AL-05", "LW-01"]}, {"titel": "Für Ausbilder/-innen", "ids": ["AU-01"]}]}];
 const GERAETE_MATRIX = [{"titel": "Schmal & erhöht", "pruef": "Leiter, Brücke", "ids": ["GE-05", "GE-06", "GE-10", "TB-GT-12", "TB-GN-02", "TB-GN-03", "TB-GB-05"]}, {"titel": "Beweglich & nachgebend", "pruef": "Wippe, Brücke", "ids": ["GE-07", "GE-08", "GE-09", "TB-GT-05", "TB-GT-06", "TB-GB-02", "TB-GB-04"]}, {"titel": "Eng & dunkel", "pruef": "Röhre", "ids": ["GE-02", "GE-03", "ER-GE-09", "TB-GT-10", "TB-GT-11", "TB-GB-07"]}, {"titel": "Steigung, Auf- & Abgang", "pruef": "–", "ids": ["GE-04", "ER-GE-10", "TB-GT-07", "TB-GT-08", "TB-GT-09", "TB-GN-06", "TB-GB-08"]}, {"titel": "Untergrund & Geräusch", "pruef": "–", "ids": ["GE-11", "ER-GE-05", "TB-GT-03", "TB-GT-04", "TB-GN-04", "TB-GN-05", "TB-GB-03", "TB-GB-06"]}, {"titel": "Steuerung & Sicherheit", "pruef": "Distanz, Grundstellung", "ids": ["GE-12", "ER-GE-07", "ER-GE-08", "TB-GT-01", "TB-GT-02", "TB-GT-14", "TB-GT-15", "TB-GN-01", "TB-GB-01"]}, {"titel": "Kombination & Transfer", "pruef": "Vollkette", "ids": ["GE-13", "ER-GE-12", "TB-GT-13", "TB-GT-16", "TB-GT-17", "TB-GT-18"]}];
 const WISSEN_TABS = [
-  {id:'pruefung', label:'Prüfungsordnungen'},
+  {id:'pruefung', label:'Prüfung & Module'},
   {id:'unterlagen', label:'Unterlagen-Bibliothek'},
   {id:'fehlerdiagnose', label:'Fehlerdiagnose'},
   {id:'sparten', label:'Sparten, Helfer & Erste Hilfe'},
@@ -12821,6 +12832,37 @@ document.addEventListener('click', e=>{
   else { route={bereich:'wissen',unter:null,id:null}; wissenTab=w; sprungZiel=b.dataset.unterlageSprung||'content'; if(b.dataset.unterlageSprung==='wissen-fachfragen') wfOffen=true; }
   render();
 });
+/* v2.96: Seite „Prüfung & Module“ – Übersicht zuerst, dann Modul 1.0, Module 1.1–1.3, zuletzt Ordnungen */
+function renderPruefungSeite(person){
+  const zeile=(m,inhalt,fl,tr,mt,ziel)=>{ const sp=[['Fläche',fl],['Trümmer',tr],['Mantrail',mt]].filter(x=>x[1]!=='–').map(x=>x[0]).join(' · '); return `<a href="#" data-pf-sprung="${ziel}" style="display:block;text-decoration:none;color:inherit;border-top:1px solid var(--line);padding:8px 0"><b style="color:var(--accent-ink,#b3202a)">${m}</b><br><span class="hint">${inhalt}</span><br><span class="chip muted" style="margin-top:4px;display:inline-block">${sp}</span></a>`; };
+  const kopf=(id,t,u)=>`<div id="${id}" style="scroll-margin-top:80px;margin:22px 0 10px"><h2 style="margin:0;font-size:1.25rem">${t}</h2>${u?`<p class="hint" style="margin:4px 0 0">${u}</p>`:''}</div>`;
+  return `<div class="card card-pad" style="margin-bottom:14px">
+      <h3 style="margin-top:0">Der Weg durch die Prüfung</h3>
+      <p class="hint" style="margin:0 0 8px">DRK-Prüfungsordnung für Rettungshundeteams (seit 1. Januar 2024) mit den Ausführungsbestimmungen Hessen. Ein Klick auf das Modul springt zum Abschnitt.</p>
+      <div>
+        ${zeile('1.0 Fachfragen','Fachfragentest zur Sparte (Theorie)','✔','✔','✔','pf-modul10')}
+        ${zeile('1.1 Verhalten','Wesen, Sozialverhalten, Umwelt, Geschicklichkeit, Anzeige oder Mini-Trail','✔','✔','✔','pf-module')}
+        ${zeile('1.2 Grundgehorsam','Freifolge, Personengruppe, Sitz, Platz, Voraus/Detachieren, Ablage','✔','✔','–','pf-module')}
+        ${zeile('1.3 Gewandtheit','Brücke, Wippe, Röhre, Leiter','–','✔','–','pf-module')}
+        ${zeile('2 Teamprüfung','Suchprüfung in der jeweiligen Sparte','✔','✔','✔','pf-ordnungen')}
+      </div>
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px">
+        <button type="button" class="btn btn-sm btn-primary" data-pf-sprung="pf-modul10">🎯 Fachfragen üben</button>
+        <button type="button" class="btn btn-sm" data-pf-sprung="pf-module">🐕 Module 1.1–1.3</button>
+        <button type="button" class="btn btn-sm btn-ghost" data-pf-sprung="pf-ordnungen">📘 Ordnungen &amp; Bestimmungen</button>
+      </div>
+      <p class="hint" style="margin:8px 0 0">📖 Mehr im Buch: ${window.RHSBuch?RHSBuch.linkify('Lehrbuch Kap. 47, 48, 49'):'Lehrbuch Kap. 47, 48, 49'}</p>
+    </div>
+    ${kopf('pf-modul10','Modul 1.0 · Fachfragen','Multiple-Choice-Training, Probeprüfung mit 25 Fragen und alle Fachfragen zum Nachlesen.')}
+    ${renderFachfragenUeben()}
+    ${renderWissenFachfragen()}
+    ${kopf('pf-module','Module 1.1 bis 1.3','Inhalte, Bestehensregeln und Aufbau-Tipps; die Stufe je Element wird pro Team festgehalten.')}
+    ${renderAusbildungPruefung(person)}
+    ${kopf('pf-ordnungen','Ordnungen & Bestimmungen','Ausbildungsordnung, Prüfungsordnung und Ausführungsbestimmungen in Kurzfassung.')}
+    ${renderAusbildungsordnungKarte()}`;
+}
+document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('[data-pf-sprung]'); if(!b) return; e.preventDefault(); const el=document.getElementById(b.dataset.pfSprung); if(!el) return; if(el.tagName==='DETAILS') el.open=true; el.scrollIntoView({behavior:'smooth',block:'start'}); });
+
 function renderWissen(person){
   return `
     <div class="eyebrow" style="--dot:var(--t-ausbildung)">Wissen & Material</div>
@@ -12829,7 +12871,7 @@ function renderWissen(person){
     <div class="row reiterleiste" style="margin:14px 0 20px;border-bottom:1px solid var(--line);padding-bottom:2px">
       ${WISSEN_TABS.map(t=>`<button class="btn ${wissenTab===t.id?'btn-primary':'btn-ghost'}" data-wtab="${t.id}">${esc(t.label)}</button>`).join('')}
     </div>
-    ${wissenTab==='taschenkarten' ? renderTaschenkarten(person) : wissenTab==='unterlagen' ? renderUnterlagen(person) : wissenTab==='apps' ? renderWissenApps(person) : wissenTab==='pruefung' ? (renderAusbildungsordnungKarte() + renderFachfragenUeben() + renderWissenFachfragen() + renderAusbildungPruefung(person)) : wissenTab==='fehlerdiagnose' ? renderAusbildungFehlerdiagnose(person) : wissenTab==='sparten' ? renderAusbildungSparten(person) : wissenTab==='funk' ? renderWissenFunk(person) : wissenTab==='lernen' ? renderWissenLernen(person) : renderAusbildungMaterial(person)}
+    ${wissenTab==='taschenkarten' ? renderTaschenkarten(person) : wissenTab==='unterlagen' ? renderUnterlagen(person) : wissenTab==='apps' ? renderWissenApps(person) : wissenTab==='pruefung' ? renderPruefungSeite(person) : wissenTab==='fehlerdiagnose' ? renderAusbildungFehlerdiagnose(person) : wissenTab==='sparten' ? renderAusbildungSparten(person) : wissenTab==='funk' ? renderWissenFunk(person) : wissenTab==='lernen' ? renderWissenLernen(person) : renderAusbildungMaterial(person)}
     ${modal ? renderModal() : ''}
   `;
 }
@@ -13281,11 +13323,11 @@ const PRUEFUNG_MODULE = [
 let pruefungOffenSet = new Set();
 const PRUEFUNG_STATUS = [
   { id:'offen', label:'Nicht bewertet' },
-  { id:'trainiert', label:'1 · Erworben – klappt mit Hilfe unter einfachen Bedingungen' },
-  { id:'gefestigt', label:'2 · Flüssig – schnell, ohne Zögern, ohne Hilfe' },
-  { id:'sicher', label:'3 · Übertragen – andere Orte, Personen, Zeiten' },
-  { id:'bestanden', label:'4 · Belastbar – unter Ablenkung, Anstrengung, Nacht, Wetter (geprüft)' },
-  { id:'behalten', label:'5 · Behalten – nach Pause beim ersten Versuch (Kaltstart)' },
+  { id:'trainiert', label:'1 · Erworben', info:'klappt mit Hilfe unter einfachen Bedingungen' },
+  { id:'gefestigt', label:'2 · Flüssig', info:'schnell, ohne Zögern, ohne Hilfe' },
+  { id:'sicher', label:'3 · Übertragen', info:'andere Orte, Personen, Zeiten' },
+  { id:'bestanden', label:'4 · Belastbar', info:'unter Ablenkung, Anstrengung, Nacht, Wetter (geprüft)' },
+  { id:'behalten', label:'5 · Behalten', info:'nach Pause beim ersten Versuch (Kaltstart)' },
 ];
 /* v2.95: Fünf Stufen des Könnens (Ausbildungshandbuch, Lehrbuch Kap. 13). „bestanden“ zählt ab Stufe 4. */
 function istBelastbar(s){ return s==='bestanden' || s==='behalten'; }
@@ -13299,8 +13341,8 @@ function pruefungStatusButtons(hundId, modul, elementId){
   const farbe = istBelastbar(aktuell) ? 'var(--green-soft, var(--soft))' : aktuell==='offen' ? 'transparent' : 'var(--t-ausbildung-soft)';
   const eintragK = state.pruefungsstatus.find(p=>p.hundId===hundId && p.modul===modul && p.elementId===elementId);
   const kalt = kaltstartFaellig(eintragK) ? '<span class="chip" title="Seit mindestens 14 Tagen auf Stufe 3 oder 4: Kaltstart prüfen (Lernstand-Check H-2)">⏱ Kaltstart fällig</span>' : '';
-  return `<label class="row" style="gap:8px;align-items:center;flex-wrap:nowrap"><span class="hint">Status</span>
-    <select data-pruef-modul="${modul}" data-pruef-element="${elementId}" style="width:auto;background:${farbe};font-weight:${aktuell==='offen'?'400':'600'}">
+  return `<label class="row" style="gap:8px;align-items:center;flex-wrap:wrap;max-width:100%"><span class="hint">Stufe</span>
+    <select data-pruef-modul="${modul}" data-pruef-element="${elementId}" title="${esc((PRUEFUNG_STATUS.find(s=>s.id===aktuell)||{}).info||'')}" style="width:auto;max-width:100%;background:${farbe};font-weight:${aktuell==='offen'?'400':'600'}">
       ${PRUEFUNG_STATUS.map(s=>`<option value="${s.id}" ${aktuell===s.id?'selected':''}>${esc(s.label)}</option>`).join('')}
     </select></label>${kalt}`;
 }
@@ -13493,7 +13535,7 @@ function renderAusbildungPruefungInhalt(person, lesenHunde){
       <select id="pf-team" style="width:auto">${hunde.map(h=>`<option value="${h.id}" ${hid===h.id?'selected':''}>${esc(teamLabel(h))}</option>`).join('')}</select>
     </div>
     ${renderRasseLebensphaseKarte(hunde.find(h=>h.id===hid))}
-    ${renderPruefungVorschlagKarte(hid)}
+    <details class="card card-pad" style="margin-bottom:14px" ${pruefungVorschlag||pruefungVorschlagVersucht?'open':''}><summary style="cursor:pointer;font-weight:600">🎯 Nächste Übung zu einem offenen Element vorschlagen</summary>${renderPruefungVorschlagKarte(hid)}</details>
     <div class="row" style="gap:6px;flex-wrap:wrap;margin:0 0 14px">
       ${PRUEFUNG_MODULE.map(m=>{ const z = m.id==='drk11'?pruefungFortschrittZahlen(hid,'drk11',DRK_VERHALTEN.map(e=>e.id)) : m.id==='drk12'?pruefungFortschrittZahlen(hid,'drk12',DRK_GRUNDGEHORSAM.map(e=>e.id)) : m.id==='drk13'?pruefungFortschrittZahlen(hid,'drk13',DRK_GEWANDTHEIT.map(e=>e.id)) : null;
         return `<button class="btn btn-sm ${pruefungModul===m.id?'btn-primary':'btn-ghost'}" data-pf-modul="${m.id}">${esc(m.label)}${z?` <span style="opacity:.75">${z.bestanden}/${z.gesamt}</span>`:''}</button>`; }).join('')}
@@ -14730,7 +14772,7 @@ document.addEventListener('click', e=>{ const b = e.target.closest && e.target.c
    Format: {exportInfo:{format:'barry-fragenpaket'}, titel, quelle, stand, dienstgebrauch:true|false, hinweis,
             fragen:[{nr?, b:'eh'|… oder Themenname, frage, optionen:[…], richtig: 0-basiert oder 'A'…, erklaerung?}]} */
 let ffQuelle = 'alle';   // 'alle' | 'staffel' | Paket-ID
-function ffPakete(){ return Array.isArray(state.fragenpakete) ? state.fragenpakete : []; }
+function ffPakete(){ if(Array.isArray(state.fragenpakete)) state.fragenpakete.forEach(p=>{ if(p && !p.dienstgebrauchManuell && /MTF\s*34/i.test((p.titel||'')+' '+(p.quelle||''))) p.dienstgebrauch=false; }); return Array.isArray(state.fragenpakete) ? state.fragenpakete : []; }
 function ffPaketFragen(paket){ return (paket.fragen||[]).map((f,i)=>Object.assign({}, f, {id:`fp-${paket.id}-${f.nr||i+1}`, paketId:paket.id, paketTitel:paket.titel})); }
 function ffMcAlleFragen(){ return FACHFRAGEN_MC.concat(...ffPakete().map(ffPaketFragen)); }
 /* 2.83: Pakete lassen sich je Gerät aus „Alle Fragen“ herausnehmen (z. B. Vertiefung) */
@@ -14747,7 +14789,7 @@ function ffMcAktiv(){
 }
 function ffQuelleSetzen(q){ ffQuelle = q || 'alle'; ffPoolCache = null; ffIndex = null; try{ localStorage.setItem(STORAGE_KEY+'-ff-quelle', ffQuelle); }catch(e){} }
 try{ ffQuelle = localStorage.getItem(STORAGE_KEY+'-ff-quelle') || 'alle'; }catch(e){}
-function ffDienstgebrauchAktiv(){ return ffQuelle!=='staffel' && ffPakete().some(p=>p.dienstgebrauch && ((ffQuelle==='alle' && ffPaketEinbezogen(p)) || ffQuelle===p.id)); }
+function ffDienstgebrauchAktiv(){ return false &&  ffQuelle!=='staffel' && ffPakete().some(p=>p.dienstgebrauch && ((ffQuelle==='alle' && ffPaketEinbezogen(p)) || ffQuelle===p.id)); }
 function fragenpaketPruefen(d){
   if(!d || !d.exportInfo || d.exportInfo.format!=='barry-fragenpaket') throw new Error('Das ist kein BARRY-Fragenpaket.');
   if(!Array.isArray(d.fragen) || !d.fragen.length) throw new Error('Das Fragenpaket enthält keine Fragen.');
@@ -14770,7 +14812,7 @@ function fragenpaketEinlesen(text){
   state.fragenpakete = state.fragenpakete.filter(x=>x!==alt).concat([eintrag]);
   ffPoolCache = null; speichereState();
   route = {bereich:'wissen', unter:null, id:null}; wissenTab = 'pruefung'; sprungZiel = 'wissen-fachfragen-mc'; render(); sprungAusfuehren();
-  alert(`Fragenpaket „${p.titel}“ eingelesen: ${p.fragen.length} Fragen.${p.fehler.length?`\n\nNicht übernommen (unvollständig): Nr. ${p.fehler.join(', ')}`:''}\n\nDie Fragen gehen mit dem nächsten Zugangspaket bzw. Stand-Update an die Mitglieder.${p.dienstgebrauch?' Sie sind als „Nur für den Dienstgebrauch“ gekennzeichnet.':''}`);
+  alert(`Fragenpaket „${p.titel}“ eingelesen: ${p.fragen.length} Fragen.${p.fehler.length?`\n\nNicht übernommen (unvollständig): Nr. ${p.fehler.join(', ')}`:''}\n\nDie Fragen gehen mit dem nächsten Zugangspaket bzw. Stand-Update an die Mitglieder.`);
 }
 function ffLerncampusUrl(){ return (state.organisation && state.organisation.lerncampusUrl) || 'https://www.drk-lerncampus.de/'; }
 function renderFfQuellen(){
@@ -14784,7 +14826,7 @@ function renderFfQuellen(){
       <p class="hint" style="margin:4px 0 0">Gilt nur auf diesem Gerät. Ein abgewähltes Paket kannst du oben trotzdem einzeln auswählen.</p></details>` : '';
   const hinweis = ffDienstgebrauchAktiv() ? `<p class="ff-dienst">🔒 <b>Nur für den Dienstgebrauch.</b> ${esc(pakete.filter(p=>p.dienstgebrauch).map(p=>[p.titel, p.quelle, p.stand?'Stand '+p.stand:''].filter(Boolean).join(', ')).join(' · '))} – nicht weitergeben, nicht abfotografieren.</p>` : '';
   const verwaltung = leit ? `<details style="margin-top:10px"><summary class="hint" style="cursor:pointer">Fragenpakete verwalten${pakete.length?` (${pakete.length})`:''}</summary>
-      ${pakete.map(p=>`<div class="spread" style="margin:6px 0"><span>${esc(p.titel)} <span class="hint">· ${p.fragen.length} Fragen${p.stand?' · Stand '+esc(p.stand):''} · eingelesen ${fmtDatum(p.eingelesenAm)}${p.dienstgebrauch?' · Dienstgebrauch':''}</span></span><button type="button" class="btn btn-ghost btn-sm" data-ff-paket-weg="${p.id}">Entfernen</button></div>`).join('')}
+      ${pakete.map(p=>`<div class="spread" style="margin:6px 0"><span>${esc(p.titel)} <span class="hint">· ${p.fragen.length} Fragen${p.stand?' · Stand '+esc(p.stand):''} · eingelesen ${fmtDatum(p.eingelesenAm)}</span></span><span class="row" style="gap:6px;align-items:center"><button type="button" class="btn btn-ghost btn-sm" data-ff-paket-weg="${p.id}">Entfernen</button></span></div>`).join('')}
       <p class="hint" style="margin:6px 0 0">Ein Fragenpaket liest du über „Datei einlesen“ ein. Es liegt nur im Bestand – nicht im öffentlichen Programm – und geht mit den verschlüsselten Zugangspaketen an die Mitglieder.</p></details>` : '';
   return `${auswahl}${hinweis}
     <div class="row" style="gap:6px;margin-top:10px;align-items:center"><a class="btn btn-sm" href="${esc(ffLerncampusUrl())}" target="_blank" rel="noopener">🎓 Fachfragen im DRK-Lerncampus</a>${leit?'<button type="button" class="btn btn-ghost btn-sm" data-ff-lc-link>Link ändern</button>':''}<span class="hint">Anmeldung mit deinem Lerncampus-Zugang.</span></div>
@@ -14795,6 +14837,7 @@ document.addEventListener('change', e=>{ const c = e.target.closest && e.target.
 document.addEventListener('toggle', e=>{ if(e.target && e.target.classList && e.target.classList.contains('ff-einbez')) ffEinbezOffen = e.target.open; }, true);
 document.addEventListener('click', e=>{
   if(!session || !e.target.closest) return;
+  const dg = e.target.closest('[data-ff-dg]'); if(dg){ const p = ffPakete().find(x=>x.id===dg.dataset.ffDg); if(p){ p.dienstgebrauch = dg.checked; p.dienstgebrauchManuell = true; speichereState(); renderErhalteScroll(); } return; }
   const w = e.target.closest('[data-ff-paket-weg]'); if(w){ e.preventDefault(); const p = ffPakete().find(x=>x.id===w.dataset.ffPaketWeg); if(!p || !confirm(`Fragenpaket „${p.titel}“ aus BARRY entfernen?`)) return;
     state.fragenpakete = ffPakete().filter(x=>x!==p); if(ffQuelle===p.id) ffQuelleSetzen('alle'); ffPoolCache = null; speichereState(); renderErhalteScroll(); return; }
   const l = e.target.closest('[data-ff-lc-link]'); if(l){ e.preventDefault(); const neu = prompt('Adresse der Fachfragen im DRK-Lerncampus (leer = Startseite des Lerncampus):', state.organisation.lerncampusUrl||'');
@@ -18534,6 +18577,7 @@ function bindModalHausaufgabe(person){
 
 const HILFE_ROLLEN = [{id:'mitglied',label:'Mitglied'},{id:'ausbilder',label:'Ausbilder/-in'},{id:'leitung',label:'Leitung/Admin'}];
 const HILFE_ARTIKEL = [
+  {id:"neu-2-96", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.96: Prüfung & Module übersichtlicher", rollen:["mitglied","ausbilder","leitung"], text:"\n<ul>\n<li><strong>Wissen & Material → Prüfung & Module:</strong> oben die Übersicht aller Module mit Sprung zum Abschnitt, dann Modul 1.0 Fachfragen, dann Module 1.1–1.3; Ausbildungsordnung, Prüfungsordnung und Ausführungsbestimmungen stehen unten.</li>\n<li><strong>Startseite:</strong> neue Kacheln „Module 1.1–1.3 üben“ und „Fachfragen & Probeprüfung“.</li>\n<li>Darstellung auf dem Handy verbessert (Stufenauswahl, Kacheln, Probeprüfung).</li>\n<li>Termine: neue Kategorie „Zusatztraining (freiwillig)“ für freiwillige Termine mit wechselnden Inhalten.</li>\n<li>Fragenpakete: Der Vermerk „Nur für den Dienstgebrauch“ entfällt, da BARRY ohnehin nur innerhalb der Staffel genutzt wird.</li>\n</ul>"},
   {id:"neu-2-95", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.95: Ausbildungshandbuch", rollen:["mitglied","ausbilder","leitung"], text:"\n<p><strong>Fünf Stufen des Könnens</strong> bei den Prüfungselementen und in der Ausbilder-Übersicht: 1 Erworben, 2 Flüssig, 3 Übertragen, 4 Belastbar, 5 Behalten (Kaltstart). Bisherige Einträge bleiben erhalten; „bestanden“ zählt ab Stufe 4. Steht ein Element seit 14 Tagen auf Stufe 3 oder 4, erscheint „Kaltstart fällig“.</p>\n<ul>\n<li><strong>Anzeigeart:</strong> Pendeln ist eine Art des Rückführens. Im Hundeprofil wählst du Rückverweiser und darunter die Rückführung.</li>\n<li><strong>📖 Mehr im Buch:</strong> Bibliothek, Lehrwerkstatt und Kataloge verweisen auf Lehrbuch, Praxisband und Ausbilderhandbuch.</li>\n<li><strong>Ampel:</strong> Jede Übung zeigt, ob sie daheim, im Hundeführer-Treffen oder nur im Training geübt wird; Filter in der Bibliothek; Hausaufgaben mit Ort und Warnung bei Rot.</li>\n<li><strong>Ausbildung &amp; Team → Lernstand &amp; Protokolle:</strong> Lernstand-Checks H-1 bis H-19 und M-1 bis M-15 mit Verlauf und Wiedervorlage, Lernpfad, fünf Protokollvorlagen und „Gefühle an der Leine“ mit Wenn-dann-Plänen auf der Startseite. Mitglieder senden Checks und Protokolle mit „Meine Angaben senden“ an die Leitung.</li>\n<li><strong>Fehlerdiagnose:</strong> Schnellsuche nach Beobachtung und Problemlösung A–Z (62 Einträge aus dem Ausbilderhandbuch) mit passenden Übungen.</li>\n<li><strong>Ausbilder-Werkzeuge</strong> (nur Ausbildende): Drehbuch einsatznahe Übung, Fallakte je Team, Checkliste „Vom Prüfungsbestehen zum ersten Einsatz“, Bewertung abgleichen.</li>\n<li><strong>📖 Ausbildungshandbuch (Buchleser):</strong> Startseite oder Unterlagen-Leiste → Bände einmal je Gerät als Buchpaket (.json) einlesen; danach offline blättern (Wischen oder Pfeile), suchen, Inhaltsverzeichnis, Lesezeichen und Sprünge zwischen den Bänden. Band 3 nur für Ausbildende. Alle „Mehr im Buch“-Hinweise öffnen die passende Stelle.</li>\n<li><strong>Mein Stand → Mein Weg in die Prüfertätigkeit:</strong> Voraussetzungen, Anwärterzeit mit Zähler für 40 Einzelsuchprüfungen und sechs Lernschritte.</li>\n</ul>"},
   {id:"neu-2-51", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.51–2.55: Übungsrad", rollen:["mitglied","ausbilder","leitung"], text:"\n<p><strong>🎡 Übungsrad</strong> (Menü, direkt unter Start): 435 Übungen zu 33 Themen aus Kynologie, Rettungshundearbeit und Erster Hilfe – ohne Ausbildungsunterlagen lösbar.</p>\n<ul>\n<li><strong>Glücksrad:</strong> Wer übt (allein, mit Hund, als Helfer, in der Gruppe), Zeit und Bereich wählen, dann drehen. Übungen „Erst mit Ausbilder“ werden zuerst im Training geübt; sind sie aus dem Training bekannt oder mit dem Ausbilder abgesprochen, dürfen sie privat auch ohne Ausbilder geübt werden, ggf. mit einem erfahrenen Helfer (eigener Schalter). Übungen „Nur mit Ausbilder“ (z. B. Trümmergelände, Mantrailing) erscheinen nur mit „Ausbilderin oder Ausbilder ist heute dabei“. Ohne Haken bei „Ein Helfer bzw. eine Versteckperson ist dabei“ zeigt das Rad nur Übungen, die allein mit dem eigenen Hund möglich sind; die Anzeigeart des Teams wird berücksichtigt. Bei Regen unter „Wo?“ „Drinnen (Schlechtwetter)“ wählen: Das Rad zeigt nur Übungen, die drinnen gehen, mit Hinweisen für drinnen. Vor Übungen mit Hund kommt ein kurzer Tagesform-Check.</li>\n<li><strong>Lösungen</strong> erst nach Bestätigung, dass die Aufgabe selbst bearbeitet wurde; Hinweise schrittweise.</li>\n<li><strong>Meine Themen</strong> und <strong>Mein Stand</strong>: eigene Themen fürs Rad wählen, erledigte Übungen und Notizen sehen. Der Stand gilt je angemeldeter Person und ist in jeder Datensicherung enthalten.</li>\n<li><strong>Trainingstagebuch:</strong> Beim Abhaken bietet BARRY (bei eigenem Hund) an, einen Eintrag mit Datum, Übung und Notiz anzulegen.</li>\n<li>Ältere Übungen in BARRY zeigen, wo es eine neue Fassung gibt: „Neue Fassung im Übungsrad: …“ – ein Tipp darauf öffnet die Übung. Die bisherigen Übungen bleiben unverändert erhalten.</li>\n</ul>"},
   {id:"neu-2-54", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.54: Qualifikationen Schritt für Schritt erfassen und schneller finden", rollen:["mitglied","ausbilder","leitung"], text:"\n<p><strong>Erfassung in drei Schritten</strong> – gerade auf dem Handy: <strong>1 · Bereich</strong> antippen (z. B. „Unterweisungen &amp; UVV“, „DRK-Lerncampus (online)“, Grundausbildung, Führung …) oder direkt suchen, <strong>2 · Qualifikation</strong> aus der gefilterten Liste wählen, <strong>3 · Angaben</strong> eintragen: Datum, „Gültig bis“ (wird vorbelegt, wenn der Katalog eine Frist kennt; jährliche Nachweise nach der Kalenderjahr-Regel), bei Bedarf Hund, Sparte, UE sowie <strong>Nachweis/Bemerkung</strong>. Die Erfassung findest du unter <strong>🎓 Mein Stand → „Nachweis eintragen“</strong>, im <strong>Personen-Dialog</strong> (Abschnitt Qualifikationen) und unter <strong>Verwaltung → Qualifikationen → „+ Zuordnung“</strong>.</p>\n<ul>\n<li><strong>UVV-Unterweisung online (DRK-Lerncampus):</strong> eigener Katalogeintrag; zählt standardmäßig als „UVV-Unterweisung allgemein (jährlich)“ und erhält dadurch dieselbe Frist. Eine eigene Gültigkeitsdauer für das Online-Modul ist nicht hinterlegt.</li>\n<li><strong>DRK-Lerncampus online – freier Kurs:</strong> für Online-Kurse ohne Katalogeintrag. Kurstitel frei eingeben, Datum, optional „Gültig bis“ und Nachweis. Der Titel erscheint in Listen, Fristen, CSV-Export und Datensicherung.</li>\n<li><strong>Geordnete Listen:</strong> Nachweise sind nach Bereich gruppiert, wahlweise alphabetisch oder nach Fälligkeit sortiert, mit Suche und Filter (Handlungsbedarf, gültig, ältere). Abgelaufene Nachweise sind rot, bald fällige gelb markiert; erneuerte ältere Nachweise erscheinen blass. Die Leitung kann die Gesamtliste unter Verwaltung → Qualifikationen auch nach Person gruppieren.</li>\n<li><strong>CSV Qualifikationen:</strong> Der Export füllt jetzt auch die Spalten Bis, Thema, UE und Stunden und enthält zusätzlich „Nachweis“. Ältere CSV-Dateien lassen sich unverändert einlesen.</li>\n</ul>\n"},
@@ -19994,7 +20038,9 @@ async function startseite(){
     ${lz.length?`<div class="karte"><b>🔖 Lesezeichen</b>${lz.map((x,i)=>`<div style="display:flex;align-items:center"><button class="zeile" data-l="lz" data-n="${i}">${e(BAND[x.band].k)} · ${e(x.titel)}</button><span class="knopf" data-l="lzweg" data-n="${i}" title="Lesezeichen entfernen">✕</span></div>`).join('')}</div>`:''}`,'Ausbildungshandbuch');
 }
 async function einlesen(ev){
-  const files=[...(ev.target.files||[])]; ev.target.value=''; let n=0;
+  const files=[...(ev.target.files||[])]; ev.target.value=''; await dateienEinlesen(files);
+}
+async function dateienEinlesen(files){ let n=0;
   for(const f of files){ try{ const p=JSON.parse(await f.text());
       if(!p||p.format!=='rhs-buch'||!BAND[p.band]||!Array.isArray(p.abschnitte)) { CFG.toast(f.name+': kein Buchpaket des Ausbildungshandbuchs.'); continue; }
       if(!CFG.baende.includes(p.band)) { CFG.toast(BAND[p.band].t+' ist in dieser App nicht vorgesehen.'); continue; }
@@ -20102,6 +20148,7 @@ document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.clo
 document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.closest('[data-rhs-buch-start]'); if(!a) return; ev.preventDefault(); RHSBuch.oeffnen(); });
 
 window.RHSBuch={
+  async importieren(files){ rahmen(); document.body.style.overflow='hidden'; await laden(); await dateienEinlesen([...(files||[])]); },
   async oeffnen(id){ rahmen(); document.body.style.overflow='hidden'; await laden(); verlauf=[]; akt=null; if(id){ if(!springe(id)) startseite(); } else startseite(); },
   linkify, eingelesen:b=>!!geladen[b],
   async status(){ await laden(); return CFG.baende.map(b=>({band:b,geladen:!!geladen[b]})); }
