@@ -3452,6 +3452,7 @@ const QUALIFIKATIONEN_KATALOG_VORSCHLAG = [
   { code:'rettsan', label:'RettSAN – Rettungssanitäter:in', kategorie:K_SAN, ue:520 },
   { code:'mtf', label:'MTF – Einweisung', kategorie:K_SAN, ue:8 },
   { code:'bhp', label:'BHP – Seminar BHP der MTF', kategorie:K_SAN, ue:16 },
+  { code:'mtf_bhp_zusatz', label:'MTF – Zusatzausbildung Behandlungsplatz', kategorie:K_SAN, hinweis:'Bezeichnung wie im drkserver (Festlegung 24.11.2026)', aliase:['MTF - Zusatzausbildung Behandlungsplatz','MTF-Zusatzausbildung Behandlungsplatz'] },
   { code:'hige', label:'HiGE – Helfer im Großeinsatz', kategorie:K_SAN, ue:16 },
   { code:'lsi', label:'LSi – Ladungssicherung', kategorie:K_SAN, ue:8 },
   // 8) Betreuungsdienst & Verpflegung
@@ -3522,7 +3523,8 @@ const QUALIFIKATIONEN_KATALOG_VORSCHLAG = [
   { code:'lc_pruef', label:'DRK-Lerncampus – Prüfungen', kategorie:K_LC, hinweis:LC_HINWEIS, aliase:['DRK-Lerncampus - Prüfungen','Lerncampus - Prüfungen','Lerncampus – Prüfungen'] },
   { code:'lc_sonst', label:'DRK-Lerncampus – Sonstige Module', kategorie:K_LC, hinweis:LC_HINWEIS, aliase:['DRK-Lerncampus - Sonstige Module','Lerncampus - Sonstige Module','Lerncampus – Sonstige Module'] },
 ].map(q=>({ intervallMonate:null, hinweis:'', pflicht:false, pflichtRHF:false, empfohlen:false, ue:null, aliase:[], ...q }));
-const QUALI_KATALOG_VERSION = 20;   // 20: Sanitätsfortbildung – Lehrgang enthält keine 16 UE (BARRY 2.79)
+const QUALI_KATALOG_VERSION = 21;   // 21: MTF – Zusatzausbildung Behandlungsplatz (BARRY 2.97)
+// alt: 20;   // 20: Sanitätsfortbildung – Lehrgang enthält keine 16 UE (BARRY 2.79)
 // alt:   // 19: Abgleich Übersicht Fachausbildung 2023 (PSNV-E 20 UE, Hinweise RHd/PSNV-E) – BARRY 2.75   // 18: Bereiche PSNV sowie Leitung & Vorstand, alle BtD-Module unter Betreuung (BARRY 2.57)
 // 17 (alt):   // 17: UVV-Unterweisung online und freier Lerncampus-Kurs (BARRY 2.54)
 // 16: Lehrberechtigung/Bewerter/Prüfer befristet, UE-Fortbildungskonten (AO RH 2024)
@@ -3749,6 +3751,7 @@ const LC_MODUL_REGELN = new Map([
   ['infektionstransport und richtlinien rd', ''],
   ['hygienemaßnahmen in betreuungsdienstlichen einsätzen', ''],
   ['einsatzfahrten durchführen', 'suwr'],
+  ['regelmäßige unterweisung zum fahren mit sonderrechten', 'suwr'],  // Festlegung 24.11.2026
   ['fachfragenprüfung zur rettungshundeprüfung sparte fläche', 'modul_10'],
   ['onlineangebot zum rot-kreuz-einführungsseminar', 'rke_online'],   // Festlegung 03.10.2026: zählt als RKE-Online-Teil
   ['schulung zur lebensmittelhygiene', ''],
@@ -3822,6 +3825,12 @@ function lerncampusAusZusatzfeldern(s){
     s.personQualifikationen.forEach(pq=>{ if(!pq.thema || pq.anrechnung) return; const q=s.qualifikationen.find(x=>x.id===pq.qualifikationId); if(!istLerncampus(q)) return;
       if(lcModulRegel(pq.thema)==='rke_online') pq.anrechnung = 'rke_online'; });
     s.meta.lcRegelnVersion = 2;
+  }
+  // 2.97: Unterweisung zum Fahren mit Sonderrechten zählt als SuWR – vorhandene Einträge ohne eigene Anrechnung nachziehen
+  if((s.meta.lcRegelnVersion||0) < 3){
+    s.personQualifikationen.forEach(pq=>{ if(!pq.thema || pq.anrechnung) return; const q=s.qualifikationen.find(x=>x.id===pq.qualifikationId); if(!istLerncampus(q)) return;
+      if(lcModulRegel(pq.thema)==='suwr') pq.anrechnung = 'suwr'; });
+    s.meta.lcRegelnVersion = 3;
   }
   return n;
 }
@@ -4278,7 +4287,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '2.96';
+const BARRY_APP_VERSION = '2.97';
 const BARRY_APP_STAND = '24.11.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -4610,12 +4619,12 @@ function renderErststartWillkommen(){
     <ol class="erst-schritte">
       <li class="${installiert||!web||barryGeradeInstalliert?'erst-fertig':''}"><b>BARRY als App installieren</b>${schritt1}${!installiert&&web&&!barryGeradeInstalliert?`<p class="hint" style="margin:6px 0 0">So sieht BARRY danach auf dem Startbildschirm aus: ${barryIconHtml(28)} <b>BARRY</b></p>`:''}</li>
       <li><b>Dein Zugangspaket öffnen</b>
-        <p class="hint" style="margin:4px 0 8px">Die Datei heißt <b>BARRY_Zugang_</b><i>dein Name</i><b>.json</b>. Du bekommst sie von der Staffelleitung, z. B. über Teams oder per E-Mail – bitte vorher auf dem Gerät speichern. Das <b>Startpasswort</b> bekommst du getrennt davon.</p>
+        <p class="hint" style="margin:4px 0 8px">Die Datei heißt <b>BARRY_Staffelpaket_</b><i>Datum</i><b>.json</b> (für alle gleich) oder <b>BARRY_Zugang_</b><i>dein Name</i><b>.json</b>. Du bekommst sie von der Staffelleitung, z. B. über Teams oder per E-Mail – bitte vorher auf dem Gerät speichern. Das <b>Staffel-</b> bzw. <b>Startpasswort</b> bekommst du getrennt davon.</p>
         <label class="btn ${installiert||!web||!ios?'btn-primary':''}" style="display:flex;justify-content:center;cursor:pointer;width:100%">📂 Zugangspaket öffnen<input type="file" id="in-erststart-import" style="display:none"></label>
         <details style="margin-top:8px"><summary class="hint" style="cursor:pointer;color:var(--ink)">Die Datei lässt sich nicht finden?</summary>
           <p class="hint" style="margin:6px 0 0">Gespeicherte Dateien liegen meist im Ordner <b>Downloads</b>. Im Auswahlfenster findest du ihn über das Menü (☰) oder „Durchsuchen“ (iPhone: „Durchsuchen“ → „Auf meinem iPhone“ → „Downloads“). In Teams die Datei über „…“ → „Herunterladen“ speichern, in E-Mail-Apps über den Anhang → „Speichern“.</p>
           <p class="hint" style="margin:6px 0 0"><b>Bitte nicht im privaten bzw. Inkognito-Fenster einrichten</b> – dort löscht der Browser beim Schließen alles wieder.</p></details></li>
-      <li><b>Fertig</b><p class="hint" style="margin:4px 0 0">Nach dem Startpasswort ist BARRY sofort geöffnet – Namen eintippen oder ein eigenes Passwort festlegen ist nicht nötig. Auf deinem Gerät bleibt BARRY ohne Passwort geöffnet.</p></li>
+      <li><b>Fertig</b><p class="hint" style="margin:4px 0 0">Beim Staffelpaket wählst du nach dem Passwort deinen Namen und bestätigst ihn mit deinem Geburtsdatum. Nach dem Startpasswort ist BARRY sofort geöffnet – Namen eintippen oder ein eigenes Passwort festlegen ist nicht nötig. Auf deinem Gerät bleibt BARRY ohne Passwort geöffnet.</p></li>
     </ol>
     <p class="hint" style="margin:16px 0 0;text-align:center"><a href="#" id="erst-leitung">Ich richte BARRY für die Staffel ein (Staffelleitung/Admin) →</a></p>
     <p class="hint" style="margin-top:10px;text-align:center">Alle Daten bleiben ausschließlich auf diesem Gerät.</p>
@@ -5083,6 +5092,7 @@ window.addEventListener('popstate', e=>{
    ========================================================= */
 const FREIGABEN = [
   {k:'geburtstag', label:'Mein Geburtstag (nur Tag und Monat, ohne Jahr) wird allen Mitgliedern in BARRY angezeigt', vorgabe:false, genutzt:true},
+  {k:'geburtsjahr', label:'Mein vollständiges Geburtsdatum (mit Jahr) wird allen Mitgliedern in BARRY angezeigt', vorgabe:false, genutzt:true},
   {k:'hundGeburtstag', label:'Der Wurftag meiner Hunde (Tag und Monat) wird allen Mitgliedern in BARRY angezeigt', vorgabe:true, genutzt:true},
   {k:'telefon', label:'Meine Telefonnummer darf für Staffelmitglieder sichtbar sein (z. B. Fahrgemeinschaften, Rückfragen)', vorgabe:false, genutzt:false},
   {k:'email', label:'Meine E-Mail-Adresse darf für Staffelmitglieder sichtbar sein', vorgabe:false, genutzt:false},
@@ -5107,9 +5117,10 @@ function geburtstageListe(person, heute){
   state.personen.filter(p=>p.status!=='inaktiv').forEach(p=>{
     const sichtbar = leitung || p.id===person.id || freigabe(p,'geburtstag');
     if(!sichtbar) return;
-    const tm = tagMonat(p.geburtsdatum) || tagMonat(p.geburtstagTM); if(!tm) return;
+    const tm = tagMonat(p.geburtsdatum) || tagMonat(p.geburtstagVoll) || tagMonat(p.geburtstagTM); if(!tm) return;
     const a = geburtstagAbstand(tm, heute); if(a.d < -GEB_TAGE_NACHHER || a.d > GEB_TAGE_VORHER) return;
-    liste.push({art:'mensch', name:p.name, d:a.d, alter: (leitung && tm.j) ? a.j-tm.j : null});
+    const mitJahr = leitung || p.id===person.id || freigabe(p,'geburtsjahr');
+    liste.push({art:'mensch', name:p.name, d:a.d, alter: (mitJahr && tm.j) ? a.j-tm.j : null});
   });
   state.hunde.filter(h=>h.status!=='inaktiv').forEach(h=>{
     const hf = state.personen.find(p=>p.id===h.hundefuehrerId);
@@ -6291,8 +6302,8 @@ function bindVerwaltungTab(tab, person){
 
 /* ---------- Freigaben & Einwilligungen (nur Leitung) ----------
    Je Person: Freigaben nach Einwilligung sowie Nachweis (Datum, Form, Ablageort). Ohne Eintrag gelten die Vorgaben. */
-const EINWILLIGUNG_FORMEN = ['Papier, unterschrieben','PDF, digital unterschrieben','Excel-Selbstauskunft','in BARRY gemeldet','mündlich (mit Vermerk)'];
-const FREIGABE_KURZ = {geburtstag:'Geburtstag', hundGeburtstag:'Wurftag Hunde', telefon:'Telefon', email:'E-Mail', wohnort:'Wohnort'};
+const EINWILLIGUNG_FORMEN = ['Papier, unterschrieben','PDF, digital unterschrieben','Excel-Selbstauskunft','in BARRY gemeldet','mündlich (mit Vermerk)','Umfrage (mit Vermerk)'];
+const FREIGABE_KURZ = {geburtstag:'Geburtstag', geburtsjahr:'mit Jahr', hundGeburtstag:'Wurftag Hunde', telefon:'Telefon', email:'E-Mail', wohnort:'Wohnort'};
 function renderTabFreigaben(){
   const personen = state.personen.filter(p=>p.status!=='inaktiv' && (p.name||'').toLowerCase()!=='admin').sort((a,b)=>a.name.localeCompare(b.name,'de'));
   const ohne = personen.filter(p=>!(p.einwilligung && p.einwilligung.datum));
@@ -6317,6 +6328,8 @@ function renderTabFreigaben(){
     <h3 style="margin-top:0">Freigaben &amp; Einwilligungen</h3>
     <p class="hint">Hier trägst du ein, was jedes Mitglied anderen Mitgliedern in BARRY zeigen möchte – nach der unterschriebenen Selbstauskunft, der Excel-Datei oder einer Meldung. Ohne Einwilligung gelten die Vorgaben: Geburtstag nur für die Leitung sichtbar, Wurftage der Hunde für alle, Kontaktdaten nicht sichtbar. Änderungen werden sofort gespeichert und erreichen die Mitglieder mit dem nächsten Zugangspaket.</p>
     <p class="hint"><b>${ohne.length} von ${personen.length}</b> Mitgliedern ohne erfasste Einwilligung${ohne.length&&ohne.length<=12?': '+ohne.map(p=>esc(p.name)).join(', '):''}.</p>
+    <p style="margin:0 0 10px"><button class="btn btn-sm" id="fg-umfrage-jahr">📅 Umfrage: Geburtsdatum mit Jahr für alle ${personen.length} freigeben</button></p>
+    ${ohne.length?`<p style="margin:0 0 10px"><button class="btn btn-sm" id="fg-muendlich-alle">🗣️ Mündliche Einwilligung (Geburtstag) für alle ${ohne.length} ohne Eintrag erfassen</button></p>`:''}
     <style>.fg-karten{display:none}@media (max-width:760px){.fg-tabelle{display:none}.fg-karten{display:block}}</style>
     <div class="fg-tabelle" style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:.9rem">
       <thead><tr><th style="text-align:left;padding:6px 6px 6px 0">Name</th>${kopf}<th style="text-align:left">Einwilligung vom</th><th style="text-align:left">Form</th><th style="text-align:left">Ablage</th></tr></thead>
@@ -6325,6 +6338,26 @@ function renderTabFreigaben(){
   </div>`;
 }
 function bindTabFreigaben(){
+  const uj = document.getElementById('fg-umfrage-jahr');
+  if(uj) uj.onclick = ()=>{
+    const alle = state.personen.filter(p=>p.status!=='inaktiv' && (p.name||'').toLowerCase()!=='admin');
+    const heute = new Date().toISOString().slice(0,10);
+    const d = prompt(`Für ${alle.length} Mitglieder wird erfasst: Einwilligung per „Umfrage (mit Vermerk)“ – Geburtstag und vollständiges Geburtsdatum mit Jahr für alle Mitglieder sichtbar.\nAusdrücklich abgelehnte Freigaben bleiben unverändert. Eine frühere Einwilligung wird als „vorher“ aufbewahrt.\n\nDatum der Umfrage (JJJJ-MM-TT):`, heute);
+    if(d===null) return; if(!/^\d{4}-\d{2}-\d{2}$/.test(d.trim())){ alert('Bitte das Datum als JJJJ-MM-TT eingeben.'); return; }
+    let n=0;
+    alle.forEach(p=>{ const f = p.freigaben||{}; if(f.geburtstag===false || f.geburtsjahr===false) return;
+      if(p.einwilligung && p.einwilligung.datum && p.einwilligung.form!=='Umfrage (mit Vermerk)') p.einwilligungVorher = Object.assign({}, p.einwilligung);
+      p.einwilligung = Object.assign({}, p.einwilligung||{}, {datum:d.trim(), form:'Umfrage (mit Vermerk)'});
+      p.freigaben = Object.assign({}, f, {geburtstag:true, geburtsjahr:true}); p.freigabenStand = nowIso(); n++; });
+    speichereState(); zeigeToast(`Geburtsdatum mit Jahr für ${n} Mitglieder freigegeben.`); renderErhalteScroll(); };
+  const ma = document.getElementById('fg-muendlich-alle');
+  if(ma) ma.onclick = ()=>{
+    const ohne = state.personen.filter(p=>p.status!=='inaktiv' && (p.name||'').toLowerCase()!=='admin' && !(p.einwilligung && p.einwilligung.datum));
+    const heute = asxHeuteIso ? asxHeuteIso() : new Date().toISOString().slice(0,10);
+    const d = prompt(`Für ${ohne.length} Mitglieder wird erfasst: Einwilligung „mündlich (mit Vermerk)“, Geburtstag (nur Tag und Monat) für alle Mitglieder sichtbar.\nAusdrücklich abgelehnte Freigaben bleiben unverändert.\n\nDatum der Einwilligung (JJJJ-MM-TT):`, heute);
+    if(d===null) return; if(!/^\d{4}-\d{2}-\d{2}$/.test(d.trim())){ alert('Bitte das Datum als JJJJ-MM-TT eingeben.'); return; }
+    ohne.forEach(p=>{ p.einwilligung = Object.assign({}, p.einwilligung||{}, {datum:d.trim(), form:'mündlich (mit Vermerk)'}); if(!(p.freigaben && p.freigaben.geburtstag===false)) p.freigaben = Object.assign({}, p.freigaben||{}, {geburtstag:true}); p.freigabenStand = nowIso(); });
+    speichereState(); zeigeToast(`Einwilligung für ${ohne.length} Mitglieder erfasst.`); renderErhalteScroll(); };
   document.querySelectorAll('[data-fg-person]').forEach(cb=>{ cb.onchange = ()=>{ const p = state.personen.find(x=>x.id===cb.dataset.fgPerson); if(!p) return;
     p.freigaben = Object.assign({}, p.freigaben||{}, {[cb.dataset.fgK]: cb.checked}); p.freigabenStand = nowIso(); speichereState(); zeigeToast('Freigabe für '+p.name+' gespeichert.');
     document.querySelectorAll(`[data-fg-person="${p.id}"][data-fg-k="${cb.dataset.fgK}"]`).forEach(x=>{ x.checked = cb.checked; }); }; });
@@ -6365,6 +6398,7 @@ function renderTabAustausch(){
       <p class="hint" style="margin:0 0 6px">An diese Adresse schicken Mitglieder Meldungen, Kurswünsche und Trainingskarten per „📧 Per E-Mail“. Sie wird mit dem Zugangspaket an die Mitglieder weitergegeben.</p>
       <div class="row" style="gap:6px;flex-wrap:wrap"><input id="org-leitung-email" type="email" value="${esc(state.organisation.leitungEmail||'')}" placeholder="name@beispiel.de" style="flex:1 1 220px"><button class="btn btn-sm" id="org-leitung-email-ok">Speichern</button></div>
     </div>
+    ${renderStaffelpaketKarte()}
     <div class="card card-pad" style="margin-bottom:14px">
       <h3 style="margin-top:0">🔑 Zugänge <span class="chip muted">${zugangsberechtigtePersonen().filter(p=>p.startPasswort).length} von ${zugangsberechtigtePersonen().length} mit Startpasswort</span></h3>
       <p class="hint" style="margin-top:8px">Jedes Mitglied erhält ein <b>eigenes Startpasswort</b> und ein eigenes Zugangspaket mit nur seinen Daten und Rechten. Das Startpasswort braucht sie nur <b>einmal</b> beim Einlesen; danach ist BARRY auf ihrem Gerät ohne Passwort geöffnet (seit 2.85). Die Startpasswörter bleiben hier in der Zugangsliste nachlesbar.</p>
@@ -6389,6 +6423,7 @@ function renderTabAustausch(){
 let vwUlGeladen = false;
 function bindTabAustausch(){
   if(!vwUlGeladen && typeof ulVorhanden!=='undefined' && ulVorhanden===null && typeof ulIndexLaden==='function'){ vwUlGeladen = true; ulIndexLaden().then(()=>{ if(route && route.bereich==='verwaltung' && route.unter==='austausch') renderErhalteScroll(); }).catch(()=>{}); }
+  bindStaffelpaketKarte();
   const spv=document.getElementById('btn-startpw-vergeben');
   if(spv) spv.onclick = ()=>{ const n=fehlendeStartpasswoerterVergeben(); zeigeToast(n?`${n} Startpasswörter vergeben.`:'Alle haben bereits ein Startpasswort.'); render(); };
   const zl=document.getElementById('btn-zugangsliste'); if(zl) zl.onclick = ()=>{ fehlendeStartpasswoerterVergeben(); zugangslisteHerunterladen(); render(); };
@@ -8126,7 +8161,7 @@ function renderModalCsvVorschau(){
     <div class="modal-body">
       ${a.quelleText?`<p style="margin:0 0 6px"><strong>${esc(a.quelleText)}</strong></p>`:''}
       <p class="hint">Noch ist nichts gespeichert. So würde BARRY die Tabelle übernehmen:</p>
-      ${a.freigaben && Object.keys(a.freigaben).length?`<p class="hint">Freigaben: ${FREIGABEN.filter(d=>d.k in a.freigaben).map(d=>esc(({geburtstag:'Geburtstag',hundGeburtstag:'Wurftag Hunde',telefon:'Telefon',email:'E-Mail',wohnort:'Wohnort'})[d.k])+': '+(a.freigaben[d.k]?'Ja':'Nein')).join(' · ')}</p>`:''}
+      ${a.freigaben && Object.keys(a.freigaben).length?`<p class="hint">Freigaben: ${FREIGABEN.filter(d=>d.k in a.freigaben).map(d=>esc(({geburtstag:'Geburtstag',geburtsjahr:'Geburtsdatum mit Jahr',hundGeburtstag:'Wurftag Hunde',telefon:'Telefon',email:'E-Mail',wohnort:'Wohnort'})[d.k])+': '+(a.freigaben[d.k]?'Ja':'Nein')).join(' · ')}</p>`:''}
       ${(a.sonstige||[]).length?`<p class="hint">Sonstige Ausbildungen: ${a.sonstige.map(x=>esc(x.label)+' ('+esc(x.datum)+')').join(' · ')}</p>`:''}
       ${!a.personenNeu.length && !a.personenUpdates.length && !a.hundeNeu.length && !a.hundeUpdates.some(u=>Object.values(u.werte).some(Boolean)) && !a.zweitZuordnungen.length && !a.ausbNeu.length ? '<p class="hint" style="color:var(--accent-ink)"><strong>Die Tabelle enthält gegenüber dem aktuellen Stand nichts Neues.</strong></p>' : ''}
       <div class="grid-2" style="gap:8px;margin-bottom:10px">
@@ -8252,7 +8287,7 @@ function rollenDatenUebernehmen(daten, umfang, eigeneId){
   const uebungsradLokal = state.uebungsrad; // 2.51: Übungsrad-Stand dieses Geräts nicht überschreiben (siehe uemStaendeZusammenfuehren)
   Object.entries(daten||{}).forEach(([k,v])=>{
     if(k==='personen' && umfang==='ausbilder'){
-      v.forEach(np=>{ const vorh=state.personen.find(x=>x.id===np.id); if(!vorh) state.personen.push(np); else if(np.id!==eigeneId) Object.assign(vorh, {name:np.name, benutzername:np.benutzername, rollen:np.rollen, status:np.status, geburtstagTM:np.geburtstagTM, freigaben:np.freigaben}); });
+      v.forEach(np=>{ const vorh=state.personen.find(x=>x.id===np.id); if(!vorh) state.personen.push(np); else if(np.id!==eigeneId) Object.assign(vorh, {name:np.name, benutzername:np.benutzername, rollen:np.rollen, status:np.status, geburtstagTM:np.geburtstagTM, geburtstagVoll:np.geburtstagVoll||'', freigaben:np.freigaben}); });
       state.personen = state.personen.filter(x=> x.id===eigeneId || v.some(np=>np.id===x.id));
     } else state[k]=v;
   });
@@ -8272,7 +8307,8 @@ function zugangspaketDaten(person, startpasswort){
     kmStandard: p.id===person.id?(p.kmStandard??null):null, sparten: p.id===person.id?(p.sparten||[]):[],
     strasse: p.id===person.id?(p.strasse||''):'', plz: p.id===person.id?(p.plz||''):'', ort: p.id===person.id?(p.ort||''):'', email: p.id===person.id?(p.email||''):'', telefon: p.id===person.id?(p.telefon||''):'',
     passwortHash: p.id===person.id ? einfacherHash(startpasswort) : '', mussPasswortAendern: p.id===person.id, angelegtAm: p.angelegtAm||nowIso(),
-    geburtstagTM: (p.id===person.id || freigabe(p,'geburtstag')) ? tmText(p.geburtsdatum) : '', freigaben: p.id===person.id ? (p.freigaben||{}) : {hundGeburtstag: freigabe(p,'hundGeburtstag'), geburtstag: freigabe(p,'geburtstag')},
+    geburtstagTM: (p.id===person.id || freigabe(p,'geburtstag')) ? tmText(p.geburtsdatum) : '', freigaben: p.id===person.id ? (p.freigaben||{}) : {hundGeburtstag: freigabe(p,'hundGeburtstag'), geburtstag: freigabe(p,'geburtstag'), geburtsjahr: freigabe(p,'geburtsjahr')},
+    geburtstagVoll: (p.id!==person.id && freigabe(p,'geburtstag') && freigabe(p,'geburtsjahr') && /^\d{4}-\d{2}-\d{2}/.test(p.geburtsdatum||'')) ? String(p.geburtsdatum).slice(0,10) : '',
     gefuehle: p.id===person.id ? (p.gefuehle||{}) : {},
   }));
   const hundeReduziert = state.hunde.filter(h=>h.status!=='inaktiv').map(h=>{
@@ -8286,7 +8322,7 @@ function zugangspaketDaten(person, startpasswort){
   const nurEigene = liste => (liste||[]).filter(e=>eigeneHundIds.has(e.hundId));
   const paket = Object.assign(leererState(), {
     meta: Object.assign({}, state.meta, {erstelltAm: nowIso(), qualiKatalogVersion: state.meta.qualiKatalogVersion, lehrOrdnerVorbelegt:true, dateiPasswort: startpasswort, dateiPersonId: person.id}),
-    organisation: state.organisation,
+    organisation: orgOhneGeheimnisse(false),
     personen: personenReduziert, hunde: hundeReduziert,
     termine: state.termine.filter(t=>(t.sichtbarkeit||'staff')==='staff').map(t=>{ const {planungsnotiz, ...rest} = t; return rest; }),
     geloeschteTermine: state.geloeschteTermine||[],
@@ -8331,6 +8367,166 @@ function startPasswortErzeugen(){
   }
   return 'start-'+Date.now().toString().slice(-6);
 }
+/* ============================== 2.97: Staffelpaket – eine Datei für alle ==============================
+   Die Leitung erstellt EINE Datei für alle Mitglieder (Termine, Orte, Fragenpakete, Katalog, Namensliste).
+   Geschützt mit dem Staffel-Passwort, das die Leitung mündlich weitergibt. Beim ersten Öffnen wählt jedes Mitglied
+   seinen Namen, bestätigt ihn mit dem eigenen Geburtsdatum (verschlüsselter Prüfwert) und legt optional Benutzername
+   und Passwort fest. NICHT enthalten: Kontaktdaten, Adressen, Mitgliedsnummern, Qualifikationen anderer, Tankkarten-PIN.
+   Geburtstage nur mit Einwilligung und nur als Tag und Monat. Persönliche Daten kommen danach per Stand-Update
+   (mit dem Staffel-Passwort geschützt) oder die Mitglieder tragen sie selbst ein und melden sie. */
+const STAFFEL_PRUEF_ITER = 100000;
+async function staffelPruefwert(datum, saltB64){
+  const basis = await crypto.subtle.importKey('raw', new TextEncoder().encode('barry-geb:'+String(datum||'').slice(0,10)), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({name:'PBKDF2', salt:b64ZuBytes(saltB64), iterations:STAFFEL_PRUEF_ITER, hash:'SHA-256'}, basis, 256);
+  return bytesZuB64(new Uint8Array(bits));
+}
+function orgOhneGeheimnisse(ohnePin){ const o = Object.assign({}, state.organisation||{}); delete o.staffelPasswort; if(ohnePin) delete o.tankkartePin; return o; }
+function staffelPasswortVorschlag(){ const z=n=>{ try{ const a=new Uint32Array(1); crypto.getRandomValues(a); return a[0]%n; }catch(e){ return Math.floor(Math.random()*n); } };
+  const w=STARTPW_WOERTER.map(x=>x.replace('ä','ae')); return w[z(w.length)]+'-'+w[z(w.length)]+'-'+String(100+z(900)); }
+/* Für Stand-Updates: Mitglieder, die über das Staffelpaket eingestiegen sind, bekommen ihre Dateien mit dem Staffel-Passwort. */
+function dateiPasswortFuer(p){ const sp = state.organisation && state.organisation.staffelPasswort; return (p && p.zugangsweg==='staffel' && sp) ? sp : (p && p.startPasswort) || ''; }
+async function staffelpaketDaten(){
+  const paket = zugangspaketDaten({id:'__staffelpaket__', name:'', rollen:[]}, '');
+  paket.exportInfo = {format:'barry-staffelpaket', app:'BARRY', appVersion:BARRY_APP_VERSION, schemaVersion:BARRY_SCHEMA_VERSION, exportiertAm:nowIso(), organisation:state.organisation.name||''};
+  paket.organisation = orgOhneGeheimnisse(true);
+  delete paket.meta.dateiPasswort; delete paket.meta.dateiPersonId;
+  paket.personen = paket.personen.filter(x=>(x.name||'').trim().toLowerCase()!=='admin');
+  for(const x of paket.personen){
+    const orig = state.personen.find(y=>y.id===x.id);
+    x.passwortHash = ''; x.mussPasswortAendern = false; x.geburtsdatum = ''; x.freigaben = {geburtstag: freigabe(orig,'geburtstag'), geburtsjahr: freigabe(orig,'geburtsjahr'), hundGeburtstag: freigabe(orig,'hundGeburtstag')};
+    if(orig && /^\d{4}-\d{2}-\d{2}/.test(orig.geburtsdatum||'')){ const s = bytesZuB64(crypto.getRandomValues(new Uint8Array(16))); x.pruef = {s, h: await staffelPruefwert(orig.geburtsdatum, s)}; }
+  }
+  return paket;
+}
+async function staffelpaketErstellen(){
+  const pw = (state.organisation.staffelPasswort||'').trim();
+  if(pw.length<8){ alert('Bitte zuerst ein Staffel-Passwort mit mindestens 8 Zeichen festlegen und speichern.'); return; }
+  if(!kryptoVerfuegbar()){ alert('Dieser Browser unterstützt keine Verschlüsselung. Bitte BARRY über die Web-Adresse (https) öffnen.'); return; }
+  fortschrittAnzeigen('🔒 Staffelpaket wird erstellt …'); await naechsterFrame();
+  let text; try{ text = await barryVerschluesseln(JSON.stringify(await staffelpaketDaten()), pw, {inhalt:'Staffelpaket', art:'staffelpaket'}); }
+  catch(e){ fortschrittAnzeigen(null); alert('Staffelpaket nicht erstellt: '+e.message); return; }
+  fortschrittAnzeigen(null);
+  state.organisation.staffelpaketAm = nowIso(); speichereState();
+  textHerunterladen(text, `BARRY_Staffelpaket_${new Date().toISOString().slice(0,10)}.json`);
+  zeigeToast('Staffelpaket erstellt – geschützt mit dem Staffel-Passwort. Datei und Passwort bitte getrennt weitergeben.'); render();
+}
+function renderStaffelpaketKarte(){
+  const o = state.organisation||{}, alle = zugangsberechtigtePersonen(), ueber = alle.filter(p=>p.zugangsweg==='staffel');
+  const mitGeb = alle.filter(p=>/^\d{4}-\d{2}-\d{2}/.test(p.geburtsdatum||'')).length, mitEinw = alle.filter(p=>freigabe(p,'geburtstag')).length, mitJahr = alle.filter(p=>freigabe(p,'geburtstag') && freigabe(p,'geburtsjahr')).length;
+  return `<div class="card card-pad" style="margin-bottom:14px" id="vw-staffelpaket">
+    <h3 style="margin-top:0">👥 Staffelpaket – eine Datei für alle ${o.staffelpaketAm?`<span class="chip muted">zuletzt ${fmtDatum(o.staffelpaketAm)}</span>`:''}</h3>
+    <p class="hint" style="margin:0 0 6px">Alle Mitglieder bekommen <b>dieselbe Datei</b>. Beim ersten Öffnen geben sie das <b>Staffel-Passwort</b> ein, wählen ihren Namen und bestätigen ihn mit ihrem <b>Geburtsdatum</b>. Benutzername und eigenes Passwort sind freiwillig.</p>
+    <p class="hint" style="margin:0 0 8px"><b>Enthalten:</b> Termine, Trainingsorte, Fragenpakete, Lehrmaterial-Links, Katalog, Namen und Hunde, Geburtstage nur mit Einwilligung (${mitEinw} von ${alle.length}) – als Tag und Monat, mit Jahr nur bei Freigabe „mit Jahr“ (${mitJahr} von ${alle.length}). Zur Prüfung ist das Geburtsdatum verschlüsselt hinterlegt (${mitGeb} von ${alle.length}).<br><b>Nicht enthalten:</b> Kontaktdaten, Adressen, Mitgliedsnummern, Ausbildungsdaten anderer, Tankkarten-PIN.</p>
+    <p class="hint" style="margin:0 0 8px">⚠️ Hinweis: ${mitJahr?`Bei ${mitJahr} Mitgliedern ist das vollständige Geburtsdatum für alle sichtbar. Damit schützt die Abfrage beim ersten Start bei ihnen nur vor Verwechslungen, nicht vor Missbrauch – deshalb sollte jede und jeder gleich ein eigenes Passwort vergeben.`:'Wer sich technisch auskennt, könnte aus dem Prüfwert zusammen mit Tag und Monat das Geburtsjahr ermitteln.'} Das Staffel-Passwort nur an Staffelmitglieder geben.</p>
+    <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
+      <input id="staffel-pw" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" value="${esc(o.staffelPasswort||'')}" placeholder="Staffel-Passwort (mind. 8 Zeichen)" style="flex:1 1 200px">
+      <button class="btn btn-sm" id="staffel-pw-vorschlag">Vorschlag</button>
+      <button class="btn btn-sm" id="staffel-pw-ok">Speichern</button>
+      <button class="btn btn-sm btn-primary" id="btn-staffelpaket">Staffelpaket erstellen</button>
+    </div>
+    <p class="hint" style="margin:6px 0 0">Das Staffel-Passwort bleibt nur auf deinem Gerät und geht in keine andere Datei. Wird es geändert, gilt das neue Passwort erst für neu verteilte Staffelpakete und künftige Stand-Updates.</p>
+    <details style="margin-top:8px"><summary class="hint" style="cursor:pointer;color:var(--ink)">Über das Staffelpaket eingestiegen (${ueber.length}) – Stand-Updates mit dem Staffel-Passwort</summary>
+      <p class="hint" style="margin:6px 0">Für diese Personen werden Stand-Updates mit dem Staffel-Passwort geschützt statt mit dem Startpasswort. Liest du eine Meldung ein, die mit dem Staffel-Passwort geschützt ist, setzt BARRY den Haken automatisch.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:4px">${alle.map(p=>`<label style="display:flex;gap:6px;align-items:center;font-size:.9rem"><input type="checkbox" data-staffelweg="${p.id}" ${p.zugangsweg==='staffel'?'checked':''} style="width:auto">${esc(p.name)}</label>`).join('')}</div>
+    </details>
+  </div>`;
+}
+function bindStaffelpaketKarte(){
+  const f = document.getElementById('staffel-pw'); if(!f) return;
+  const vs = document.getElementById('staffel-pw-vorschlag'); if(vs) vs.onclick = ()=>{ f.value = staffelPasswortVorschlag(); };
+  const ok = document.getElementById('staffel-pw-ok'); if(ok) ok.onclick = ()=>{ const v=f.value.trim(); if(v && v.length<8){ alert('Bitte mindestens 8 Zeichen.'); return; }
+    const alt = state.organisation.staffelPasswort||''; if(alt && v!==alt && !confirm('Das Staffel-Passwort ändern?\n\nMitglieder, die schon mit dem bisherigen Passwort eingerichtet sind, können neue Stand-Updates dann nur mit dem neuen Passwort öffnen. Bitte das neue Passwort allen mitteilen.')) return;
+    state.organisation.staffelPasswort = v; speichereState(); zeigeToast(v?'Staffel-Passwort gespeichert.':'Staffel-Passwort gelöscht.'); renderErhalteScroll(); };
+  const b = document.getElementById('btn-staffelpaket'); if(b) b.onclick = ()=>{ const v=f.value.trim(); if(v!==(state.organisation.staffelPasswort||'')){ if(v.length<8){ alert('Bitte mindestens 8 Zeichen.'); return; } state.organisation.staffelPasswort=v; speichereState(); } staffelpaketErstellen(); };
+  document.querySelectorAll('[data-staffelweg]').forEach(cb=>cb.onchange=()=>{ const p=state.personen.find(x=>x.id===cb.dataset.staffelweg); if(!p) return; if(cb.checked) p.zugangsweg='staffel'; else delete p.zugangsweg; speichereState(); });
+}
+/* ---------- Mitglied: Staffelpaket öffnen und Gerät einrichten ---------- */
+async function staffelDateiEntschluesseln(file){
+  const umschlag = istVerschluesselteDatei(await file.text()); if(!umschlag) throw new Error('Das Staffelpaket ist nicht verschlüsselt und wird aus Sicherheitsgründen nicht eingelesen.');
+  for(let versuch=1; versuch<=3; versuch++){
+    const pw = await passwortDialog({titel:'🔒 Staffelpaket öffnen', knopf:'Öffnen', text:(versuch>1?'<b style="color:#b3261e">Das Passwort war nicht richtig.</b> ':'')+'Bitte das <b>Staffel-Passwort</b> eingeben, das du von der Staffelleitung bekommen hast.'});
+    if(pw===null) return null;
+    for(const v of [...new Set([pw, pw.trim(), pw.trim().charAt(0).toLowerCase()+pw.trim().slice(1)])]){ try{ return {text: await barryEntschluesseln(umschlag, v), passwort:v}; }catch(e){ if(!e.falschesPasswort) throw e; } }
+  }
+  throw new Error('Das Staffel-Passwort war dreimal nicht richtig.');
+}
+function staffelEinrichtungDialog(paket, staffelPw){
+  return new Promise(fertig=>{
+    const personen = [...paket.personen].sort((a,b)=>String(a.name).localeCompare(String(b.name),'de'));
+    const w = document.createElement('div');
+    w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;overflow:auto';
+    const feld='width:100%;box-sizing:border-box;padding:10px;font-size:1rem;margin:4px 0 10px';
+    w.innerHTML = `<div style="background:var(--card,#fff);color:inherit;max-width:440px;width:100%;border-radius:14px;padding:18px;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:system-ui,sans-serif;max-height:92vh;overflow:auto">
+      <h3 style="margin:0 0 6px;font-size:1.15rem">👋 Willkommen bei BARRY</h3>
+      <p style="margin:0 0 12px;font-size:.92rem;line-height:1.4">${esc(paket.exportInfo.organisation||'Deine Staffel')}: Bitte wähle deinen Namen und bestätige ihn mit deinem Geburtsdatum.</p>
+      <label style="font-size:.9rem;font-weight:600">Wer bist du?</label>
+      <select id="se-person" style="${feld}"><option value="">– Name auswählen –</option>${personen.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select>
+      <label style="font-size:.9rem;font-weight:600">Dein Geburtsdatum</label>
+      <input type="date" id="se-geb" style="${feld}">
+      <details style="margin:0 0 10px"><summary style="cursor:pointer;font-size:.9rem">Benutzername und eigenes Passwort (freiwillig)</summary>
+        <p style="font-size:.85rem;margin:6px 0">Ohne eigenes Passwort ist BARRY auf deinem Gerät direkt geöffnet. Mit Passwort schützt du geschützte Bereiche zusätzlich.</p>
+        <input type="text" id="se-benutzer" placeholder="Benutzername (z. B. Vorname)" autocapitalize="off" spellcheck="false" style="${feld}">
+        <input type="password" id="se-pw1" placeholder="Eigenes Passwort (mind. 6 Zeichen)" autocomplete="new-password" style="${feld}">
+        <input type="password" id="se-pw2" placeholder="Passwort wiederholen" autocomplete="new-password" style="${feld}"></details>
+      <div id="se-fehler" style="color:#b3261e;font-size:.88rem;min-height:1.2em;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+        <button type="button" class="btn btn-sm btn-ghost" id="se-abbruch">Abbrechen</button>
+        <button type="button" class="btn btn-sm btn-primary" id="se-ok">BARRY einrichten</button></div></div>`;
+    document.body.appendChild(w);
+    const $ = id=>w.querySelector('#'+id), fe = $('se-fehler'); let fehlversuche = 0;
+    const ende = v=>{ w.remove(); fertig(v); };
+    $('se-abbruch').onclick = ()=>ende(null);
+    $('se-ok').onclick = async ()=>{
+      fe.textContent='';
+      const p = paket.personen.find(x=>x.id===$('se-person').value); if(!p){ fe.textContent='Bitte deinen Namen auswählen.'; return; }
+      const geb = $('se-geb').value;
+      if(p.pruef){
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(geb)){ fe.textContent='Bitte dein Geburtsdatum eingeben.'; return; }
+        $('se-ok').disabled = true; fe.textContent='Wird geprüft …';
+        let passt=false; try{ passt = (await staffelPruefwert(geb, p.pruef.s))===p.pruef.h; }catch(e){}
+        $('se-ok').disabled = false; fe.textContent='';
+        if(!passt){ fehlversuche++; if(fehlversuche>=5){ alert('Das Geburtsdatum passt fünfmal nicht zum gewählten Namen. Bitte bei der Staffelleitung nachfragen.'); ende(null); return; }
+          fe.textContent='Das Geburtsdatum passt nicht zu diesem Namen. Bitte prüfen.'; return; }
+      } else if(!confirm(`Für ${p.name} ist bei der Staffelleitung kein Geburtsdatum hinterlegt, deshalb kann BARRY den Namen nicht prüfen.\n\nBist du wirklich ${p.name}?`)) return;
+      const bn = $('se-benutzer').value.trim(), pw1 = $('se-pw1').value, pw2 = $('se-pw2').value;
+      if(bn && paket.personen.some(x=>x.id!==p.id && ((x.benutzername||'').toLowerCase()===bn.toLowerCase() || (x.name||'').toLowerCase()===bn.toLowerCase()))){ fe.textContent='Dieser Benutzername ist schon vergeben.'; return; }
+      if(pw1 || pw2){ if(pw1.length<6){ fe.textContent='Das eigene Passwort braucht mindestens 6 Zeichen.'; return; } if(pw1!==pw2){ fe.textContent='Die beiden Passwörter stimmen nicht überein.'; return; } }
+      ende({personId:p.id, geburtsdatum: geb||'', benutzername: bn, passwort: pw1||''});
+    };
+    setTimeout(()=>$('se-person').focus(), 50);
+  });
+}
+async function staffelpaketEinlesen(file){
+  let ent; try{ ent = await staffelDateiEntschluesseln(file); }catch(e){ alert('Das Staffelpaket konnte nicht geöffnet werden: '+e.message); return; }
+  if(!ent) return;
+  let paket; try{ paket = JSON.parse(ent.text); if(!paket.exportInfo || paket.exportInfo.format!=='barry-staffelpaket' || !Array.isArray(paket.personen)) throw new Error('Das ist kein BARRY-Staffelpaket.'); }
+  catch(e){ alert('Das Staffelpaket konnte nicht gelesen werden: '+e.message); return; }
+  if(Number(paket.exportInfo.schemaVersion) > BARRY_SCHEMA_VERSION){ alert('Das Staffelpaket stammt aus einer neueren BARRY-Version. Bitte BARRY zuerst aktualisieren (Seite neu laden).'); return; }
+  if(!istErststartOhneDaten()){
+    const ich = aktuellePerson();
+    if(ich && istLeitungOderAdmin(ich)){ alert('Das ist das Staffelpaket für die Mitglieder. Auf dem Gerät der Leitung wird es nicht eingespielt – dein Bestand bleibt unverändert.'); return; }
+    if(!confirm('BARRY ist auf diesem Gerät schon eingerichtet.\n\nMit dem Staffelpaket wird BARRY neu eingerichtet und der bisherige Stand ersetzt (er wird vorher als Sicherheitskopie abgelegt). Eigene Einträge, die du noch nicht an die Leitung gemeldet hast, gehen dabei verloren.\n\nFortfahren?')) return;
+  }
+  const erg = await staffelEinrichtungDialog(paket, ent.passwort); if(!erg) return;
+  const ich = paket.personen.find(x=>x.id===erg.personId);
+  ich.passwortHash = einfacherHash(erg.passwort || ent.passwort); ich.mussPasswortAendern = false;
+  if(erg.geburtsdatum) ich.geburtsdatum = erg.geburtsdatum;
+  if(erg.benutzername) ich.benutzername = erg.benutzername;
+  ich.zugangsweg = 'staffel';
+  paket.personen.forEach(x=>{ delete x.pruef; });
+  const daten = Object.assign({}, paket); delete daten.exportInfo;
+  daten.meta = Object.assign({}, daten.meta||{}, {dateiPasswort: ent.passwort, dateiPersonId: ich.id, zugangsweg:'staffel', einrichtungHinweis: ich.id, staffelpaketVom: paket.exportInfo.exportiertAm});
+  try{ localStorage.setItem(STORAGE_KEY+'-vor-import-backup', JSON.stringify(state)); }catch(e){}
+  state = migriereState(Object.assign(leererState(), daten)); speichereState();
+  let gespeichert = false; try{ const s2 = JSON.parse(localStorage.getItem(STORAGE_KEY)||'null'); gespeichert = !!(s2 && (s2.personen||[]).some(y=>y.id===ich.id && y.passwortHash)); }catch(e){}
+  if(!gespeichert) alert('BARRY konnte auf diesem Gerät NICHT dauerhaft gespeichert werden.\n\nMögliche Ursachen: privates bzw. Inkognito-Fenster, Speicher voll oder „Websitedaten blockieren“. Bitte BARRY in einem normalen Fenster öffnen und das Staffelpaket erneut einlesen.');
+  try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}
+  geraetPersonSetzen(ich.id); session = {personId:ich.id}; route = {bereich:'start', unter:null, id:null};
+  try{ localStorage.setItem('barry-last-login', ich.benutzername || ich.name); }catch(e){}
+  loginSchrittNeuesPasswort = null; loginWillkommen = false; loginLeitungZeigen = false; loginHinweis = ''; loginFehler = '';
+  render(); zeigeToast(`Willkommen bei BARRY, ${kurzName(ich.name)}! Trage unter „Mein Stand“ deine Ausbildungen ein – auch per Bild aus dem drkserver.`);
+}
+
 function zugangsberechtigtePersonen(){
   const ich = aktuellePerson();
   return state.personen.filter(p=>p.status!=='inaktiv' && (!ich || p.id!==ich.id) && (p.name||'').toLowerCase()!=='admin');
@@ -9182,6 +9378,9 @@ function renderMeinStand(person){
       <h3 style="margin-top:0">✏️ Nachweis ergänzen</h3>
       <p class="hint" style="margin:0 0 6px">${darfTrainingBearbeiten(person)?'Eigene Nachweise direkt eintragen.':'Neue Ausbildung, Prüfung oder Unterweisung eintragen – sie erscheint sofort bei dir (⏳ bis zur Bestätigung durch die Leitung) und wird mit „Meine Angaben senden“ an die Staffelleitung übermittelt.'}</p>
       ${qeRahmenHtml('msq', {person, art:'eigen'}, 'Nachweis eintragen', 'Schritt für Schritt – auch UVV online und freie Lerncampus-Kurse', true)}
+      <div style="margin:10px 0 0;padding:10px;border-radius:10px;background:var(--soft)"><b>📷 Aus dem drkserver übernehmen</b>
+        <p class="hint" style="margin:4px 0 8px">Screenshot aus der drkserver-App (Meine Akte → Ausbildungen) oder Foto der Ausbildungsliste am PC auswählen. BARRY liest Kurs, Datum und Status aus und schlägt die Einträge vor – du prüfst und hakst ab. Gilt nur für den drkserver, nicht für HiOrg-Anwesenheiten. Beim ersten Mal ist Internet nötig.</p>
+        <label class="btn btn-sm" style="cursor:pointer">📷 Bild(er) auswählen<input type="file" id="ms-ocr" accept="image/*" multiple style="display:none"></label></div>
       ${(()=>{ const off=offeneMeldungen(person.id); return off.length?`<p class="hint" style="margin:10px 0 2px">⏳ Noch nicht bestätigt (${off.length}):</p><ul class="hint" style="margin:0 0 0 -18px">${off.map(pq=>{ const q=q2(pq.qualifikationId); return `<li>${esc(q?pqTitel(pq,q):'?')}${q&&q.code==='lc_frei'?qlLcInfo(pq,q):lcInfoHtml(pq)}${pq.datum?' · '+fmtDatum(pq.datum):''}${pq.gemeldetAm?' · gemeldet am '+fmtDatum(pq.gemeldetAm):' · noch nicht gesendet'} <button class="btn btn-ghost btn-sm" data-ms-del="${pq.id}" title="entfernen">✕</button></li>`; }).join('')}</ul>`:''; })()}
       ${!darfTrainingBearbeiten(person) && kontaktOffen(person)?'<p class="hint" style="margin:8px 0 0">📇 Geänderte Kontaktdaten werden mitgesendet.</p>':''}
       ${(()=>{ if(darfTrainingBearbeiten(person)) return ''; const l=(state.lernchecks||[]).filter(e=>e.erfasstVon===person.id&&!e.gemeldetAm).length, p=(state.protokolle||[]).filter(e=>e.erfasstVon===person.id&&!e.gemeldetAm).length; return l||p?`<p class="hint" style="margin:8px 0 0">✅ ${l} Lernstand-Check(s) und ${p} Protokoll(e) werden mitgesendet.</p>`:''; })()}
@@ -9227,6 +9426,7 @@ function bindMeinStand(person){
   qlBinden();
   document.querySelectorAll('[data-ms-del]').forEach(b=>b.onclick=()=>{ state.personQualifikationen=state.personQualifikationen.filter(pq=>!(pq.id===b.dataset.msDel && pq.vomMitglied && !pq.bestaetigt)); speichereState(); render(); });
   const snd=document.getElementById('ms-senden'); if(snd) snd.onclick=()=>meldungSenden(person);
+  const ocr=document.getElementById('ms-ocr'); if(ocr) ocr.onchange=e=>{ const fs=Array.from(e.target.files||[]); e.target.value=''; if(fs.length) ocrBilderEinlesen(person, fs); };
   const zs=document.getElementById('ms-ziel'); if(zs) zs.onchange=()=>{ person.eigenesZiel=zs.value; speichereState(); renderErhalteScroll(); };
   const zs2=document.getElementById('ms-ziel2'); if(zs2) zs2.onchange=()=>{ if(zs2.value) person.weiteresZiel=zs2.value; else delete person.weiteresZiel; speichereState(); renderErhalteScroll(); };
   document.querySelectorAll('[data-ms-sprung]').forEach(b=>b.onclick=()=>{ const el=document.getElementById(b.dataset.msSprung); if(!el) return; if(el.tagName==='DETAILS'){ el.open=true; msNachweiseOffen=true; } el.scrollIntoView({block:'start', behavior:'smooth'}); });
@@ -9250,21 +9450,22 @@ function standUpdateDaten(p){
 }
 function standUpdateDateiname(p){ return `BARRY_Stand_${p.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}.json`; }
 async function standUpdateHerunterladen(p){
-  if(!p.startPasswort){ alert(`Für ${p.name} ist noch kein Startpasswort vergeben. Das Stand-Update wird mit dem Startpasswort geschützt – bitte zuerst ein Zugangspaket erstellen.`); return; }
-  let text; try{ text = await barryVerschluesseln(JSON.stringify(standUpdateDaten(p)), p.startPasswort, {inhalt:'Stand-Update', art:'standupdate', personId:p.id}); }catch(e){ alert('Stand-Update nicht erstellt: '+e.message); return; }
+  const dpw = dateiPasswortFuer(p);
+  if(!dpw){ alert(`Für ${p.name} ist noch kein Startpasswort vergeben. Das Stand-Update wird mit dem Startpasswort geschützt – bitte zuerst ein Zugangspaket erstellen oder die Person unter „Staffelpaket“ als „über das Staffelpaket eingestiegen“ markieren.`); return; }
+  let text; try{ text = await barryVerschluesseln(JSON.stringify(standUpdateDaten(p)), dpw, {inhalt:'Stand-Update', art:'standupdate', personId:p.id}); }catch(e){ alert('Stand-Update nicht erstellt: '+e.message); return; }
   textHerunterladen(text, standUpdateDateiname(p));
-  zeigeToast('Stand-Update für '+p.name+' erstellt – geschützt mit dem Startpasswort.');
+  zeigeToast('Stand-Update für '+p.name+' erstellt – geschützt mit dem '+(p.zugangsweg==='staffel'&&dpw!==p.startPasswort?'Staffel-Passwort.':'Startpasswort.'));
 }
 async function alleStandUpdatesHerunterladen(){
-  const alle=zugangsberechtigtePersonen(); const personen=alle.filter(p=>p.startPasswort); const ohne=alle.filter(p=>!p.startPasswort);
-  const dateien=[]; try{ let i=0; for(const p of personen){ i++; fortschrittAnzeigen(`🔒 Stand-Update ${i} von ${personen.length}: ${p.name}`); await naechsterFrame(); dateien.push({name:standUpdateDateiname(p), text: await barryVerschluesseln(JSON.stringify(standUpdateDaten(p)), p.startPasswort, {inhalt:'Stand-Update', art:'standupdate', personId:p.id})}); } }
+  const alle=zugangsberechtigtePersonen(); const personen=alle.filter(p=>dateiPasswortFuer(p)); const ohne=alle.filter(p=>!dateiPasswortFuer(p));
+  const dateien=[]; try{ let i=0; for(const p of personen){ i++; fortschrittAnzeigen(`🔒 Stand-Update ${i} von ${personen.length}: ${p.name}`); await naechsterFrame(); dateien.push({name:standUpdateDateiname(p), text: await barryVerschluesseln(JSON.stringify(standUpdateDaten(p)), dateiPasswortFuer(p), {inhalt:'Stand-Update', art:'standupdate', personId:p.id})}); } }
   catch(e){ fortschrittAnzeigen(null); alert('Stand-Updates nicht erstellt: '+e.message); return; }
   fortschrittAnzeigen(null);
   if(ohne.length) alert(`Ohne Startpasswort und daher nicht enthalten: ${ohne.map(p=>p.name).join(', ')}. Für diese Personen bitte zuerst ein Zugangspaket erstellen.`);
   const blob=zipErstellen(dateien);
   const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=`BARRY_Stand-Updates_${new Date().toISOString().slice(0,10)}.zip`;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
-  zeigeToast(`${dateien.length} Stand-Updates erstellt, jedes mit dem eigenen Startpasswort geschützt.`);
+  zeigeToast(`${dateien.length} Stand-Updates erstellt, jedes mit dem eigenen Start- bzw. dem Staffel-Passwort geschützt.`);
 }
 async function standUpdateEinlesen(file){
   let roh; try{ roh = await barryDateiLesen(file, 'Dieses Stand-Update ist geschützt. Bitte das <b>Startpasswort</b> eingeben, das du von der Staffelleitung erhalten hast (nicht dein selbst gewähltes Anmeldepasswort).', state.meta.dateiPasswort); }
@@ -9350,6 +9551,203 @@ function eigenerNachweisHinzufuegen(person, qualId, datum, hundId, sparte, plake
   if(leitung){ const h=hundId?state.hunde.find(x=>x.id===hundId):null; modulQualiUebertragen(person.id, q.id, h); if(q.code==='rh_pruef' && h && sparte) suchpruefungAufHundUebertragen(h, sparte, plakette, datum); }
   speichereState(); return e;
 }
+/* ---------- 2.97: drkserver-Bild auswerten – Zeilen aus der Texterkennung in Ausbildungseinträge zerlegen ----------
+   Unterstützt die drkserver-App („Meine Akte → Ausbildungen“: Überschrift in Großbuchstaben, darunter Details, Datum, Status)
+   und die Tabellenansicht am PC (Bezeichnung · Nähere Bezeichnung · Von · Bis · Status in einer Zeile). */
+function drkOcrDatum(t, m, j){ const T=Number(t), M=Number(m), J=Number(j); if(!(T>=1&&T<=31&&M>=1&&M<=12&&J>=1970&&J<=2100)) return ''; return J+'-'+String(M).padStart(2,'0')+'-'+String(T).padStart(2,'0'); }
+function drkOcrDaten(zeile){
+  const re=/(\d{1,2})\s?[.,:]\s?(\d{1,2})\s?[.,:]?\s?((?:19|20)\d{2})/g; const out=[]; let m;
+  while((m=re.exec(zeile))){ const d=drkOcrDatum(m[1],m[2],m[3]); out.push({iso:d, pos:m.index, ende:re.lastIndex}); }
+  return out;
+}
+function drkOcrStatus(t){ const s=String(t||'').toLowerCase();
+  if(/nicht\s*bestand/.test(s)) return 'nicht bestanden';
+  if(/bestand/.test(s)) return 'bestanden';
+  if(/[a-z]{0,2}i?[il1]{1,2}[gq]e?n?omm|genomm|teilgen/.test(s)) return 'teilgenommen';
+  return ''; }
+function drkOcrGross(t){ const b=String(t||'').replace(/[^A-Za-zÄÖÜäöüß]/g,''); if(b.length<5) return false; const g=b.replace(/[^A-ZÄÖÜ]/g,'').length; return g/b.length>0.8; }
+function drkOcrBuchstaben(t){ return String(t||'').replace(/[^A-Za-zÄÖÜäöüß]/g,'').length; }
+function drkOcrBereinigen(t){ return String(t||'').replace(/[|_«»<>©®~*]+/g,' ').replace(/\s+/g,' ').replace(/^[\s.:;,\-–]+|[\s.:;,\-–]+$/g,'').trim(); }
+function drkOcrStunden(t){ const m=/\((\d+(?:[.,]\d+)?)\s*[hH]\)/.exec(String(t||'')) || /\((\d+(?:[.,]\d+)?)\s*(?:Std|UE)\.?\)/.exec(String(t||'')); return m ? m[1].replace('.',',') : ''; }
+function drkOcrEintraege(text){
+  const roh = String(text||'').split(/\r?\n/).map(z=>z.replace(/\s+/g,' ').trim());
+  const zeilen = roh.filter(z=>z && !/^(\d{1,2}:\d{2}\b|ausbildungen\b|bezeichnung\b|meine akte|ereignisse|nachrichten)/i.test(z));
+  const app = zeilen.filter(drkOcrGross).length >= 2;      // App-Ansicht: Kursnamen in Großbuchstaben
+  const eintraege = [];
+  if(app){
+    let titel=[], details=[], aktuell=null;
+    const abschliessen=()=>{ if(aktuell){ aktuell.zusatz=details.filter(z=>!drkOcrStatus(z)).join(' · '); eintraege.push(aktuell); } aktuell=null; details=[]; };
+    zeilen.forEach((z,i)=>{
+      if(drkOcrGross(z)){ if(aktuell || !titel.length || (i>0 && !drkOcrGross(zeilen[i-1]))) { abschliessen(); titel=[]; } titel.push(z); return; }
+      const d=drkOcrDaten(z).filter(x=>x.iso);
+      if(d.length && !aktuell){ aktuell={titel:drkOcrBereinigen(titel.join(' ')), naehere:drkOcrBereinigen(details.join(' ')), von:d[0].iso, bis:(d[1]||d[0]).iso, status:'', stunden:drkOcrStunden(details.join(' ')), quelle:z}; details=[]; return; }
+      if(aktuell && !aktuell.status && drkOcrStatus(z)){ aktuell.status=drkOcrStatus(z); return; }
+      details.push(z);
+    });
+    abschliessen();
+  } else {
+    let vorher='';
+    zeilen.forEach(z=>{
+      const d=drkOcrDaten(z); const ok=d.filter(x=>x.iso);
+      if(!d.length){ vorher = drkOcrBuchstaben(z)>=8 ? z : ''; return; }
+      let text=drkOcrBereinigen(z.slice(0, d[0].pos));
+      if(drkOcrBuchstaben(text)<6 && vorher){ text=drkOcrBereinigen(vorher); }
+      vorher='';
+      if(!ok.length || drkOcrBuchstaben(text)<6) return;
+      const rest=z.slice(d[d.length-1].ende);
+      eintraege.push({titel:text, naehere:'', von:ok[0].iso, bis:(ok[1]||ok[0]).iso, status:drkOcrStatus(rest)||drkOcrStatus(z), stunden:drkOcrStunden(text), quelle:z});
+    });
+  }
+  return eintraege.filter(e=>e.titel && e.von);
+}
+/* ---------- 2.97: Ausbildungen aus einem drkserver-Bild übernehmen (Texterkennung) ----------
+   Grundsatz der Staffel: Ausbildungen und Qualifikationen gelten nur aus dem drkserver. HiOrg-Anwesenheiten (z. B. bei einer
+   Prüfung als Helfer) sind KEIN Nachweis und werden hier nicht ausgewertet.
+   Die Texterkennung (Tesseract.js, Sprache Deutsch) wird beim ersten Mal aus dem Internet geladen (einige MB) und läuft dann
+   auf dem Gerät – das Bild verlässt das Gerät nicht. Jede erkannte Zeile ist nur ein VORSCHLAG und muss bestätigt werden;
+   Mitglieder melden die Einträge anschließend wie gewohnt an die Leitung (⏳ bis zur Bestätigung). */
+const OCR_SKRIPT = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+let ocrWorker = null;
+function ocrSkriptLaden(){
+  if(window.Tesseract) return Promise.resolve();
+  return new Promise((ok, fehler)=>{ const s=document.createElement('script'); s.src=OCR_SKRIPT; s.async=true; s.onload=()=>ok(); s.onerror=()=>fehler(new Error('Die Texterkennung konnte nicht geladen werden. Beim ersten Mal ist eine Internetverbindung nötig.')); document.head.appendChild(s); });
+}
+async function ocrBildVorbereiten(file){
+  const url = URL.createObjectURL(file);
+  try{
+    const img = await new Promise((ok,f)=>{ const i=new Image(); i.onload=()=>ok(i); i.onerror=()=>f(new Error('Das Bild konnte nicht geöffnet werden.')); i.src=url; });
+    let b = img.naturalWidth, h = img.naturalHeight; const faktor = b<1200 ? 1200/b : (b>2600 ? 2600/b : 1); b=Math.round(b*faktor); h=Math.round(h*faktor);
+    const c = document.createElement('canvas'); c.width=b; c.height=h; const g=c.getContext('2d'); g.drawImage(img,0,0,b,h);
+    const d = g.getImageData(0,0,b,h), px = d.data; const grau = new Uint8ClampedArray(b*h); let summe=0;
+    for(let i=0,j=0;i<px.length;i+=4,j++){ const v = 0.299*px[i]+0.587*px[i+1]+0.114*px[i+2]; grau[j]=v; summe+=v; }
+    const dunkel = summe/grau.length < 110;                       // dunkler Modus (App) → umkehren
+    const sortiert = Array.from(grau).sort((a,b)=>a-b); const lo = sortiert[Math.floor(sortiert.length*0.02)], hi = sortiert[Math.floor(sortiert.length*0.98)] || 255;
+    for(let j=0,i=0;j<grau.length;j++,i+=4){ let v = (grau[j]-lo)*255/Math.max(1,hi-lo); v = Math.max(0,Math.min(255,v)); if(dunkel) v=255-v; px[i]=px[i+1]=px[i+2]=v; }
+    g.putImageData(d,0,0); return c;
+  } finally { URL.revokeObjectURL(url); }
+}
+async function ocrTextAusBild(file, fortschritt){
+  await ocrSkriptLaden();
+  if(!ocrWorker){ fortschritt('Texterkennung wird vorbereitet (beim ersten Mal einige MB) …');
+    ocrWorker = await Tesseract.createWorker('deu', 1, {logger: m=>{ if(m && m.status==='recognizing text') fortschritt(`Bild wird gelesen … ${Math.round((m.progress||0)*100)} %`); }});
+    await ocrWorker.setParameters({tessedit_pageseg_mode:'4', preserve_interword_spaces:'1'}); }
+  const canvas = await ocrBildVorbereiten(file);
+  const r = await ocrWorker.recognize(canvas); return (r && r.data && r.data.text) || '';
+}
+/* Zuordnung einer erkannten Zeile zum BARRY-Katalog (nur Vorschlag) */
+function ocrNorm(t){ return String(t||'').toLowerCase().replace(/l[ea][mr]n?c[ae]mpus|lem+ncampus|lerncampus|lemcampus|lermcampus/g,'lerncampus').replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue').replace(/ß/g,'ss').replace(/[^a-z0-9]+/g,' ').trim(); }
+function ocrTrigramme(t){ const s='  '+ocrNorm(t)+' '; const m=new Map(); for(let i=0;i<s.length-2;i++){ const k=s.slice(i,i+3); m.set(k,(m.get(k)||0)+1); } return m; }
+function ocrAehnlich(a, b){ const A=ocrTrigramme(a), B=ocrTrigramme(b); let gem=0, na=0, nb=0; A.forEach(v=>na+=v); B.forEach(v=>nb+=v); A.forEach((v,k)=>{ if(B.has(k)) gem+=Math.min(v,B.get(k)); }); return na+nb ? 2*gem/(na+nb) : 0; }
+/* Anteil von b, der in a vorkommt (für Zeilen, in denen Bezeichnung und nähere Bezeichnung zusammenstehen) */
+function ocrEnthalten(a, b){ const A=ocrTrigramme(a), B=ocrTrigramme(b); let gem=0, nb=0; B.forEach((v,k)=>{ nb+=v; if(A.has(k)) gem+=Math.min(v,A.get(k)); }); return nb ? gem/nb : 0; }
+const OCR_REGELN = [
+  [/(2\.?\s*modul|rettungshundeteam.?pr[uü]f|suchpr[uü]fung)/, 'rh_pruef'], [/modul\s*1\s*[.,]?\s*1|verhalten und grundfert|eignungstest/, 'modul_11'],
+  [/modul\s*1\s*[.,]?\s*2|grundgehorsam/, 'modul_12'], [/modul\s*1\s*[.,]?\s*3|gewandtheit/, 'modul_13'], [/modul\s*1\s*[.,]?\s*0|fachfragenpr/, 'modul_10'],
+  [/fachdienstausbildung rettungshund/, 'rhd'], [/orientierung.{0,20}karte/, 'rhd_orient'], [/tr[uü]mmerkunde/, 'rhd_truemmer'], [/kynologie/, 'rhd_kyno'],
+  [/einsatztaktik/, 'rhd_taktik'], [/erste hilfe am hund/, 'rhd_ehhund'], [/transport.{0,15}hund/, 'rhd_transport'], [/geruch/, 'rhd_geruch'],
+  [/hlw|aed|reanimation/, 'hlw'], [/f[uü]r\s*rettungshunde.?ausbild|ausbilder.?fortbildung/, 'ausb_fb'], [/mtf.{0,25}behandlungsplatz/, 'mtf_bhp_zusatz'], [/ega\s*b\b|grundausbildung betreuung/, 'ekga_b'],
+];
+function ocrZuordnen(e){
+  const text = [e.titel, e.naehere].filter(Boolean).join(' '), roh = text.toLowerCase();
+  const nachCode = c=>state.qualifikationen.find(q=>q.code===c) || null;
+  const out = {q:null, lc:null, quelle:'', sicher:0};
+  // 1) DRK-Lerncampus: Kategorie + Modul (Thema), Anrechnung nach den Staffelregeln
+  if(/lerncampus/.test(ocrNorm(text))){
+    const lcQ = state.qualifikationen.filter(q=>/^lc_/.test(q.code||'') && /lerncampus\s*[–-]/i.test(q.label||''));
+    let best=null; lcQ.forEach(q=>{ const kat=String(q.label).split(/[–-]/).slice(1).join(' '); const s=ocrEnthalten(text, kat); if(!best || s>best.s) best={q,s}; });
+    if(best && best.s>0.55){
+      let thema = e.naehere || '';
+      if(!thema){ const zk=(state.zusatzKurse||[]).filter(z=>/lerncampus/i.test(z.bezeichnung||'') && z.naehereBezeichnung); let bz=null; zk.forEach(z=>{ const s=ocrEnthalten(text, z.naehereBezeichnung); if(!bz||s>bz.s) bz={z,s}; });
+        thema = bz && bz.s>0.6 ? bz.z.naehereBezeichnung : drkOcrBereinigen(String(e.titel).replace(/^.*?(rahmenbedingungen|arbeitsschutz|einsatztaktik|konfliktmanagement|management|pr[aä]vention|pr[uü]fungen|einsatzdienst|beratung|einweisungen|lehre|fortbildung|angebote|module)\s*/i,'')); }
+      thema = thema.replace(/\(\s*\d+(?:[.,]\d+)?\s*h\s*\)/i,'').trim();
+      let anr = lcAnrechnungVorschlag(best.q, thema);
+      if(lcModulRegel(thema)===null){ let br=null; LC_MODUL_REGELN.forEach((v,k)=>{ const sc=ocrAehnlich(thema,k); if(!br||sc>br.sc) br={k,v,sc}; }); if(br && br.sc>0.78){ anr = br.v; } }
+      out.q = best.q; out.lc = {thema, stunden: e.stunden||'', anrechnung: anr}; out.quelle='Lerncampus'; out.sicher=best.s; return out;
+    }
+  }
+  // ohne Vorschlag: Treffen und Schulungen ohne Entsprechung im Katalog
+  if(/ausbildertreffen|drkserver\W*impuls|sachbearbeiter|landeslager|tagung/.test(roh)) return out;
+  // 2) feste Regeln der Rettungshundearbeit und Pflichtfortbildungen
+  for(const [re, code] of OCR_REGELN){ if(re.test(roh)){ const q=nachCode(code); if(q){ out.q=q; out.quelle='Regel'; out.sicher=0.9; return out; } } }
+  // 3) Kursliste aus dem drkserver (Zusatzkurse mit vorgesehener Qualifikation)
+  let bz=null; (state.zusatzKurse||[]).forEach(z=>{ const s=Math.max(ocrAehnlich(text, [z.bezeichnung,z.naehereBezeichnung].filter(Boolean).join(' ')), ocrEnthalten(text, z.bezeichnung||'')*0.95); if(!bz||s>bz.s) bz={z,s}; });
+  if(bz && bz.s>0.62 && bz.z.kandidatQualifikation){ const q=nachCode(bz.z.kandidatQualifikation); if(q){ out.q=q; out.quelle='drkserver-Kursliste'; out.sicher=bz.s; return out; } }
+  // 4) Katalog (Bezeichnung und Kurzformen)
+  const direkt = qualiFindenNachBezeichnung(e.titel); if(direkt){ out.q=direkt; out.quelle='Katalog'; out.sicher=0.85; return out; }
+  let bq=null; state.qualifikationen.forEach(q=>{ const s=ocrAehnlich(text, q.label); if(!bq||s>bq.s) bq={q,s}; });
+  if(bq && bq.s>0.72){ out.q=bq.q; out.quelle='ähnlicher Katalogeintrag'; out.sicher=bq.s; }
+  return out;
+}
+function ocrSparte(text){ const t=String(text||'').toLowerCase(); return /tr[uü]mmer/.test(t)?'truemmer':/mantrail/.test(t)?'mantrailing':/fl[aä]che/.test(t)?'flaeche':''; }
+function ocrVorschlaege(person, eintraege){
+  const hunde = state.hunde.filter(h=>h.status!=='inaktiv' && hundGefuehrtVon(h, person.id));
+  return eintraege.map(e=>{
+    const z = ocrZuordnen(e); const q = z.q;
+    const hundNoetig = !!q && /^(modul_1[0-3]|rh_pruef)$/.test(q.code||'');
+    const pruefung = !!q && /^(modul_1[1-3]|rh_pruef)$/.test(q.code||'');
+    const doppelt = !!q && state.personQualifikationen.some(pq=>pq.personId===person.id && pq.qualifikationId===q.id && (pq.datum||'')===e.von);
+    let hinweis = '';
+    if(e.status==='nicht bestanden') hinweis='nicht bestanden – wird nicht übernommen';
+    else if(pruefung && e.status!=='bestanden') hinweis='Prüfung ohne „bestanden“ – nur übernehmen, wenn im drkserver bestanden';
+    else if(doppelt) hinweis='schon in BARRY vorhanden';
+    else if(!q) hinweis='bitte Ausbildung auswählen';
+    return {e, q, lc:z.lc, quelle:z.quelle, sicher:z.sicher, hundNoetig, hundId: hundNoetig && hunde.length===1 ? hunde[0].id : '', sparte: q && q.code==='rh_pruef' ? (ocrSparte([e.titel,e.naehere].join(' '))||'flaeche') : '',
+      an: !!q && !doppelt && e.status!=='nicht bestanden' && !(pruefung && e.status!=='bestanden'), hinweis};
+  });
+}
+function ocrDialog(person, vorschlaege){
+  return new Promise(fertig=>{
+    const hunde = state.hunde.filter(h=>h.status!=='inaktiv' && hundGefuehrtVon(h, person.id));
+    const w = document.createElement('div');
+    w.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99999;display:flex;align-items:center;justify-content:center;padding:10px';
+    const zeile = (v,i)=>`<div style="border-top:1px solid var(--line,#ddd);padding:8px 0" data-ocr-zeile="${i}">
+      <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" data-ocr-an="${i}" ${v.an?'checked':''} style="width:auto;margin-top:3px">
+      <span style="flex:1"><b>${fmtDatum(v.e.von)}${v.e.bis && v.e.bis!==v.e.von?' – '+fmtDatum(v.e.bis):''}</b> · ${esc(v.e.status||'Status nicht erkannt')}<br><span style="font-size:.85rem">${esc(v.e.titel)}${v.e.naehere?' · '+esc(v.e.naehere):''}</span>
+      ${v.hinweis?`<br><span style="font-size:.8rem;color:#b3261e">${esc(v.hinweis)}</span>`:''}</span></label>
+      <select data-ocr-q="${i}" style="width:100%;margin-top:4px;font-size:.88rem"><option value="">– nicht übernehmen / Ausbildung wählen –</option>${qualiOptionenHtml(v.q?v.q.id:'')}</select>
+      ${v.lc?`<div style="font-size:.8rem;margin-top:2px">Lerncampus-Modul: ${esc(v.lc.thema||'–')}${v.lc.stunden?' · '+esc(v.lc.stunden)+' h':''}${v.lc.anrechnung?' · '+esc(lcAnrechnungText(v.lc.anrechnung)):''}</div>`:''}
+      ${v.hundNoetig && hunde.length?`<select data-ocr-hund="${i}" style="width:100%;margin-top:4px;font-size:.88rem"><option value="">– Hund wählen –</option>${hunde.map(h=>`<option value="${h.id}" ${h.id===v.hundId?'selected':''}>🐕 ${esc(h.name)}</option>`).join('')}</select>`:''}</div>`;
+    w.innerHTML = `<div style="background:var(--card,#fff);color:inherit;max-width:620px;width:100%;border-radius:14px;padding:16px;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:system-ui,sans-serif;max-height:94vh;display:flex;flex-direction:column">
+      <h3 style="margin:0 0 4px;font-size:1.1rem">📷 Aus dem drkserver-Bild erkannt (${vorschlaege.length})</h3>
+      <p style="margin:0 0 6px;font-size:.85rem;line-height:1.35">Bitte jede Zeile prüfen: Datum, Status und die Zuordnung zur Ausbildung. Nur angehakte Zeilen werden übernommen${darfTrainingBearbeiten(person)?'.':' und erscheinen bei dir mit ⏳, bis die Staffelleitung sie bestätigt.'} Anwesenheiten aus HiOrg sind kein Nachweis.</p>
+      <div style="overflow:auto;flex:1">${vorschlaege.length?vorschlaege.map(zeile).join(''):'<p style="font-size:.9rem">Im Bild wurde keine Ausbildung mit Datum erkannt. Tipp: einen Screenshot aus der drkserver-App (Meine Akte → Ausbildungen) verwenden oder das Foto gerade und scharf aufnehmen.</p>'}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:10px">
+        <button type="button" class="btn btn-sm btn-ghost" id="ocr-abbruch">Abbrechen</button>
+        ${vorschlaege.length?'<button type="button" class="btn btn-sm btn-primary" id="ocr-ok">Angehakte übernehmen</button>':''}</div></div>`;
+    document.body.appendChild(w);
+    const ende=v=>{ w.remove(); fertig(v); };
+    w.querySelector('#ocr-abbruch').onclick=()=>ende(null);
+    w.querySelectorAll('[data-ocr-q]').forEach(s=>s.onchange=()=>{ const cb=w.querySelector(`[data-ocr-an="${s.dataset.ocrQ}"]`); if(cb && s.value && !cb.checked) cb.checked=true; });
+    const ok=w.querySelector('#ocr-ok'); if(ok) ok.onclick=()=>{
+      const auswahl=[]; let fehlt='';
+      vorschlaege.forEach((v,i)=>{ const cb=w.querySelector(`[data-ocr-an="${i}"]`); if(!cb || !cb.checked) return;
+        const qid=w.querySelector(`[data-ocr-q="${i}"]`).value; if(!qid){ fehlt=fehlt||`Zeile ${i+1}: bitte eine Ausbildung auswählen oder den Haken entfernen.`; return; }
+        const hs=w.querySelector(`[data-ocr-hund="${i}"]`); const q=state.qualifikationen.find(x=>x.id===qid);
+        if(hs && !hs.value && /^(modul_1[1-3]|rh_pruef)$/.test((q&&q.code)||'')){ fehlt=fehlt||`Zeile ${i+1}: bitte den Hund auswählen.`; return; }
+        auswahl.push({v, qid, hundId: hs ? hs.value : v.hundId, lc: q && /^lc_/.test(q.code||'') ? (v.lc || {thema:v.e.naehere||v.e.titel, stunden:v.e.stunden||'', anrechnung:lcAnrechnungVorschlag(q, v.e.naehere||v.e.titel)}) : null}); });
+      if(fehlt){ alert(fehlt); return; }
+      ende(auswahl);
+    };
+  });
+}
+async function ocrBilderEinlesen(person, files){
+  const liste = Array.from(files||[]).filter(f=>/^image\//.test(f.type||'') || /\.(png|jpe?g|webp|heic)$/i.test(f.name||'')); if(!liste.length){ alert('Bitte ein Bild (Screenshot oder Foto) auswählen.'); return; }
+  let alle=[];
+  try{
+    for(let i=0;i<liste.length;i++){ const text = await ocrTextAusBild(liste[i], t=>fortschrittAnzeigen(`📷 Bild ${i+1} von ${liste.length}: ${t}`)); alle = alle.concat(drkOcrEintraege(text)); }
+  }catch(e){ fortschrittAnzeigen(null); alert(e.message||String(e)); return; }
+  fortschrittAnzeigen(null);
+  const gesehen=new Set(); alle = alle.filter(e=>{ const k=ocrNorm(e.titel+' '+e.naehere).slice(0,60)+'|'+e.von; if(gesehen.has(k)) return false; gesehen.add(k); return true; });
+  const doppelt=new Set(); const vorschlaege = ocrVorschlaege(person, alle).filter(v=>{ if(!v.q) return true; const k=v.e.von+'|'+v.q.id+'|'+(v.lc?(v.lc.stunden||ocrNorm(v.lc.thema).replace(/[aeiou]/g,'').slice(0,12)):''); if(doppelt.has(k)) return false; doppelt.add(k); return true; });
+  const auswahl = await ocrDialog(person, vorschlaege); if(!auswahl || !auswahl.length) return;
+  let n=0;
+  auswahl.forEach(a=>{ const e=a.v.e; const neu=eigenerNachweisHinzufuegen(person, a.qid, e.von, a.hundId||'', a.v.sparte||'', '', a.lc); if(!neu) return; n++;
+    if(e.bis && e.bis!==e.von) neu.datumBis=e.bis;
+    neu.nachweis = ['drkserver-Bild: '+[e.titel, e.naehere].filter(Boolean).join(' · '), e.status].filter(Boolean).join(' – ').slice(0,300); });
+  speichereState(); render();
+  zeigeToast(darfTrainingBearbeiten(person) ? `${n} Nachweis(e) übernommen.` : `${n} Nachweis(e) eingetragen (⏳). Bitte mit „Meine Angaben teilen“ an die Staffelleitung senden.`);
+}
+
 function offeneMeldungen(personId){ return state.personQualifikationen.filter(pq=>pq.personId===personId && pq.vomMitglied && !pq.bestaetigt); }
 function entfernungenZumMelden(p){
   const e=p.ortEntfernungen||{};
@@ -9427,7 +9825,9 @@ function meldungenEinlesen(files){
   (async()=>{ const dat=[];
     for(const f of liste){ try{
       const umschlag=istVerschluesselteDatei(await f.text()); const p=umschlag && state.personen.find(x=>x.id===umschlag.personId);
-      const t=await barryDateiLesen(f, `Meldung${p?' von '+esc(p.name):''}: Für diese Person ist kein passendes Startpasswort gespeichert. Bitte das Passwort eingeben, mit dem sie die Meldung geschützt hat.`, p && p.startPasswort);
+      let t=null; const sp=state.organisation && state.organisation.staffelPasswort;
+      if(umschlag) for(const k of [p && p.startPasswort, sp].filter(Boolean)){ try{ t=await barryEntschluesseln(umschlag, k); if(p && k===sp && k!==p.startPasswort){ p.zugangsweg='staffel'; speichereState(); } break; }catch(e){} }
+      if(t===null) t=await barryDateiLesen(f, `Meldung${p?' von '+esc(p.name):''}: Weder das Startpasswort noch das Staffel-Passwort passt. Bitte das Passwort eingeben, mit dem die Meldung geschützt ist.`, null);
       dat.push(t?JSON.parse(t):null); }catch(e){ dat.push(null); } }
     return dat; })().then(dat=>{
     const eintraege=[], wuensche=[], fehler=[], kontakte=[], entfernungen=[], zusagen=[], lernen=[];
@@ -9965,7 +10365,7 @@ function dateiArtErkennen(name, text, bytes){
   if(bytes && bytes[0]===0x50 && bytes[1]===0x4B) return /zip$/i.test(name) ? 'zip' : 'xlsx';
   const t=String(text||'').replace(/^\uFEFF/,'').trim();
   if(t.startsWith('{')){
-    try{ const d=JSON.parse(t); if(d.format===BARRY_KRYPTO_FORMAT) return ({zugang:'zugang', sicherung:'sicherung', teilsicherung:'teilsicherung', standupdate:'standupdate', meldung:'meldung'})[d.art] || 'sicherung';
+    try{ const d=JSON.parse(t); if(d.format===BARRY_KRYPTO_FORMAT) return ({zugang:'zugang', sicherung:'sicherung', teilsicherung:'teilsicherung', standupdate:'standupdate', meldung:'meldung', staffelpaket:'staffelpaket'})[d.art] || 'sicherung';
       const f=d.exportInfo&&d.exportInfo.format;
       if(f==='barry-nachtrag') return 'nachtrag';
       if(f==='barry-teilsicherung') return 'teilsicherung';
@@ -9983,7 +10383,7 @@ function dateiArtErkennen(name, text, bytes){
   if(UL_DOK_TEXT.test(name||'')) return 'dokument';
   return 'unbekannt';
 }
-const DATEI_ARTEN = {nachtrag:'Nachtragsdatei', fragenpaket:'Fragenpaket', flaechenuebergabe:'Übergabe aus dem Flächensuchassistenten', terminplan:'Terminplan', standupdate:'Stand-Update', meldung:'Meldung eines Mitglieds', zugang:'Zugangspaket', sicherung:'Datensicherung', teilsicherung:'Teilsicherung', xlsx:'Selbstauskunft (Excel)', csv:'Mitglieder-Tabelle (CSV)', zip:'ZIP-Archiv', ics:'Kalenderdatei', rhs:'Team-Datenaustausch', dokument:'Dokument für die Unterlagen-Bibliothek', unterlagenpaket:'Unterlagenpaket', buch:'Buchpaket (Ausbildungshandbuch)', unbekannt:'unbekannte Datei'};
+const DATEI_ARTEN = {staffelpaket:'Staffelpaket', nachtrag:'Nachtragsdatei', fragenpaket:'Fragenpaket', flaechenuebergabe:'Übergabe aus dem Flächensuchassistenten', terminplan:'Terminplan', standupdate:'Stand-Update', meldung:'Meldung eines Mitglieds', zugang:'Zugangspaket', sicherung:'Datensicherung', teilsicherung:'Teilsicherung', xlsx:'Selbstauskunft (Excel)', csv:'Mitglieder-Tabelle (CSV)', zip:'ZIP-Archiv', ics:'Kalenderdatei', rhs:'Team-Datenaustausch', dokument:'Dokument für die Unterlagen-Bibliothek', unterlagenpaket:'Unterlagenpaket', buch:'Buchpaket (Ausbildungshandbuch)', unbekannt:'unbekannte Datei'};
 async function dateiEinlesenUniversal(files){
   const liste=Array.from(files||[]); if(!liste.length) return;
   const person=aktuellePerson(); const leitung=person && istLeitungOderAdmin(person);
@@ -10005,6 +10405,7 @@ async function dateiEinlesenUniversal(files){
       try{ teilsicherungEinlesen(JSON.parse(tTs)); }catch(err){ alert('Diese Datei konnte nicht gelesen werden: '+err.message); }
       break; }
     case 'buch': if(window.RHSBuch) RHSBuch.importieren(liste); break;
+    case 'staffelpaket': staffelpaketEinlesen(f); break;
     case 'zugang': case 'sicherung':
       if(!confirm(art==='zugang' ? 'Das ist ein Zugangspaket. Es ersetzt den gesamten Bestand auf diesem Gerät, und das Passwort wird auf das Startpasswort zurückgesetzt. Nur einlesen, wenn die Leitung es dir neu geschickt hat. Fortfahren?' : 'Das ist eine vollständige Datensicherung. Sie ersetzt den gesamten Bestand auf diesem Gerät. Fortfahren?')) return;
       bestandAusDateiImportieren(f); break;
@@ -10180,6 +10581,7 @@ async function sicherungSchuetzen(text, opt){
 
 /* Gemeinsame Importlogik für Datensicherung und Erststart – alle Schutzprüfungen an einer Stelle. */
 async function bestandAusDateiImportieren(file){
+  try{ const u = istVerschluesselteDatei(await file.text()); if(u && u.art==='staffelpaket'){ staffelpaketEinlesen(file); return; } }catch(e){}
   let text, verschluesselt = false;
   try{ verschluesselt = !!istVerschluesselteDatei(await file.text()); text = await barryDateiLesen(file); }catch(err){ alert('Diese Datei konnte nicht gelesen werden: '+err.message); return; }
   if(text===null) return;
@@ -18577,6 +18979,7 @@ function bindModalHausaufgabe(person){
 
 const HILFE_ROLLEN = [{id:'mitglied',label:'Mitglied'},{id:'ausbilder',label:'Ausbilder/-in'},{id:'leitung',label:'Leitung/Admin'}];
 const HILFE_ARTIKEL = [
+  {id:"neu-2-97", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.97: Staffelpaket und drkserver-Bild", rollen:["mitglied","ausbilder","leitung"], text:"\n<ul>\n<li><strong>Staffelpaket – eine Datei für alle:</strong> Die Leitung erstellt unter Verwaltung → Pakete für Mitglieder eine gemeinsame Datei, geschützt mit dem Staffel-Passwort. Beim ersten Öffnen wählst du deinen Namen, bestätigst ihn mit deinem Geburtsdatum und legst bei Bedarf Benutzername und eigenes Passwort fest. Enthalten sind Termine, Trainingsorte, Fragenpakete und die Namensliste; Geburtstage nur mit Einwilligung und ohne Jahr. Kontaktdaten und Ausbildungsdaten anderer sind nicht enthalten.</li>\n<li><strong>Deine Ausbildungsdaten</strong> kommen danach per Stand-Update von der Leitung (mit dem Staffel-Passwort geschützt) – oder du trägst sie selbst ein und meldest sie.</li>\n<li><strong>📷 Aus dem drkserver übernehmen</strong> (Ausbildung → Mein Stand → Nachweis ergänzen): Screenshot der drkserver-App oder Foto der Ausbildungsliste auswählen; BARRY schlägt Kurs, Datum und Status vor, du bestätigst Zeile für Zeile. Beim ersten Mal ist Internet nötig; das Bild verlässt dein Gerät nicht.</li>\n<li><strong>Freigaben & Einwilligungen:</strong> neuer Knopf, um mündlich erteilte Einwilligungen (Geburtstag) für alle ohne Eintrag auf einmal zu erfassen.</li>\n<li><strong>Katalog:</strong> neu „MTF – Zusatzausbildung Behandlungsplatz“ wie im drkserver; das Lerncampus-Modul „Regelmäßige Unterweisung zum Fahren mit Sonderrechten“ zählt als SuWR.</li>\n<li><strong>Grundsatz:</strong> Ausbildungen und Qualifikationen gelten nur aus dem drkserver. Eine Anwesenheit in HiOrg (z. B. als Helfer bei einer Prüfung) ist kein Nachweis.</li>\n</ul>\n"},
   {id:"neu-2-96", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.96: Prüfung & Module übersichtlicher", rollen:["mitglied","ausbilder","leitung"], text:"\n<ul>\n<li><strong>Wissen & Material → Prüfung & Module:</strong> oben die Übersicht aller Module mit Sprung zum Abschnitt, dann Modul 1.0 Fachfragen, dann Module 1.1–1.3; Ausbildungsordnung, Prüfungsordnung und Ausführungsbestimmungen stehen unten.</li>\n<li><strong>Startseite:</strong> neue Kacheln „Module 1.1–1.3 üben“ und „Fachfragen & Probeprüfung“.</li>\n<li>Darstellung auf dem Handy verbessert (Stufenauswahl, Kacheln, Probeprüfung).</li>\n<li>Termine: neue Kategorie „Zusatztraining (freiwillig)“ für freiwillige Termine mit wechselnden Inhalten.</li>\n<li>Fragenpakete: Der Vermerk „Nur für den Dienstgebrauch“ entfällt, da BARRY ohnehin nur innerhalb der Staffel genutzt wird.</li>\n</ul>"},
   {id:"neu-2-95", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.95: Ausbildungshandbuch", rollen:["mitglied","ausbilder","leitung"], text:"\n<p><strong>Fünf Stufen des Könnens</strong> bei den Prüfungselementen und in der Ausbilder-Übersicht: 1 Erworben, 2 Flüssig, 3 Übertragen, 4 Belastbar, 5 Behalten (Kaltstart). Bisherige Einträge bleiben erhalten; „bestanden“ zählt ab Stufe 4. Steht ein Element seit 14 Tagen auf Stufe 3 oder 4, erscheint „Kaltstart fällig“.</p>\n<ul>\n<li><strong>Anzeigeart:</strong> Pendeln ist eine Art des Rückführens. Im Hundeprofil wählst du Rückverweiser und darunter die Rückführung.</li>\n<li><strong>📖 Mehr im Buch:</strong> Bibliothek, Lehrwerkstatt und Kataloge verweisen auf Lehrbuch, Praxisband und Ausbilderhandbuch.</li>\n<li><strong>Ampel:</strong> Jede Übung zeigt, ob sie daheim, im Hundeführer-Treffen oder nur im Training geübt wird; Filter in der Bibliothek; Hausaufgaben mit Ort und Warnung bei Rot.</li>\n<li><strong>Ausbildung &amp; Team → Lernstand &amp; Protokolle:</strong> Lernstand-Checks H-1 bis H-19 und M-1 bis M-15 mit Verlauf und Wiedervorlage, Lernpfad, fünf Protokollvorlagen und „Gefühle an der Leine“ mit Wenn-dann-Plänen auf der Startseite. Mitglieder senden Checks und Protokolle mit „Meine Angaben senden“ an die Leitung.</li>\n<li><strong>Fehlerdiagnose:</strong> Schnellsuche nach Beobachtung und Problemlösung A–Z (62 Einträge aus dem Ausbilderhandbuch) mit passenden Übungen.</li>\n<li><strong>Ausbilder-Werkzeuge</strong> (nur Ausbildende): Drehbuch einsatznahe Übung, Fallakte je Team, Checkliste „Vom Prüfungsbestehen zum ersten Einsatz“, Bewertung abgleichen.</li>\n<li><strong>📖 Ausbildungshandbuch (Buchleser):</strong> Startseite oder Unterlagen-Leiste → Bände einmal je Gerät als Buchpaket (.json) einlesen; danach offline blättern (Wischen oder Pfeile), suchen, Inhaltsverzeichnis, Lesezeichen und Sprünge zwischen den Bänden. Band 3 nur für Ausbildende. Alle „Mehr im Buch“-Hinweise öffnen die passende Stelle.</li>\n<li><strong>Mein Stand → Mein Weg in die Prüfertätigkeit:</strong> Voraussetzungen, Anwärterzeit mit Zähler für 40 Einzelsuchprüfungen und sechs Lernschritte.</li>\n</ul>"},
   {id:"neu-2-51", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.51–2.55: Übungsrad", rollen:["mitglied","ausbilder","leitung"], text:"\n<p><strong>🎡 Übungsrad</strong> (Menü, direkt unter Start): 435 Übungen zu 33 Themen aus Kynologie, Rettungshundearbeit und Erster Hilfe – ohne Ausbildungsunterlagen lösbar.</p>\n<ul>\n<li><strong>Glücksrad:</strong> Wer übt (allein, mit Hund, als Helfer, in der Gruppe), Zeit und Bereich wählen, dann drehen. Übungen „Erst mit Ausbilder“ werden zuerst im Training geübt; sind sie aus dem Training bekannt oder mit dem Ausbilder abgesprochen, dürfen sie privat auch ohne Ausbilder geübt werden, ggf. mit einem erfahrenen Helfer (eigener Schalter). Übungen „Nur mit Ausbilder“ (z. B. Trümmergelände, Mantrailing) erscheinen nur mit „Ausbilderin oder Ausbilder ist heute dabei“. Ohne Haken bei „Ein Helfer bzw. eine Versteckperson ist dabei“ zeigt das Rad nur Übungen, die allein mit dem eigenen Hund möglich sind; die Anzeigeart des Teams wird berücksichtigt. Bei Regen unter „Wo?“ „Drinnen (Schlechtwetter)“ wählen: Das Rad zeigt nur Übungen, die drinnen gehen, mit Hinweisen für drinnen. Vor Übungen mit Hund kommt ein kurzer Tagesform-Check.</li>\n<li><strong>Lösungen</strong> erst nach Bestätigung, dass die Aufgabe selbst bearbeitet wurde; Hinweise schrittweise.</li>\n<li><strong>Meine Themen</strong> und <strong>Mein Stand</strong>: eigene Themen fürs Rad wählen, erledigte Übungen und Notizen sehen. Der Stand gilt je angemeldeter Person und ist in jeder Datensicherung enthalten.</li>\n<li><strong>Trainingstagebuch:</strong> Beim Abhaken bietet BARRY (bei eigenem Hund) an, einen Eintrag mit Datum, Übung und Notiz anzulegen.</li>\n<li>Ältere Übungen in BARRY zeigen, wo es eine neue Fassung gibt: „Neue Fassung im Übungsrad: …“ – ein Tipp darauf öffnet die Übung. Die bisherigen Übungen bleiben unverändert erhalten.</li>\n</ul>"},
@@ -18584,7 +18987,7 @@ const HILFE_ARTIKEL = [
   {id:"neu-2-9-bis-2-17", kategorie:"Erste Schritte", titel:"Neu seit BARRY 2.9 (Oktober 2026)", rollen:["mitglied","ausbilder","leitung"], text:"\n<ul>\n<li><strong>Verschlüsselte Dateien:</strong> Zugangspakete, Stand-Updates, Meldungen und Datensicherungen sind mit Passwort geschützt (siehe eigener Artikel).</li>\n<li><strong>Anmeldung per Fingerabdruck/Gesicht</strong> als freiwillige Option, mit Passwortabfrage bei jeder 10. Anmeldung.</li>\n<li><strong>Freigaben:</strong> Jedes Mitglied entscheidet, was andere in BARRY sehen dürfen (Geburtstag, Wurftag der Hunde, später Kontaktdaten). Die Leitung erfasst die Einwilligungen unter <strong>Verwaltung → Freigaben &amp; Einwilligungen</strong>.</li>\n<li><strong>Geburtstage</strong> auf der Startseite: 7 Tage vorher bis 7 Tage danach.</li>\n<li><strong>Modulprüfungen gelten bis zum Monatsende</strong> (24 Monate), jährliche Nachweise nach der Stufenregel: ab Januar fällig, ab September abgelaufen mit Nachfrist bis 30.11., ab Dezember kritisch.</li>\n<li><strong>Lerncampus-Module</strong> werden als Unterweisungen angerechnet (UVV, Datenschutz, Hygiene, SuWR), <strong>Führerscheine</strong> mit jährlicher Kontrolle unter Verwaltung → Fahrzeuge, <strong>Formulare</strong> für die Polizei unter Verwaltung → Formulare &amp; Meldungen.</li>\n<li><strong>Weitere Apps</strong> unter Wissen &amp; Material mit aktuellen Adressen und Besonderheiten.</li>\n</ul>\n"},
   {id:"verschluesselte-dateien", kategorie:"Daten sichern & teilen", titel:"Verschlüsselte Dateien: Startpasswort und Dateipasswort", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>BARRY schützt alle Dateien zwischen Leitung und Mitgliedern mit einem Passwort (AES-256). Ohne Passwort ist der Inhalt nicht lesbar – auch nicht in einem Texteditor.</p>\n<p>Es gibt <strong>zwei getrennte Passwörter</strong>:</p>\n<ul>\n<li><strong>Anmeldepasswort:</strong> selbst gewählt, nur zum Öffnen von BARRY auf dem eigenen Gerät. Kann jederzeit geändert werden.</li>\n<li><strong>Dateipasswort = Startpasswort</strong> aus der Zugangsliste der Leitung. Damit sind Zugangspaket, Stand-Updates und die eigenen Meldungen geschützt. Es ändert sich nur, wenn die Leitung ein neues Startpasswort vergibt.</li>\n</ul>\n<p><strong>Für Mitglieder:</strong> Beim Einspielen des Zugangspakets einmal das Startpasswort eingeben – BARRY merkt es sich auf dem Gerät. Stand-Updates öffnen sich danach automatisch, Meldungen an die Leitung werden automatisch verschlüsselt. Nach einem Gerätewechsel das Startpasswort bei der Leitung erfragen.</p>\n<p><strong>Für die Leitung:</strong> Meldungen der Mitglieder öffnet BARRY mit dem Startpasswort aus der Zugangsliste von selbst. Datensicherungen fragen nach einem frei wählbaren Passwort; ein vergessenes Passwort lässt sich nicht wiederherstellen. Die Zugangsliste getrennt und sicher aufbewahren – sie enthält alle Startpasswörter.</p>\n<p><strong>Umfang nach Rolle:</strong> Mitglieder erhalten nur eigene Daten. Ausbilder/-innen bekommen zusätzlich alle Hunde, Nachweise, Prüfungen und Trainings, Leitungspersonen den vollständigen Bestand. Ein Stand-Update bringt diese Daten auf den neuesten Stand, ohne das Anmeldepasswort zu ändern. Ein Zugangspaket ist nur beim ersten Mal oder bei vergessenem Passwort nötig.</p>\n<p>Alte, unverschlüsselte Dateien lassen sich weiterhin einspielen.</p>\n"},
   {id:"biometrie", kategorie:"Erste Schritte", titel:"Anmeldung per Fingerabdruck oder Gesicht", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>Nach einer Anmeldung mit Passwort bietet BARRY einmal an, künftig die Gerätesperre zu nutzen (Fingerabdruck, Gesicht oder Display-PIN). Ein- und ausschalten geht jederzeit unter <strong>Mein Profil</strong>.</p>\n<ul>\n<li>Gilt nur auf dem Gerät, auf dem es eingerichtet wurde; das Passwort bleibt gültig.</li>\n<li>Bei jeder <strong>10. Anmeldung</strong> fragt BARRY wieder nach dem Passwort, damit es nicht in Vergessenheit gerät.</li>\n<li>Voraussetzung: eingerichtete Displaysperre und BARRY über die Web-Adresse (https) geöffnet. Alle auf dem Handy hinterlegten Fingerabdrücke können BARRY öffnen.</li>\n<li>Das Dateipasswort (Startpasswort) ist davon nicht betroffen.</li>\n</ul>\n"},
-  {id:"freigaben-geburtstage", kategorie:"Verwaltung", titel:"Freigaben, Einwilligungen und Geburtstage", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>Jedes Mitglied entscheidet selbst, was andere Mitglieder in BARRY sehen dürfen: den eigenen Geburtstag (nur Tag und Monat), den Wurftag der eigenen Hunde und – für künftige Funktionen – Telefonnummer, E-Mail und Wohnort.</p>\n<p><strong>Vorgaben ohne Einwilligung:</strong> Geburtstage von Menschen sieht nur die Leitung, Wurftage der Hunde sehen alle, Kontaktdaten niemand.</p>\n<p><strong>So wird die Entscheidung erfasst:</strong> über das Blatt „Freigaben“ der Excel-Selbstauskunft, über die unterschriebene PDF-Selbstauskunft oder mündlich. Die Leitung trägt alles unter <strong>Verwaltung → Freigaben &amp; Einwilligungen</strong> ein, mit Datum, Form und Ablageort. Die Freigaben erreichen die Mitglieder mit dem nächsten Zugangspaket.</p>\n<p><strong>Geburtstage</strong> erscheinen auf der Startseite von 7 Tagen vorher bis 7 Tage danach. Die Leitung sieht alle mit Alter, Mitglieder nur die freigegebenen Geburtstage und die Hunde.</p>\n"},
+  {id:"freigaben-geburtstage", kategorie:"Verwaltung", titel:"Freigaben, Einwilligungen und Geburtstage", rollen:["mitglied","ausbilder","leitung"], text:"\n<p>Jedes Mitglied entscheidet selbst, was andere Mitglieder in BARRY sehen dürfen: den eigenen Geburtstag (Tag und Monat, auf Wunsch auch mit Jahr), den Wurftag der eigenen Hunde und – für künftige Funktionen – Telefonnummer, E-Mail und Wohnort.</p>\n<p><strong>Vorgaben ohne Einwilligung:</strong> Geburtstage von Menschen sieht nur die Leitung, Wurftage der Hunde sehen alle, Kontaktdaten niemand.</p>\n<p><strong>So wird die Entscheidung erfasst:</strong> über das Blatt „Freigaben“ der Excel-Selbstauskunft, über die unterschriebene PDF-Selbstauskunft oder mündlich. Die Leitung trägt alles unter <strong>Verwaltung → Freigaben &amp; Einwilligungen</strong> ein, mit Datum, Form und Ablageort. Die Freigaben erreichen die Mitglieder mit dem nächsten Zugangspaket.</p>\n<p><strong>Geburtstage</strong> erscheinen auf der Startseite von 7 Tagen vorher bis 7 Tage danach. Die Leitung sieht alle mit Alter, Mitglieder nur die freigegebenen Geburtstage und die Hunde – das Alter nur, wenn auch „mit Jahr“ freigegeben ist.</p>\n"},
   {id:"anmelden", kategorie:"Erste Schritte", titel:"Anmelden und erstes Passwort", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p><strong>Neues Gerät (seit 2.68):</strong> Beim allerersten Öffnen zeigt BARRY eine Willkommensseite mit drei Schritten: 1. BARRY als App installieren (wo der Browser es anbietet, mit Knopf „📲 BARRY installieren“; auf dem iPhone über Safari → Teilen → „Zum Home-Bildschirm“), 2. „📂 Zugangspaket öffnen“ und das <strong>Startpasswort</strong> eingeben, – fertig. <strong>Seit 2.85 ohne eigenes Passwort:</strong> BARRY erkennt dich am Zugangspaket und bleibt auf deinem Gerät geöffnet. Stand-Updates öffnen sich ohne erneute Eingabe. Schütze dein Handy mit der Bildschirmsperre.</p>\n<p><strong>Auf dem iPhone/iPad</strong> haben Safari und die installierte App getrennte Speicher. Das Zugangspaket deshalb erst in der installierten App öffnen.</p>\n<p><strong>Anmelden danach:</strong> Namen eintippen – schon nach den ersten Buchstaben erscheinen Vorschläge. Wer einen <strong>Benutzernamen</strong> hat, kann diesen kürzeren Namen nehmen. Mit 👁 lässt sich das Passwort beim Tippen anzeigen. Ein automatischer Großbuchstabe am Anfang und Leerzeichen am Rand stören nicht.</p>\n<p><strong>BARRY wiederfinden:</strong> Nach der Installation heißt die App „BARRY“ und hat das rote Staffel-Symbol. Bei vielen Android-Geräten liegt sie zunächst nur in der App-Übersicht (vom unteren Rand nach oben wischen) – dort gedrückt halten und auf den Startbildschirm ziehen.</p>\n<p><strong>Staffelleitung/Admin auf einem neuen Gerät:</strong> Auf der Willkommensseite unten „Ich richte BARRY für die Staffel ein“ wählen – dort gibt es das normale Anmeldeformular (Erstzugang Admin) und das Einspielen einer Datensicherung.</p>\n<p>Wer sein Passwort vergessen hat, wendet sich an die Staffelleitung oder den Admin: Diese können unter <strong>Verwaltung → Personen</strong> ein neues Startpasswort und Zugangspaket erstellen.</p>\n"},
   {id:"mein-profil", kategorie:"Erste Schritte", titel:"Mein Profil: eigenes Passwort, Sparten, Kilometer", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Ein Klick auf den eigenen Namen unten links in der Seitenleiste \u00f6ffnet <strong>Mein Profil</strong>.\nDas kann jede Person f\u00fcr sich selbst nutzen, unabh\u00e4ngig von der Rolle:</p>\n<ul>\n<li><strong>Eigenes Passwort \u00e4ndern</strong> \u2013 zweimal das neue Passwort eintippen, speichern.</li>\n<li><strong>Meine Sparte(n)</strong> ausw\u00e4hlen (Fl\u00e4che, Tr\u00fcmmer, Mantrailing). Das bestimmt, welche\nSchnellzugriffe auf der Startseite zuerst angezeigt werden.</li>\n<li><strong>Standard-Kilometer</strong> zum \u00dcbungsort hinterlegen, damit dieser Wert beim Dienstnachweis\nautomatisch vorgeschlagen wird.</li>\n</ul>\n"},
   {id:"rollen", kategorie:"Rollen & Rechte", titel:"Rollen\u00fcbersicht: Wer darf was?", rollen:["mitglied", "ausbilder", "leitung"], text:"\n<p>Die genaue Tabelle steht oben auf dieser Seite fest angepinnt. Kurz zusammengefasst:</p>\n<ul>\n<li><strong>Mitglied:</strong> eigene Trainings f\u00fcr das eigene Team eintragen, Termine ansehen und\nzu-/absagen, Hausaufgaben des eigenen Teams erledigen, Wissen &amp; Material nachlesen.</li>\n<li><strong>Ausbilder, Ausbilder-Anw\u00e4rter, Ausbilder-Helfer:</strong> zus\u00e4tzlich Trainings f\u00fcr\n<em>jedes</em> Team eintragen, Pr\u00fcfstatus setzen, Termine anlegen, Hausaufgaben an mehrere/alle Teams\nverteilen, sowie Hunde, Qualifikationen, Anwesenheit und Orte in der Verwaltung pflegen. Alle drei\nAusbilder-Rollen haben fachlich exakt dieselben Rechte \u2013 nur die Bezeichnung unterscheidet sich.</li>\n<li><strong>Staffelleitung, Bereitschaftsleitung, Admin:</strong> zus\u00e4tzlich Personen, Rollen &amp;\nRechte, Datensicherung, den Staffelnamen und den kompletten Einsatzbereich (reale Eins\u00e4tze).</li>\n<li><strong>Individuelle Zusatzrechte:</strong> Die Leitung kann einzelnen Personen unter\n<strong>Verwaltung \u2192 Rollen &amp; Rechte</strong> gezielt das Recht \u201eKalender verwalten\" oder\n\u201eAusbildung verwalten\" geben, auch ohne dass diese Person offiziell Ausbilder/-in ist.</li>\n</ul>\n"},
