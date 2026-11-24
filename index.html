@@ -4302,7 +4302,7 @@ function orteVorlageEinspielen(s){
   s.meta.orteVorlage=ORTE_VORLAGE_STAND; return n;
 }
 const BARRY_SCHEMA_VERSION = 1; // muss VOR ladeState() definiert sein (temporal dead zone)
-const BARRY_APP_VERSION = '3.01';
+const BARRY_APP_VERSION = '3.02';
 const BARRY_APP_STAND = '24.11.2026';
 let state = ladeState();
 // Internes Datenschema von BARRY selbst (unabhängig vom RHS-Austauschformat-Schema).
@@ -9461,7 +9461,7 @@ function standUpdateDaten(p){
     fahrzeuge: state.fahrzeuge||[], fahrzeugEinweisungen: (state.fahrzeugEinweisungen||[]).filter(e=>e.personId===p.id),
     kurswuensche: (state.kurswuensche||[]).filter(w=>w.personId===p.id), pruefungsstatus: state.pruefungsstatus.filter(s=>state.hunde.some(h=>h.id===s.hundId && h.status!=='inaktiv' && hundGefuehrtVon(h,p.id))),
     plaketten: state.hunde.filter(h=>h.status!=='inaktiv' && hundGefuehrtVon(h,p.id)).map(h=>({hundId:h.id, plaketten:h.plaketten||[], sparten:h.sparten||[]})),
-    fragenpakete: fragenpaketeFuer(p)};
+    fragenpakete: fragenpaketeFuer(p), ...anwesenheitenFuerStandUpdate(p)};
 }
 function standUpdateDateiname(p){ return `BARRY_Stand_${p.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}.json`; }
 async function standUpdateHerunterladen(p){
@@ -9509,6 +9509,7 @@ async function standUpdateEinlesen(file){
       if(umfang!=='mitglied' && d.rollenDaten && ich && ich.id===pid) rollenDatenUebernehmen(d.rollenDaten, umfang, pid);
       // Eigene Stammdaten und Rollen von der Leitung übernehmen – Anmeldepasswort und Geräteeinstellungen bleiben
       if(d.eigenePerson){ const me=state.personen.find(x=>x.id===pid); if(me) Object.assign(me, d.eigenePerson); }
+      if(Array.isArray(d.anwesenheiten)) anwesenheitenAusStandUpdate(pid, d.anwesenheiten, d.anwTermine||[]);
       state.meta.standUpdateAm=d.exportInfo.exportiertAm; speichereState();
       zeigeToast(umfang==='leitung' ? 'Vollständiger Bestand der Staffelleitung übernommen – dein Anmeldepasswort bleibt.' : umfang==='ausbilder' ? 'Ausbildungsdaten aller Teams übernommen – dein Anmeldepasswort bleibt.' : 'Ausbildungsstand aktualisiert.'); render();
     }catch(err){ alert('Stand-Update konnte nicht eingelesen werden: '+err.message); }
@@ -9778,25 +9779,25 @@ function meldungDaten(person){
     nachweise: offeneMeldungen(person.id).map(pq=>{ const q=state.qualifikationen.find(x=>x.id===pq.qualifikationId)||{}; return {...pq, code:q.code||'', label:q.label||''}; }),
     kurswuensche: (state.kurswuensche||[]).filter(w=>w.personId===person.id && w.status==='offen'),
     kontakt: kontaktOffen(person) ? Object.fromEntries(KONTAKT_FELDER.map(([k])=>[k, person[k]||''])) : null,
-    entfernungen: entfernungenZumMelden(person), zusagen: zusagenZumMelden(person),
+    entfernungen: entfernungenZumMelden(person), zusagen: zusagenZumMelden(person), anwesenheiten: anwesenheitenZumMelden(person),
     lernchecks: (state.lernchecks||[]).filter(e=>e.erfasstVon===person.id && !e.gemeldetAm),
     protokolle: (state.protokolle||[]).filter(e=>e.erfasstVon===person.id && !e.gemeldetAm)};
 }
 function lernMeldungMarkieren(daten){ const jetzt=nowIso(); (daten.lernchecks||[]).forEach(x=>{ const e=(state.lernchecks||[]).find(y=>y.id===x.id); if(e) e.gemeldetAm=jetzt; }); (daten.protokolle||[]).forEach(x=>{ const e=(state.protokolle||[]).find(y=>y.id===x.id); if(e) e.gemeldetAm=jetzt; }); }
 async function meldungPerMail(person){
   const daten=meldungDaten(person);
-  if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt && !daten.entfernungen.length && !daten.zusagen.length && !daten.lernchecks.length && !daten.protokolle.length){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
+  if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt && !daten.entfernungen.length && !daten.zusagen.length && !daten.lernchecks.length && !daten.protokolle.length && !(daten.anwesenheiten||[]).length){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
   const name=`BARRY_Meldung_${person.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}_${new Date().toISOString().slice(0,10)}.json`;
   const mdatei = await meldungsDatei(person, daten, name); if(!mdatei) return;
   const ok = await dateiPerMail(mdatei, `BARRY – neue Angaben von ${person.name}`, `Neue Angaben von ${person.name}: ${daten.nachweise.length} Nachweis(e), ${daten.kurswuensche.length} Kurswunsch/-wünsche.`);
-  if(ok){ offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); if(daten.entfernungen.length) person.entfernungenGemeldetAm=nowIso(); if(daten.zusagen.length) person.zusagenGemeldetAm=nowIso(); lernMeldungMarkieren(daten); speichereState(); render(); }
+  if(ok){ offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); if(daten.entfernungen.length) person.entfernungenGemeldetAm=nowIso(); if(daten.zusagen.length) person.zusagenGemeldetAm=nowIso(); lernMeldungMarkieren(daten); anwMeldungMarkieren(daten); speichereState(); render(); }
 }
 async function meldungSenden(person){
   const daten=meldungDaten(person);
-  if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt && !daten.entfernungen.length && !daten.zusagen.length && !daten.lernchecks.length && !daten.protokolle.length){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
+  if(!daten.nachweise.length && !daten.kurswuensche.length && !daten.kontakt && !daten.entfernungen.length && !daten.zusagen.length && !daten.lernchecks.length && !daten.protokolle.length && !(daten.anwesenheiten||[]).length){ zeigeToast('Keine neuen Angaben zum Senden.'); return; }
   const name=`BARRY_Meldung_${person.name.replace(/[^\p{L}\p{N}-]+/gu,'_')}_${new Date().toISOString().slice(0,10)}.json`;
   const datei=await meldungsDatei(person, daten, name); if(!datei) return;
-  offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); if(daten.entfernungen.length) person.entfernungenGemeldetAm=nowIso(); if(daten.zusagen.length) person.zusagenGemeldetAm=nowIso(); lernMeldungMarkieren(daten); speichereState();
+  offeneMeldungen(person.id).forEach(pq=>pq.gemeldetAm=nowIso()); if(daten.kontakt) person.kontaktGemeldetAm=nowIso(); if(daten.entfernungen.length) person.entfernungenGemeldetAm=nowIso(); if(daten.zusagen.length) person.zusagenGemeldetAm=nowIso(); lernMeldungMarkieren(daten); anwMeldungMarkieren(daten); speichereState();
   try{ if(navigator.canShare && navigator.canShare({files:[datei]})){ await navigator.share({files:[datei], title:'BARRY – meine Angaben', text:`Neue Angaben von ${person.name} für BARRY (${daten.nachweise.length} Nachweis(e)).`}); zeigeToast('Meldung geteilt.'); render(); return; } }catch(e){ if(e&&e.name==='AbortError'){ render(); return; } }
   const url=URL.createObjectURL(new Blob([datei],{type:datei.type||'application/json'})); const a=document.createElement('a'); a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000);
   zeigeToast('Meldung gespeichert – bitte die Datei an die Staffelleitung schicken.'); render();
@@ -9845,7 +9846,7 @@ function meldungenEinlesen(files){
       if(t===null) t=await barryDateiLesen(f, `Meldung${p?' von '+esc(p.name):''}: Weder das Startpasswort noch das Staffel-Passwort passt. Bitte das Passwort eingeben, mit dem die Meldung geschützt ist.`, null);
       dat.push(t?JSON.parse(t):null); }catch(e){ dat.push(null); } }
     return dat; })().then(dat=>{
-    const eintraege=[], wuensche=[], fehler=[], kontakte=[], entfernungen=[], zusagen=[], lernen=[];
+    const eintraege=[], wuensche=[], fehler=[], kontakte=[], entfernungen=[], zusagen=[], lernen=[], anwesenheiten=[];
     dat.forEach((d,i)=>{
       if(!d || !d.exportInfo || d.exportInfo.format!=='barry-mitglied-meldung'){ fehler.push(liste[i].name); return; }
       const person=state.personen.find(p=>p.id===d.exportInfo.personId) || state.personen.find(p=>p.name===d.exportInfo.von);
@@ -9857,13 +9858,14 @@ function meldungenEinlesen(files){
       });
       (d.kurswuensche||[]).forEach(w=>{ if(!(state.kurswuensche||[]).some(x=>x.id===w.id)) wuensche.push({person, w}); });
       if((d.entfernungen||[]).length) entfernungen.push({person, liste:d.entfernungen.map(x=>Object.assign({}, x, {ort: state.orte.find(o=>o.id===x.ortId) || state.orte.find(o=>ortNameNorm(o.name)===ortNameNorm(x.ortName))})).filter(x=>x.ort)});
+      if((d.anwesenheiten||[]).length) anwesenheiten.push({person, liste:d.anwesenheiten});
       if((d.zusagen||[]).length) zusagen.push({person, liste:d.zusagen.filter(z=>state.termine.some(t=>t.id===z.terminId))});
       { const lc=(d.lernchecks||[]).filter(x=>!(state.lernchecks||[]).some(y=>y.id===x.id) && (!x.hundId || state.hunde.some(h=>h.id===x.hundId)));
         const pr=(d.protokolle||[]).filter(x=>!(state.protokolle||[]).some(y=>y.id===x.id) && state.hunde.some(h=>h.id===x.hundId));
         if(lc.length||pr.length) lernen.push({person, lc, pr}); }
       if(d.kontakt){ const diff=KONTAKT_FELDER.filter(([k])=>(d.kontakt[k]||'')!==(person[k]||'')).map(([k,l])=>({k,l,alt:person[k]||'',neu:d.kontakt[k]||''})); if(diff.length) kontakte.push({person, diff}); }
     });
-    meldungVorschau={eintraege, wuensche, fehler, kontakte, entfernungen:entfernungen.filter(x=>x.liste.length), zusagen:zusagen.filter(x=>x.liste.length), lernen}; modal={type:'meldungImport'}; render();
+    meldungVorschau={eintraege, wuensche, fehler, kontakte, entfernungen:entfernungen.filter(x=>x.liste.length), zusagen:zusagen.filter(x=>x.liste.length), lernen, anwesenheiten}; modal={type:'meldungImport'}; render();
   });
 }
 function renderModalMeldungImport(){
@@ -9881,6 +9883,8 @@ function renderModalMeldungImport(){
       ${(v.kontakte||[]).map((k,i)=>`<label class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-top:1px dashed var(--line);cursor:pointer"><input type="checkbox" data-mk="${i}" checked style="margin-top:3px"><span><b>${esc(k.person.name)}</b> – Kontaktdaten: ${k.diff.map(d=>`${esc(d.l)}: <s>${esc(d.alt||'–')}</s> → ${esc(d.neu||'–')}`).join(' · ')}</span></label>`).join('')}
       ${(v.entfernungen||[]).map((k,i)=>`<label class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-top:1px dashed var(--line);cursor:pointer"><input type="checkbox" data-me="${i}" checked style="margin-top:3px"><span><b>${esc(k.person.name)}</b> – Entfernung zu ${k.liste.length} Trainingsort(en): ${k.liste.map(x=>`${esc(x.ort.name)} ${String(x.km).replace('.',',')} km`).join(' · ')}</span></label>`).join('')}
       ${(v.zusagen||[]).map((k,i)=>`<label class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-top:1px dashed var(--line);cursor:pointer"><input type="checkbox" data-mz="${i}" checked style="margin-top:3px"><span><b>${esc(k.person.name)}</b> – ${k.liste.length} Rückmeldung(en) zu Terminen, davon ${k.liste.filter(z=>z.km!=null).length} mit gefahrenen Km (für den Dienstnachweis)</span></label>`).join('')}
+      ${(v.anwesenheiten||[]).map((k,i)=>{ const an=k.liste.filter(x=>x.status==='anwesend'), zu=k.liste.length-an.length, hi=an.filter(x=>x.hiorgSchluessel).length, std=Math.round(an.reduce((s,x)=>s+(x.stunden||0),0)*100)/100;
+        return `<label class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-top:1px dashed var(--line);cursor:pointer"><input type="checkbox" data-ma="${i}" checked style="margin-top:3px"><span><b>${esc(k.person.name)}</b> – ${an.length} nachgetragene Anwesenheit(en)${hi?`, davon ${hi} aus HiOrg`:''}${std?` (${String(std).replace('.',',')} Std.)`:''}${zu?`, ${zu} zurückgezogen`:''}<br><span class="hint">Sie stehen danach unter Verwaltung → Anwesenheit → Prüfliste zur Bestätigung. Von der Leitung bereits erfasste Termine bleiben unverändert.</span></span></label>`; }).join('')}
       ${(v.lernen||[]).map((k,i)=>`<label class="row" style="gap:8px;align-items:flex-start;padding:6px 0;border-top:1px dashed var(--line);cursor:pointer"><input type="checkbox" data-ml="${i}" checked style="margin-top:3px"><span><b>${esc(k.person.name)}</b> – ${k.lc.length} Lernstand-Check(s)${k.lc.length?' ('+[...new Set(k.lc.map(x=>x.check))].map(esc).join(', ')+')':''}, ${k.pr.length} Protokoll(e)</span></label>`).join('')}
       ${v.wuensche.length?`<p style="margin:12px 0 4px"><b>Kurswünsche (${v.wuensche.length})</b> – werden unter Auswertung → Kurswünsche übernommen:</p><ul class="hint" style="margin:0 0 0 -18px">${v.wuensche.map(x=>`<li>${esc(x.person.name)}: ${esc(kursLabel({code:x.w.kursCode}))}</li>`).join('')}</ul>`:''}
     </div>
@@ -9905,6 +9909,7 @@ function bindModalMeldungImport(){
       k.liste.forEach(z=>{ let r=rueckmeldungFuer(z.terminId, k.person.id);
         if(!r){ state.ruckmeldungen.push({id:uid(), terminId:z.terminId, personId:k.person.id, status:z.status, km:z.km, stunden:z.stunden, aktualisiertAm:z.aktualisiertAm||nowIso()}); }
         else if(!r.aktualisiertAm || (z.aktualisiertAm||'')>=r.aktualisiertAm){ Object.assign(r, {status:z.status, km:z.km, stunden:z.stunden, aktualisiertAm:z.aktualisiertAm||nowIso()}); } }); n++; });
+    document.querySelectorAll('[data-ma]').forEach(cb=>{ if(!cb.checked) return; const k=v.anwesenheiten[+cb.dataset.ma]; anwesenheitenAusMeldung(k.person, k.liste); n++; });
     document.querySelectorAll('[data-ml]').forEach(cb=>{ if(!cb.checked) return; const k=v.lernen[+cb.dataset.ml]; state.lernchecks=state.lernchecks||[]; state.protokolle=state.protokolle||[];
       k.lc.forEach(x=>state.lernchecks.push(Object.assign({}, x, {gemeldetAm:x.gemeldetAm||nowIso()}))); k.pr.forEach(x=>state.protokolle.push(Object.assign({}, x, {gemeldetAm:x.gemeldetAm||nowIso()}))); n++; });
     speichereState(); meldungVorschau=null;
@@ -10680,6 +10685,7 @@ function renderModal(){
   if(modal.type==='zusatzrecht') return renderModalZusatzrecht();
   if(modal.type==='termin') return renderModalTermin();
   if(modal.type==='anwesenheit') return renderModalAnwesenheit();
+  if(modal.type==='dnPruefung') return renderModalDnPruefung();
   if(modal.type==='trainingseintrag') return renderModalTrainingseintrag();
   if(modal.type==='alltagseintrag') return renderModalAlltagseintrag();
   if(modal.type==='einsatz') return renderModalEinsatz();
@@ -10711,6 +10717,7 @@ function bindModal(person){
   if(modal.type==='zusatzrecht') return bindModalZusatzrecht();
   if(modal.type==='termin') return bindModalTermin(person);
   if(modal.type==='anwesenheit') return bindModalAnwesenheit(person);
+  if(modal.type==='dnPruefung') return bindModalDnPruefung();
   if(modal.type==='trainingseintrag') return bindModalTrainingseintrag(person);
   if(modal.type==='alltagseintrag') return bindModalAlltagseintrag(person);
   if(modal.type==='einsatz') return bindModalEinsatz(person);
@@ -11820,14 +11827,16 @@ function renderOrganisationDienstnachweis(person){
       ${proMonat.filter(x=>x.n).map(x=>`<tr><td>${x.m}</td><td>${x.n}</td><td>${f(x.h)}</td><td>${f(x.k)}${x.o?` <span class="chip muted">${x.o} offen</span>`:''}</td></tr>`).join('') || '<tr><td colspan="4" class="hint">Für dieses Jahr liegen noch keine Einträge vor. Am einfachsten liest du deine HiOrg-Helferstunden ein.</td></tr>'}
     </tbody></table></div>
     <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn btn-primary btn-sm" id="mdn-export">Dienstnachweis ${meinDnJahr} als Excel</button>
+      <button class="btn btn-primary btn-sm" id="mdn-export">Dienstnachweis ${meinDnJahr} als Excel</button>${(()=>{ const n=dienstPruefpunkte(person, meinDnJahr).filter(x=>!x.hinweis).length; return n?`<a href="#dp-karte" class="chip" style="text-decoration:none">⚠️ ${n} Punkt${n===1?'':'e'} offen – siehe Prüfliste</a>`:'<span class="chip">✓ vollständig</span>'; })()}
       <input type="file" id="mdn-hiorg" accept=".xls,.xlsx,.csv" style="display:none"><button class="btn btn-sm" id="mdn-hiorg-btn">⏱️ Meine HiOrg-Helferstunden einlesen</button>
     </div>
-    <p class="hint" style="margin-top:10px">Grundlage sind deine Anwesenheiten und die eingelesenen HiOrg-Helferstunden. Km = Hin- und Rückfahrt aus deinen Entfernungen unter 📍 Trainingsorte. Im Excel kannst du alles nacharbeiten; gelbe Felder werden nach dem Eintragen automatisch weiß, Summen rechnen selbst.
+    <p class="hint" style="margin-top:10px">Grundlage sind deine Anwesenheiten (auch selbst nachgetragene unter „Teilnahme“) und die eingelesenen HiOrg-Helferstunden. Beim Einlesen gleicht BARRY die HiOrg-Datei mit deinen Einträgen ab – das Ergebnis steht in der Prüfliste. Km = Hin- und Rückfahrt aus deinen Entfernungen unter 📍 Trainingsorte. Im Excel kannst du alles nacharbeiten; gelbe Felder werden nach dem Eintragen automatisch weiß, Summen rechnen selbst.
     Deckblatt: ${dn.kreisverband||dn.ortsvereinigung||dn.einsatzeinheit?`Kreisverband ${esc(dn.kreisverband||'–')}, Ortsvereinigung ${esc(dn.ortsvereinigung||'–')}, Einsatzeinheit ${esc(dn.einsatzeinheit||'–')} (von der Staffelleitung)`:'Angaben der Einheit fehlen noch – sie kommen mit dem nächsten Terminplan der Staffelleitung'}. KFZ-Kennzeichen trägst du unter 🎓 Mein Stand → Meine Kontaktdaten ein.</p>
-  </div>`;
+  </div>
+  ${renderDienstPruefliste(person, meinDnJahr, false)}`;
 }
 function bindOrganisationDienstnachweis(person){
+  bindDienstPruefliste({id:person.id, jahr:meinDnJahr}, false);
   const j=document.getElementById('mdn-jahr'); if(j) j.onchange=()=>{ meinDnJahr=+j.value; render(); };
   const ex=document.getElementById('mdn-export'); if(ex) ex.onclick=()=>exportiereDienstnachweis(person.id, meinDnJahr);
   const hb=document.getElementById('mdn-hiorg-btn'), hd=document.getElementById('mdn-hiorg');
@@ -11973,9 +11982,10 @@ function renderOrganisationTeilnahme(person){
           </div>`:''}
         </div>`;
     }).join('') || '<div class="card empty"><p>Keine kommenden Staffeltermine.</p></div>'}
+    ${renderAnwesenheitNachtragen(person)}
   `;
 }
-function bindOrganisationTeilnahme(person){ bindZusageButtons(person); }
+function bindOrganisationTeilnahme(person){ bindZusageButtons(person); bindAnwesenheitNachtragen(person); }
 function bindZusageButtons(person){
   document.querySelectorAll('[data-rm-status]').forEach(b=>{
     b.onclick = ()=>{
@@ -12619,7 +12629,9 @@ function renderModalAnwesenheit(){
   if(!modal.draftStatus){
     modal.draftStatus = {}; modal.draftKm = {};
     anwesenheitFuerTermin(modal.terminId).forEach(a=>{
+      if(a.status==='zurueckgezogen') return;
       modal.draftStatus[a.personId]=a.status;
+      if(a.vomMitglied && !a.bestaetigt) (modal.herkunft=modal.herkunft||{})[a.personId]='vom Mitglied nachgetragen';
       if(a.km!=null) modal.draftKm[a.personId]=String(a.km);
     });
     // Km, die ein Mitglied bereits bei seiner eigenen Zusage angegeben hat, als Vorschlag übernehmen,
@@ -12629,18 +12641,26 @@ function renderModalAnwesenheit(){
       const r = rueckmeldungFuer(modal.terminId, p.id);
       if(r && r.km!=null) modal.draftKm[p.id] = String(r.km);
     });
+    // 3.02: Bei begonnenen Terminen Zusagen als „anwesend“ und Absagen als „entschuldigt“ vorwählen – die Leitung korrigiert nur noch Abweichungen.
+    modal.herkunft = modal.herkunft || {};
+    if(termin && new Date(termin.beginn) <= new Date()) state.personen.filter(p=>p.status!=='inaktiv').forEach(p=>{
+      if(modal.draftStatus[p.id]) return; const r=rueckmeldungFuer(modal.terminId, p.id); if(!r) return;
+      if(r.status==='zusage'){ modal.draftStatus[p.id]='anwesend'; modal.herkunft[p.id]='aus Zusage';
+        if(modal.draftKm[p.id]==null){ const v=kmFuerDienst(p, termin, null); if(v.km!=null) modal.draftKm[p.id]=String(v.km); } }
+      else if(r.status==='absage'){ modal.draftStatus[p.id]='entschuldigt'; modal.herkunft[p.id]='aus Absage'; }
+    });
   }
   const aktive = state.personen.filter(p=>p.status!=='inaktiv');
   return `
   <div class="modal-back"><div class="modal" style="max-width:680px">
     <div class="modal-head"><h3>Anwesenheit – ${esc(termin?termin.titel:'')}</h3><button class="btn btn-ghost btn-sm" id="m-schliessen">✕</button></div>
     <div class="modal-body" style="max-height:60vh;overflow-y:auto">
-      <p class="hint">Kilometer werden nur bei Bedarf für den Jahres-Dienstnachweis erfasst – Hin- und Rückfahrt zusammen.</p>
+      <p class="hint">Kilometer werden nur bei Bedarf für den Jahres-Dienstnachweis erfasst – Hin- und Rückfahrt zusammen.${Object.keys(modal.herkunft||{}).length?' Vorgewählt aus Zusagen und Absagen der Mitglieder – bitte nur Abweichungen korrigieren. Mit „Speichern“ gelten auch nachgetragene Einträge als bestätigt.':''}</p>
       <table><tbody>
       ${aktive.map(p=>{
         const aktuell = modal.draftStatus[p.id];
         return `<tr>
-          <td>${esc(p.name)}</td>
+          <td>${esc(p.name)}${(modal.herkunft||{})[p.id]?` <span class="chip muted">${esc(modal.herkunft[p.id])}</span>`:''}</td>
           <td style="text-align:right;white-space:nowrap">
             ${ANWESENHEIT_STATUS.map(s=>`<button class="btn btn-sm ${aktuell===s.id?'btn-primary':'btn-ghost'}" data-status-person="${p.id}" data-status-wert="${s.id}">${esc(s.label)}</button>`).join(' ')}
           </td>
@@ -12682,7 +12702,7 @@ function bindModalAnwesenheit(){
       const kmRoh = modal.draftKm[personId];
       const km = kmRoh ? parseFloat(kmRoh) : null;
       const alt = bisher.find(a=>a.personId===personId) || {};
-      state.anwesenheiten.push(Object.assign({}, alt, {id:alt.id||uid(), terminId:modal.terminId, personId, status, km:(km!=null && !isNaN(km))?km:null}));
+      state.anwesenheiten.push(Object.assign({}, alt, {id:alt.id||uid(), terminId:modal.terminId, personId, status, km:(km!=null && !isNaN(km))?km:null}, alt.vomMitglied?{bestaetigt:true, bestaetigtAm:nowIso()}:{}));
     });
     speichereState(); zeigeToast('Anwesenheit gespeichert.'); schliesseModal();
   };
@@ -12703,14 +12723,14 @@ function renderTabAnwesenheit(){
     const unentschuldigt = eintraege.filter(e=>e.status==='unentschuldigt').length;
     const km = Math.round(eintraege.filter(e=>e.status==='anwesend').reduce((sum,e)=> sum + (kmFuerDienst(p, state.termine.find(t=>t.id===e.terminId), e).km||0), 0)*10)/10;
     const std = Math.round(eintraege.filter(e=>e.status==='anwesend').reduce((sum,e)=> sum + (dienstStunden(state.termine.find(t=>t.id===e.terminId), e)||0), 0)*100)/100;
-    return `<tr><td>${esc(p.name)}</td><td>${anwesend}</td><td>${entschuldigt}</td><td>${unentschuldigt}</td><td>${staffTermineImJahr}</td><td>${std?std.toLocaleString('de-DE'):'–'}</td><td>${km?km.toLocaleString('de-DE'):'–'}</td><td><button class="btn btn-sm btn-ghost" data-dn-person="${p.id}">Dienstnachweis (Excel)</button></td></tr>`;
-  }).join('') || `<tr><td colspan="8" class="hint">Keine Personen im Bestand.</td></tr>`;
+    return `<tr><td>${esc(p.name)}</td><td>${anwesend}</td><td>${entschuldigt}</td><td>${unentschuldigt}</td><td>${staffTermineImJahr}</td><td>${std?std.toLocaleString('de-DE'):'–'}</td><td>${km?km.toLocaleString('de-DE'):'–'}</td><td>${(()=>{ const n=dienstPruefpunkte(p, anwesenheitJahrFilter).filter(x=>!x.hinweis).length; return `<button class="btn btn-sm ${n?'':'btn-ghost'}" data-dp-person="${p.id}" title="Prüfliste öffnen">${n?'⚠️ '+n+' offen':'✓'}</button>`; })()}</td><td><button class="btn btn-sm btn-ghost" data-dn-person="${p.id}">Dienstnachweis (Excel)</button></td></tr>`;
+  }).join('') || `<tr><td colspan="9" class="hint">Keine Personen im Bestand.</td></tr>`;
   return `
     <div class="spread" style="margin-bottom:14px">
       <p class="hint">Grundlage für den Jahres-Dienstnachweis inkl. Kilometern (Hin- und Rückfahrt) für die Spendenquittung. Erfasst wird je Termin unter Organisation & Termine. Fehlen dort Kilometer, nimmt BARRY der Reihe nach: Km aus der Zusage des Mitglieds, seine Entfernung zum Trainingsort × 2, zuletzt seine Standard-Km × 2.</p>
       <select id="af-jahr" style="width:auto">${jahre.map(j=>`<option value="${j}" ${j===anwesenheitJahrFilter?'selected':''}>${j}</option>`).join('')}</select>
     </div>
-    <div class="card table-scroll"><table><thead><tr><th>Person</th><th>Anwesend</th><th>Entschuldigt</th><th>Unentschuldigt</th><th>Staffeltermine</th><th>Stunden</th><th>Km gesamt</th><th></th></tr></thead><tbody>${zeilen}</tbody></table></div>
+    <div class="card table-scroll"><table><thead><tr><th>Person</th><th>Anwesend</th><th>Entschuldigt</th><th>Unentschuldigt</th><th>Staffeltermine</th><th>Stunden</th><th>Km gesamt</th><th>Prüfliste</th><th></th></tr></thead><tbody>${zeilen}</tbody></table></div>
     <div class="card card-pad" style="margin-top:14px">
       <h3>Angaben für das Deckblatt</h3>
       <p class="hint">Erscheinen auf dem Deckblatt „Gesamtstunden“ jedes Dienstnachweises. Persönliche Angaben (Dienstbuch-Nr., KFZ-Kennzeichen, Dienststellung) stehen bei der jeweiligen Person.</p>
@@ -12834,6 +12854,7 @@ async function hiorgStundenVorschau(datei, personId, festePerson){
   const erg = hiorgZeilenLesen(sheets);
   if(!erg.zeilen.length) throw new Error('Keine Zeilen mit Datum gefunden. Ist das der HiOrg-Export „Helferstunden“?');
   let person = state.personen.find(p=>p.id===personId);
+  if(festePerson && erg.name && person && ortNameNorm(erg.name)!==ortNameNorm(person.name) && !confirm(`Die Datei gehört laut Kopfzeile zu „${erg.name}“, nicht zu ${person.name}. Trotzdem für ${person.name} einlesen?`)) return;
   const namensTreffer = erg.name && state.personen.find(p=>p.status!=='inaktiv' && p.name && ortNameNorm(p.name)===ortNameNorm(erg.name));
   if(!festePerson && namensTreffer && namensTreffer.id!==personId && confirm(`Die Datei gehört laut Kopfzeile zu „${erg.name}“. Für diese Person einlesen?`)) person = namensTreffer;
   const heute = new Date(); const heuteIso = heute.getFullYear()+'-'+String(heute.getMonth()+1).padStart(2,'0')+'-'+String(heute.getDate()).padStart(2,'0');
@@ -12882,7 +12903,7 @@ function bindModalHiorgImport(){
   const merken=()=>{ document.querySelectorAll('[data-ho]').forEach(s=>{ const z=hiorgVorschau.zeilen[+s.dataset.ho]; if(s.value!==z.ortId){ z.ortId=s.value; z.stufe=s.value?'gewählt':''; } }); };
   document.querySelectorAll('[data-hz]').forEach(cb=>cb.onchange=()=>{ merken(); hiorgVorschau.zeilen[+cb.dataset.hz].an=cb.checked; render(); });
   document.querySelectorAll('[data-ho]').forEach(s=>s.onchange=merken);
-  document.getElementById('m-hiorg-ok').onclick=()=>{ merken(); const r=hiorgUebernehmen(hiorgVorschau); speichereState(); hiorgVorschau=null; schliesseModal();
+  document.getElementById('m-hiorg-ok').onclick=()=>{ merken(); const r=hiorgUebernehmenMitAbgleich(hiorgVorschau); speichereState(); hiorgVorschau=null; schliesseModal();
     zeigeToast(`${r.neuTermine} persönliche Termine angelegt, ${r.zuStaff} Staffeltermin(en) zugeordnet, ${r.aktualisiert} aktualisiert${r.umgehaengt?`, ${r.umgehaengt} Fehlzuordnung(en) korrigiert`:''}.`); };
 }
 function hiorgUebernehmen(v){
@@ -12910,6 +12931,286 @@ function hiorgUebernehmen(v){
   });
   return r;
 }
+
+/* =========================================================
+   3.02: Anwesenheit nachtragen · Prüfliste „Vor dem Jahresabschluss“ · HiOrg-Abgleich
+   Mitglieder tragen vergangene Termine selbst nach (vomMitglied) → Meldung an die Leitung →
+   Leitung bestätigt (bestaetigt) → Stand-Update bringt den bestätigten Stand zurück.
+   ========================================================= */
+function dnSelbst(ich){ return !!ich && !darfTrainingBearbeiten(ich); } // wie bei Nachweisen: Mitglieder melden, Ausbildende/Leitung tragen direkt ein
+function heuteIsoDatum(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function anwFuer(terminId, personId){ return state.anwesenheiten.find(a=>a.terminId===terminId && a.personId===personId); }
+function anwGesperrt(a){ return !!a && !a.vomMitglied && dnSelbst(aktuellePerson()); } // von der Leitung erfasst – Mitglied ändert nicht
+function anwesenheitSetzen(person, termin, felder){
+  let a=anwFuer(termin.id, person.id);
+  if(anwGesperrt(a)) return a;
+  if(!a){ a={id:uid(), terminId:termin.id, personId:person.id, status:'anwesend', km:null}; state.anwesenheiten.push(a); }
+  Object.assign(a, felder, {aktualisiertAm:nowIso()});
+  if(dnSelbst(aktuellePerson())){ a.vomMitglied=true; a.bestaetigt=false; }
+  return a;
+}
+function anwesenheitZurueckziehen(person, terminId){
+  const a=anwFuer(terminId, person.id); if(!a || anwGesperrt(a)) return;
+  if(a.vomMitglied && a.gemeldetAm){ a.status='zurueckgezogen'; a.bestaetigt=false; a.aktualisiertAm=nowIso(); }
+  else state.anwesenheiten=state.anwesenheiten.filter(x=>x!==a);
+}
+function rueckmeldungSetzen(personId, terminId, status){
+  let r=rueckmeldungFuer(terminId, personId);
+  if(!r){ r={id:uid(), terminId, personId, status, km:null, stunden:null}; state.ruckmeldungen.push(r); } else r.status=status;
+  r.aktualisiertAm=nowIso(); return r;
+}
+function anwMarkiereGeaendert(a){ a.aktualisiertAm=nowIso(); if(a.vomMitglied && dnSelbst(aktuellePerson())) a.bestaetigt=false; }
+function zahlOderNull(v){ const x=String(v??'').trim().replace(',','.'); if(x==='') return null; const n=parseFloat(x); return isNaN(n)?null:n; }
+function anwStatusInfo(a, r){
+  if(a && a.status==='anwesend'){
+    if(!a.vomMitglied) return {txt:'✔ erfasst', cls:''};
+    if(a.bestaetigt) return {txt:'✔ bestätigt', cls:''};
+    return (a.gemeldetAm && (a.aktualisiertAm||'')<=a.gemeldetAm) ? {txt:'⏳ gemeldet – Bestätigung offen', cls:'muted'} : {txt:'⏳ noch nicht gesendet', cls:'muted'};
+  }
+  if(a && a.status==='entschuldigt') return {txt:'entschuldigt', cls:'muted'};
+  if(a && a.status==='unentschuldigt') return {txt:'unentschuldigt', cls:'muted'};
+  if(r && r.status==='absage') return {txt:'nicht dabei', cls:'muted'};
+  if(r && r.status==='zusage') return {txt:'⚠️ zugesagt – Anwesenheit offen', cls:'warn'};
+  return {txt:'keine Angabe', cls:'muted'};
+}
+function vergangeneTermineFuer(person, jahr){
+  const heute=heuteIsoDatum();
+  return state.termine.filter(t=>t.beginn && t.beginn.slice(0,4)===String(jahr) && t.beginn.slice(0,10)<=heute
+      && ((t.sichtbarkeit||'staff')==='staff' || (t.sichtbarkeit==='personal' && t.ownerId===person.id && anwFuer(t.id, person.id))))
+    .sort((a,b)=>String(b.beginn).localeCompare(String(a.beginn)));
+}
+
+/* ---- Prüfliste ---- */
+function dienstPruefpunkte(person, jahr){
+  const J=String(jahr), heute=heuteIsoDatum(), P=[];
+  const tOf=id=>state.termine.find(t=>t.id===id);
+  const da=state.anwesenheiten.filter(a=>a.personId===person.id && a.status==='anwesend').map(a=>({a, t:tOf(a.terminId)})).filter(x=>x.t && (x.t.beginn||'').startsWith(J));
+  state.termine.filter(t=>(t.sichtbarkeit||'staff')==='staff' && (t.beginn||'').startsWith(J) && t.beginn.slice(0,10)<=heute).forEach(t=>{
+    const r=rueckmeldungFuer(t.id, person.id), a=anwFuer(t.id, person.id);
+    if(r && r.status==='zusage' && (!a || a.status==='zurueckgezogen')) P.push({art:'zusage', t, text:'Zugesagt, aber keine Anwesenheit erfasst'});
+  });
+  da.forEach(({a,t})=>{
+    if(kmFuerDienst(person, t, a).km==null) P.push({art:'km', t, a, text:'Km fehlen'+((a.ortId || ortFuerTermin(t))?' – keine Entfernung zu diesem Trainingsort hinterlegt':' – kein Trainingsort zugeordnet')});
+    if(dienstStunden(t, a)==null) P.push({art:'std', t, a, text:'Stunden fehlen (ganztägiger Termin oder ohne Uhrzeit)'});
+    if(a.hiorgUnbestaetigt) P.push({art:'hiorgunb', t, a, text:'In HiOrg noch nicht bestätigt – nach der Bestätigung die HiOrg-Datei erneut einlesen'});
+    if(a.vomMitglied && !a.bestaetigt) P.push({art:'bestaetigung', t, a, text:(a.gemeldetAm && (a.aktualisiertAm||'')<=a.gemeldetAm)?'Gemeldet – Bestätigung durch die Leitung offen':'Noch nicht an die Leitung gesendet'});
+  });
+  const ab=(person.hiorgAbgleich||{})[J];
+  if(ab){
+    const min=s=>{ const [h,m]=String(s||'0:0').split(':').map(Number); return (h||0)*60+(m||0); };
+    da.forEach(({a,t})=>{ const d=t.beginn.slice(0,10); if(a.hiorgSchluessel || d<ab.von || d>ab.bis) return;
+      const treffer=ab.zeilen.some(z=>z.datum===d && (!z.von || t.ganztags || Math.abs(min(z.von)-min(t.beginn.slice(11,16)))<=90));
+      if(!treffer) P.push({art:'nichthiorg', t, a, text:'In BARRY erfasst, fehlt aber in der HiOrg-Datei – in HiOrg nachtragen oder hier prüfen'}); });
+    ab.zeilen.filter(z=>z.stunden!=null && !z.ignoriert && !state.anwesenheiten.some(a=>a.hiorgSchluessel===z.schluessel && a.status==='anwesend'))
+      .forEach(z=>P.push({art:'hiorgfehlt', z, text:'Steht in HiOrg, ist aber nicht in BARRY übernommen'}));
+  } else P.push({art:'hiorgkeine', hinweis:true, text:'Die HiOrg-Helferstunden '+J+' sind noch nicht eingelesen. Mit der HiOrg-Datei prüft BARRY, ob in BARRY oder in HiOrg etwas fehlt.'});
+  const dn=state.organisation.dienstnachweis||{};
+  if(da.length && !(dn.kreisverband||dn.ortsvereinigung||dn.einsatzeinheit)) P.push({art:'deckblatt', text:'Angaben der Einheit für das Deckblatt fehlen – trägt die Staffelleitung ein'});
+  if(da.length && !person.dienstbuchNr) P.push({art:'deckblatt', text:'Dienstbuch-Nr. fehlt – trägt die Staffelleitung ein'});
+  if(da.some(x=>kmFuerDienst(person, x.t, x.a).km) && !person.kfzKennzeichen) P.push({art:'kfz', text:'KFZ-Kennzeichen fehlt – Mitglieder tragen es unter Ausbildung → Mein Stand → Meine Kontaktdaten ein'});
+  return P;
+}
+const DP_GRUPPEN = [
+  ['zusage','Zugesagt, aber keine Anwesenheit'], ['bestaetigung','Selbst nachgetragen'], ['km','Km fehlen'], ['std','Stunden fehlen'],
+  ['hiorgfehlt','In HiOrg, aber nicht in BARRY'], ['nichthiorg','In BARRY, aber nicht in HiOrg'], ['hiorgunb','In HiOrg noch unbestätigt'],
+  ['deckblatt','Deckblatt'], ['kfz','Deckblatt'], ['hiorgkeine','HiOrg-Abgleich'] ];
+function renderDienstPruefliste(person, jahr, leitung){
+  const P=dienstPruefpunkte(person, jahr), offen=P.filter(x=>!x.hinweis), ich=aktuellePerson(), selbst=dnSelbst(ich);
+  const tTxt=t=>`<b>${fmtDatum(t.beginn.slice(0,10))}</b>${t.ganztags?'':' '+esc(t.beginn.slice(11,16))} · ${esc(t.titel||'')}`;
+  const zeile=x=>{
+    let kopf = x.t ? tTxt(x.t) : x.z ? `<b>${fmtDatum(x.z.datum)}</b> ${esc(x.z.von||'')} · ${esc(x.z.titel||'')} · ${String(x.z.stunden).replace('.',',')} Std.` : '';
+    let akt='';
+    if(x.art==='zusage') akt=`<button class="btn btn-sm" data-dp-da="${x.t.id}">War dabei</button> <button class="btn btn-sm btn-ghost" data-dp-nein="${x.t.id}">Nicht dabei</button>`;
+    if(x.art==='km') akt=(!anwGesperrt(x.a)?`<input type="text" inputmode="decimal" data-dp-km="${x.a.id}" placeholder="Km hin+zurück" style="width:130px"> `:'')+`<button class="btn btn-sm btn-ghost" data-dp-orte>📍 Entfernungen</button>`;
+    if(x.art==='std' && !anwGesperrt(x.a)) akt=`<input type="text" inputmode="decimal" data-dp-std="${x.a.id}" placeholder="Stunden" style="width:100px">`;
+    if(x.art==='bestaetigung') akt = leitung ? `<button class="btn btn-sm btn-primary" data-dp-ok="${x.a.id}">Bestätigen</button> <button class="btn btn-sm btn-ghost" data-dp-nein="${x.t.id}">Ablehnen</button>` : '';
+    if(x.art==='hiorgfehlt') akt=`<button class="btn btn-sm btn-ghost" data-dp-ign="${esc(x.z.schluessel)}" title="z. B. private Feier – zählt nicht zum Dienst">Bewusst nicht übernehmen</button>`;
+    if(x.art==='kfz' && !leitung) akt=`<button class="btn btn-sm btn-ghost" data-dp-kontakt>Öffnen</button>`;
+    return `<div style="padding:6px 0;border-top:1px dashed var(--line)">${kopf?`<div>${kopf}</div>`:''}<div class="hint" style="margin:2px 0 4px">${esc(x.text)}</div>${akt?`<div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">${akt}</div>`:''}</div>`;
+  };
+  const gesehen=new Set(); let gruppen='';
+  DP_GRUPPEN.forEach(([art,titel])=>{ if(gesehen.has(titel)) return; const arten=DP_GRUPPEN.filter(g=>g[1]===titel).map(g=>g[0]); gesehen.add(titel);
+    const l=P.filter(x=>arten.includes(x.art)); if(!l.length) return;
+    const zusatz = (art==='bestaetigung' && leitung && l.length>1) ? ` <button class="btn btn-sm" data-dp-alleok>Alle ${l.length} bestätigen</button>` : (art==='bestaetigung' && !leitung && selbst && anwesenheitenZumMelden(person).length) ? ` <button class="btn btn-sm btn-primary" data-dp-senden>📤 An die Leitung senden</button>` : (art==='hiorgfehlt' && !leitung) ? ' <span class="hint">– HiOrg-Datei erneut einlesen und die Zeilen anhaken</span>' : (art==='km') ? ' <span class="hint">– am schnellsten: unter 📍 Trainingsorte die Entfernungen eintragen, dann rechnet BARRY die Km selbst</span>' : '';
+    gruppen += `<details ${l.length<=8?'open':''} style="margin-top:10px"><summary style="cursor:pointer"><b>${esc(titel)}</b> (${l.length})${zusatz}</summary>${l.slice(0,120).map(zeile).join('')}${l.length>120?`<p class="hint">… und ${l.length-120} weitere</p>`:''}</details>`; });
+  const ab=(person.hiorgAbgleich||{})[String(jahr)];
+  return `<div class="card card-pad" style="margin-bottom:14px" id="dp-karte">
+    <h3 style="margin:0">✅ Prüfliste vor dem Jahresabschluss ${jahr}${leitung?' – '+esc(person.name):''}</h3>
+    <p class="hint" style="margin:6px 0 0">${offen.length ? `<b>${offen.length} Punkt${offen.length===1?'':'e'} offen.</b> Der Dienstnachweis lässt sich trotzdem jederzeit erstellen; offene Angaben sind im Excel gelb.` : '<b>✓ Vollständig – der Dienstnachweis kann erstellt werden.</b>'}
+    ${ab?` HiOrg-Abgleich mit „${esc(ab.datei||'HiOrg-Datei')}“ vom ${fmtDatum(String(ab.am).slice(0,10))}.`:''}</p>
+    ${gruppen}
+  </div>`;
+}
+function bindDienstPruefliste(ziel, leitung){
+  const P=()=>state.personen.find(p=>p.id===ziel.id)||ziel;
+  const fertig=()=>{ speichereState(); if(leitung) render(); else renderErhalteScroll(); };
+  const anw=id=>state.anwesenheiten.find(x=>x.id===id);
+  document.querySelectorAll('[data-dp-da]').forEach(b=>b.onclick=()=>{ const t=state.termine.find(x=>x.id===b.dataset.dpDa); if(t){ anwesenheitSetzen(P(), t, {status:'anwesend'}); fertig(); } });
+  document.querySelectorAll('[data-dp-nein]').forEach(b=>b.onclick=()=>{ const p=P(), tid=b.dataset.dpNein;
+    if(leitung){ const a=anwFuer(tid, p.id); if(a && a.vomMitglied) state.anwesenheiten=state.anwesenheiten.filter(x=>x!==a); }
+    else anwesenheitZurueckziehen(p, tid);
+    rueckmeldungSetzen(p.id, tid, 'absage'); fertig(); });
+  document.querySelectorAll('[data-dp-km]').forEach(i=>i.onchange=()=>{ const a=anw(i.dataset.dpKm); if(!a || anwGesperrt(a)) return; a.km=zahlOderNull(i.value); anwMarkiereGeaendert(a); fertig(); });
+  document.querySelectorAll('[data-dp-std]').forEach(i=>i.onchange=()=>{ const a=anw(i.dataset.dpStd); if(!a || anwGesperrt(a)) return; a.stunden=zahlOderNull(i.value); anwMarkiereGeaendert(a); fertig(); });
+  document.querySelectorAll('[data-dp-ok]').forEach(b=>b.onclick=()=>{ const a=anw(b.dataset.dpOk); if(a){ a.bestaetigt=true; a.bestaetigtAm=nowIso(); fertig(); } });
+  const alle=document.querySelector('[data-dp-alleok]'); if(alle) alle.onclick=e=>{ e.preventDefault(); const p=P(), J=String(ziel.jahr||'');
+    state.anwesenheiten.forEach(a=>{ if(a.personId!==p.id || !a.vomMitglied || a.bestaetigt || a.status!=='anwesend') return; const t=state.termine.find(x=>x.id===a.terminId); if(J && !(t && (t.beginn||'').startsWith(J))) return; a.bestaetigt=true; a.bestaetigtAm=nowIso(); }); fertig(); };
+  document.querySelectorAll('[data-dp-ign]').forEach(b=>b.onclick=()=>{ const p=P(); Object.values(p.hiorgAbgleich||{}).forEach(ab=>(ab.zeilen||[]).forEach(z=>{ if(z.schluessel===b.dataset.dpIgn) z.ignoriert=true; })); fertig(); });
+  const sd=document.querySelector('[data-dp-senden]'); if(sd) sd.onclick=e=>{ e.preventDefault(); meldungSenden(P()); };
+  document.querySelectorAll('[data-dp-orte]').forEach(b=>b.onclick=()=>{ if(leitung) schliesseModal(); route={bereich:'organisation',unter:null,id:null}; orgTab='orte'; render(); window.scrollTo(0,0); });
+  document.querySelectorAll('[data-dp-kontakt]').forEach(b=>b.onclick=()=>{ route={bereich:'ausbildung',unter:null,id:null}; ausbildungTab='meinstand'; render(); window.scrollTo(0,0); });
+}
+function renderModalDnPruefung(){
+  const p=state.personen.find(x=>x.id===modal.personId); if(!p) return '';
+  return `<div class="modal-back"><div class="modal" style="max-width:760px">
+    <div class="modal-head"><h3>Dienstnachweis prüfen</h3><button class="btn btn-ghost btn-sm" id="m-schliessen">✕</button></div>
+    <div class="modal-body" style="max-height:68vh;overflow-y:auto">${renderDienstPruefliste(p, modal.jahr, true)}</div>
+    <div class="modal-foot"><button class="btn" id="m-dp-export">Dienstnachweis ${modal.jahr} als Excel</button><button class="btn btn-primary" id="m-abbrechen">Fertig</button></div>
+  </div></div>`;
+}
+function bindModalDnPruefung(){
+  document.getElementById('m-schliessen').onclick=schliesseModal; document.getElementById('m-abbrechen').onclick=schliesseModal;
+  const ex=document.getElementById('m-dp-export'); if(ex) ex.onclick=()=>exportiereDienstnachweis(modal.personId, modal.jahr);
+  bindDienstPruefliste({id:modal.personId, jahr:modal.jahr}, true);
+}
+
+/* ---- Nachtragen im Reiter „Teilnahme“ ---- */
+let tnJahr = new Date().getFullYear(); let tnNurOffen = false;
+function renderAnwesenheitNachtragen(person){
+  const jahre=[new Date().getFullYear(), new Date().getFullYear()-1];
+  const MON=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+  const selbst=dnSelbst(person);
+  let liste=vergangeneTermineFuer(person, tnJahr);
+  const istOffen=t=>{ const a=anwFuer(t.id, person.id), r=rueckmeldungFuer(t.id, person.id); return (!a || a.status==='zurueckgezogen') && (!r || r.status==='zusage'); };
+  if(tnNurOffen) liste=liste.filter(istOffen);
+  const gruppen={}; liste.forEach(t=>{ const m=+t.beginn.slice(5,7); (gruppen[m]=gruppen[m]||[]).push(t); });
+  const zeile=t=>{
+    const a=anwFuer(t.id, person.id), r=rueckmeldungFuer(t.id, person.id), st=anwStatusInfo(a && a.status!=='zurueckgezogen'?a:null, r);
+    const gesperrt=anwGesperrt(a) || (selbst && a && a.bestaetigt), da=a && a.status==='anwesend';
+    const kmV=da?kmFuerDienst(person, t, a):null;
+    return `<div style="padding:8px 0;border-top:1px dashed var(--line)">
+      <div class="spread" style="gap:8px;flex-wrap:wrap;align-items:flex-start"><span><b>${fmtDatum(t.beginn.slice(0,10))}</b>${t.ganztags?'':' '+esc(t.beginn.slice(11,16))} · ${esc(t.titel||'')}${t.sichtbarkeit==='personal'?' <span class="chip muted">eigener Dienst</span>':''}</span><span class="chip ${st.cls==='muted'?'muted':''}">${esc(st.txt)}</span></div>
+      ${gesperrt ? `<p class="hint" style="margin:4px 0 0">${a && !a.vomMitglied?'Von der Leitung erfasst':'Von der Leitung bestätigt'}${da && kmV && kmV.km!=null?' · '+String(kmV.km).replace('.',',')+' km':''} – Korrekturen bitte über die Leitung.</p>` : `
+      <div class="row" style="gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
+        <button class="btn btn-sm ${da?'btn-primary':'btn-ghost'}" data-nt-da="${t.id}">War dabei</button>
+        <button class="btn btn-sm ${!da && r && r.status==='absage'?'btn-primary':'btn-ghost'}" data-nt-nein="${t.id}">Nicht dabei</button>
+        ${da?`<label class="hint" style="display:flex;gap:4px;align-items:center">Km <input type="text" inputmode="decimal" data-nt-km="${t.id}" value="${a.km??''}" placeholder="${kmV && kmV.km!=null?String(kmV.km).replace('.',','):'hin+zurück'}" style="width:90px"></label>
+        <label class="hint" style="display:flex;gap:4px;align-items:center">Std. <input type="text" inputmode="decimal" data-nt-std="${t.id}" value="${a.stunden??''}" placeholder="${(()=>{ const h=dienstStunden(t, Object.assign({}, a, {stunden:null})); return h!=null?String(h).replace('.',','):''; })()}" style="width:70px"></label>`:''}
+      </div>`}
+    </div>`;
+  };
+  const offenAnz=vergangeneTermineFuer(person, tnJahr).filter(istOffen).length;
+  const zuSenden=selbst ? anwesenheitenZumMelden(person).length : 0;
+  const orte=state.orte.slice().sort((a,b)=>a.name.localeCompare(b.name,'de'));
+  return `<div class="card card-pad" style="margin:18px 0 12px" id="nt-karte">
+    <div class="spread" style="flex-wrap:wrap;gap:8px"><h3 style="margin:0">🕓 Vergangene Termine – Anwesenheit nachtragen</h3>
+      <select id="nt-jahr" style="width:auto">${jahre.map(j=>`<option ${j===tnJahr?'selected':''}>${j}</option>`).join('')}</select></div>
+    <p class="hint" style="margin:6px 0">Für den Dienstnachweis zur Spendenquittung. Trage ein, wo du dabei warst – mit Km (Hin- und Rückfahrt) und bei Bedarf abweichenden Stunden. ${selbst?'Deine Einträge zählen sofort in deinem Dienstnachweis und gehen mit „Meine Angaben an die Leitung“ zur Bestätigung.':'Deine Einträge gelten direkt.'} Am schnellsten geht es mit der HiOrg-Datei unter „Mein Dienstnachweis“.</p>
+    ${zuSenden?`<p style="margin:6px 0"><span class="chip">⏳ ${zuSenden} Eintrag/Einträge noch nicht gesendet</span> <button class="btn btn-sm btn-primary" data-dp-senden>📤 An die Leitung senden</button></p>`:''}
+    <label class="row" style="gap:6px;align-items:center;margin:6px 0;flex-wrap:nowrap"><input type="checkbox" id="nt-offen" style="width:auto;flex:0 0 auto" ${tnNurOffen?'checked':''}> Nur Termine ohne Angabe oder mit offener Zusage (${offenAnz})</label>
+    ${Object.keys(gruppen).sort((a,b)=>b-a).map((m,i)=>{ const l=gruppen[m]; const o=l.filter(istOffen).length;
+      return `<details ${(i===0||tnNurOffen)?'open':''} style="margin-top:8px"><summary style="cursor:pointer"><b>${MON[m-1]}</b> · ${l.length} Termin${l.length===1?'':'e'}${o?` · <span style="color:var(--accent-ink)">${o} ohne Angabe</span>`:''}</summary>${l.map(zeile).join('')}</details>`; }).join('') || `<p class="hint">${tnNurOffen?'Keine offenen Termine – alles eingetragen.':'Für dieses Jahr liegen keine vergangenen Staffeltermine vor.'}</p>`}
+    <details style="margin-top:14px"><summary style="cursor:pointer"><b>➕ Weiteren Dienst nachtragen</b> (ohne Staffeltermin, z. B. Bereitschaftsabend, Lehrgang, Öffentlichkeitsarbeit)</summary>
+      <div class="grid-2" style="margin-top:8px">
+        <div class="field"><label>Datum</label><input type="date" id="nt-datum" max="${heuteIsoDatum()}"></div>
+        <div class="field"><label>Bezeichnung</label><input id="nt-titel" placeholder="z. B. Bereitschaftsabend Sanität"></div>
+        <div class="field"><label>von</label><input type="time" id="nt-von"></div>
+        <div class="field"><label>bis</label><input type="time" id="nt-bis"></div>
+        <div class="field"><label>Art</label><select id="nt-kat">${TERMIN_KATEGORIEN.map(k=>`<option value="${k.id}">${esc(k.label)}</option>`).join('')}</select></div>
+        <div class="field"><label>Ort (für die Km)</label><select id="nt-ort"><option value="">– kein Trainingsort –</option>${orte.map(o=>`<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>Km hin+zurück (optional)</label><input type="text" inputmode="decimal" id="nt-km"></div>
+      </div>
+      <button class="btn btn-sm btn-primary" id="nt-neu">Dienst eintragen</button>
+    </details>
+  </div>`;
+}
+function bindAnwesenheitNachtragen(person){
+  const nochmal=()=>{ speichereState(); renderErhalteScroll(); };
+  const j=document.getElementById('nt-jahr'); if(j) j.onchange=()=>{ tnJahr=+j.value; renderErhalteScroll(); };
+  const o=document.getElementById('nt-offen'); if(o) o.onchange=()=>{ tnNurOffen=o.checked; renderErhalteScroll(); };
+  const t=id=>state.termine.find(x=>x.id===id);
+  document.querySelectorAll('[data-nt-da]').forEach(b=>b.onclick=()=>{ const tt=t(b.dataset.ntDa); if(!tt) return; const a=anwFuer(tt.id, person.id); if(a && a.status==='anwesend') return; anwesenheitSetzen(person, tt, {status:'anwesend'}); nochmal(); });
+  document.querySelectorAll('[data-nt-nein]').forEach(b=>b.onclick=()=>{ anwesenheitZurueckziehen(person, b.dataset.ntNein); rueckmeldungSetzen(person.id, b.dataset.ntNein, 'absage'); nochmal(); });
+  document.querySelectorAll('[data-nt-km]').forEach(i=>i.onchange=()=>{ const a=anwFuer(i.dataset.ntKm, person.id); if(!a || anwGesperrt(a)) return; a.km=zahlOderNull(i.value); anwMarkiereGeaendert(a); nochmal(); });
+  document.querySelectorAll('[data-nt-std]').forEach(i=>i.onchange=()=>{ const a=anwFuer(i.dataset.ntStd, person.id); if(!a || anwGesperrt(a)) return; a.stunden=zahlOderNull(i.value); anwMarkiereGeaendert(a); nochmal(); });
+  const sd=document.querySelector('#nt-karte [data-dp-senden]'); if(sd) sd.onclick=()=>meldungSenden(person);
+  const nb=document.getElementById('nt-neu'); if(nb) nb.onclick=()=>{
+    const v=id=>(document.getElementById(id)||{}).value||'';
+    const datum=v('nt-datum'), von=v('nt-von'), bis=v('nt-bis'), titel=v('nt-titel').trim();
+    if(!datum || !titel){ alert('Bitte mindestens Datum und Bezeichnung eintragen.'); return; }
+    if(datum>heuteIsoDatum()){ alert('Nachtragen geht nur für vergangene Dienste. Kommende Termine stehen im Kalender.'); return; }
+    let ende=datum; if(von && bis && bis<=von){ const d=new Date(datum+'T12:00'); d.setDate(d.getDate()+1); ende=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+    const ortId=v('nt-ort'), ort=ortId?state.orte.find(x=>x.id===ortId):null;
+    const tt={id:uid(), titel, kategorie:v('nt-kat')||'sonstiges', ganztags:!von, beginn:datum+'T'+(von||'00:00'), ende:ende+'T'+(bis||von||'23:59'), ort:ort?ort.name:'', ortId,
+      beschreibung:'Selbst nachgetragen', sichtbarkeit:'personal', ownerId:person.id, quelle:'nachtrag', aktualisiertAm:nowIso()};
+    state.termine.push(tt);
+    anwesenheitSetzen(person, tt, {status:'anwesend', km:zahlOderNull(v('nt-km')), ortId});
+    tnJahr=+datum.slice(0,4); zeigeToast('Dienst eingetragen.'); nochmal(); };
+}
+
+/* ---- Meldung / Stand-Update / HiOrg-Abgleich ---- */
+function anwesenheitenZumMelden(p){
+  return state.anwesenheiten.filter(a=>a.personId===p.id && a.vomMitglied && !a.bestaetigt && (!a.gemeldetAm || (a.aktualisiertAm||'')>a.gemeldetAm))
+    .map(a=>{ const t=state.termine.find(x=>x.id===a.terminId)||{};
+      return Object.assign({}, a, {termin:{id:t.id||'', titel:t.titel||'', beginn:t.beginn||'', ende:t.ende||'', ganztags:!!t.ganztags, kategorie:t.kategorie||'', ort:t.ort||'', ortId:t.ortId||'', sichtbarkeit:t.sichtbarkeit||'staff', quelle:t.quelle||'', beschreibung:t.beschreibung||''}}); });
+}
+function anwMeldungMarkieren(daten){ const jetzt=nowIso(); (daten.anwesenheiten||[]).forEach(x=>{ const a=state.anwesenheiten.find(y=>y.id===x.id); if(a) a.gemeldetAm=jetzt; }); }
+function anwesenheitenAusMeldung(person, liste){
+  let n=0;
+  liste.forEach(x=>{
+    const sn=x.termin||{};
+    let t=state.termine.find(tt=>tt.id===x.terminId);
+    if(!t && sn.beginn){
+      t=hiorgTerminFinden({datum:sn.beginn.slice(0,10), von:sn.ganztags?'':sn.beginn.slice(11,16), titel:sn.titel||''});
+      if(!t){ t={id:sn.id||uid(), titel:sn.titel||'Dienst', kategorie:sn.kategorie||'sonstiges', ganztags:!!sn.ganztags, beginn:sn.beginn, ende:sn.ende||sn.beginn, ort:sn.ort||'', ortId:sn.ortId||'',
+        beschreibung:sn.beschreibung||'Vom Mitglied nachgetragen', sichtbarkeit:'personal', ownerId:person.id, quelle:sn.quelle||'nachtrag', aktualisiertAm:nowIso()}; state.termine.push(t); }
+    }
+    if(!t) return;
+    let a=state.anwesenheiten.find(y=>y.id===x.id && y.personId===person.id) || anwFuer(t.id, person.id);
+    if(x.status==='zurueckgezogen'){ if(a && a.vomMitglied && !a.bestaetigt){ state.anwesenheiten=state.anwesenheiten.filter(y=>y!==a); n++; } return; }
+    if(a && !a.vomMitglied){ if(a.km==null && x.km!=null) a.km=x.km; if(a.stunden==null && x.stunden!=null) a.stunden=x.stunden; n++; return; } // von der Leitung erfasst: Status bleibt
+    if(!a){ a={id:x.id||uid(), terminId:t.id, personId:person.id}; state.anwesenheiten.push(a); }
+    ['status','km','stunden','ortId','hiorgSchluessel','hiorgTyp','hiorgTitel','hiorgUnbestaetigt','hiorgAm','aktualisiertAm'].forEach(k=>{ if(x[k]!==undefined) a[k]=x[k]; });
+    Object.assign(a, {terminId:t.id, personId:person.id, vomMitglied:true, bestaetigt:false, gemeldetAm:nowIso()});
+    n++;
+  });
+  return n;
+}
+function anwesenheitenFuerStandUpdate(p){
+  const l=state.anwesenheiten.filter(a=>a.personId===p.id); const ids=new Set(l.map(a=>a.terminId));
+  return {anwesenheiten:l, anwTermine: state.termine.filter(t=>ids.has(t.id) && ((t.sichtbarkeit||'staff')==='staff' || (t.sichtbarkeit==='personal' && t.ownerId===p.id)))};
+}
+function anwesenheitenAusStandUpdate(pid, liste, termine){
+  (termine||[]).forEach(t=>{ if(!state.termine.some(x=>x.id===t.id)) state.termine.push(t); });
+  const ids=new Set(liste.map(a=>a.id)), tp=new Set(liste.map(a=>a.terminId));
+  const behalten=state.anwesenheiten.filter(a=>a.personId===pid && !ids.has(a.id) && !tp.has(a.terminId) && a.vomMitglied && !a.bestaetigt && !(a.status==='zurueckgezogen' && a.gemeldetAm));
+  state.anwesenheiten=state.anwesenheiten.filter(a=>a.personId!==pid).concat(liste, behalten);
+  state.termine=state.termine.filter(t=>!(t.sichtbarkeit==='personal' && t.ownerId===pid && (t.quelle==='hiorg'||t.quelle==='nachtrag') && !state.anwesenheiten.some(a=>a.terminId===t.id)));
+}
+function hiorgAbgleichMerken(v){
+  const p=state.personen.find(x=>x.id===v.personId); if(!p) return;
+  const heute=heuteIsoDatum(), proJahr={};
+  v.zeilen.filter(z=>z.datum<=heute).forEach(z=>{ const j=z.datum.slice(0,4); (proJahr[j]=proJahr[j]||[]).push({datum:z.datum, von:z.von||'', titel:z.titel||'', stunden:z.stunden, schluessel:z.schluessel}); });
+  p.hiorgAbgleich=p.hiorgAbgleich||{};
+  Object.entries(proJahr).forEach(([j,l])=>{
+    const alt=p.hiorgAbgleich[j], ign=new Set(((alt&&alt.zeilen)||[]).filter(z=>z.ignoriert).map(z=>z.schluessel));
+    l.forEach(z=>{ if(ign.has(z.schluessel)) z.ignoriert=true; });
+    p.hiorgAbgleich[j]={am:nowIso(), datei:v.dateiName||'', von:j+'-01-01', bis:(j===heute.slice(0,4)?heute:j+'-12-31'), zeilen:l};
+  });
+}
+function hiorgUebernehmenMitAbgleich(v){
+  const vorher={}; state.anwesenheiten.filter(a=>a.personId===v.personId).forEach(a=>{ vorher[a.id]=JSON.stringify([a.status,a.stunden,a.hiorgUnbestaetigt,a.ortId||'']); });
+  const r=hiorgUebernehmen(v);
+  if(dnSelbst(aktuellePerson())){
+    const schl=new Set(v.zeilen.filter(z=>z.an).map(z=>z.schluessel));
+    state.anwesenheiten.forEach(a=>{ if(a.personId!==v.personId || !schl.has(a.hiorgSchluessel)) return;
+      const war=vorher[a.id]; if(war!==undefined && !a.vomMitglied) return;            // Eintrag der Leitung bleibt deren Eintrag
+      if(war===undefined || war!==JSON.stringify([a.status,a.stunden,a.hiorgUnbestaetigt,a.ortId||''])){ a.vomMitglied=true; a.bestaetigt=false; a.aktualisiertAm=nowIso(); } });
+  }
+  hiorgAbgleichMerken(v);
+  return r;
+}
+
 function exportiereDienstnachweis(personId, jahr){
   const p = state.personen.find(x=>x.id===personId); if(!p) return;
   const eintraege = state.anwesenheiten.filter(a=>a.personId===personId && a.status==='anwesend' && state.termine.some(t=>t.id===a.terminId && new Date(t.beginn).getFullYear()===jahr));
@@ -12941,6 +13242,7 @@ function bindTabAnwesenheit(){
   const hw=document.getElementById('hi-waehlen'), hd=document.getElementById('hi-datei');
   if(hw && hd){ hw.onclick=()=>hd.click(); hd.onchange=async e=>{ const f=e.target.files[0]; e.target.value=''; if(!f) return;
     try{ await hiorgStundenVorschau(f, document.getElementById('hi-person').value); }catch(err){ alert('Datei konnte nicht gelesen werden: '+err.message); } }; }
+  document.querySelectorAll('[data-dp-person]').forEach(b=>{ b.onclick=()=>{ modal={type:'dnPruefung', personId:b.dataset.dpPerson, jahr:anwesenheitJahrFilter}; render(); }; });
   document.querySelectorAll('[data-dn-person]').forEach(b=>{
     b.onclick = ()=> exportiereDienstnachweis(b.dataset.dnPerson, anwesenheitJahrFilter);
   });
@@ -19006,7 +19308,7 @@ function bindModalHausaufgabe(person){
 
 const HILFE_ROLLEN = [{id:'mitglied',label:'Mitglied'},{id:'ausbilder',label:'Ausbilder/-in'},{id:'leitung',label:'Leitung/Admin'}];
 const HILFE_ARTIKEL = [
-  {id:"neu-2-97", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.97–3.01: Staffelpaket, drkserver-Bild, Probeprüfung und Übungen", rollen:["mitglied","ausbilder","leitung"], text:"\n<ul>\n<li><strong>Staffelpaket – eine Datei für alle:</strong> Die Leitung erstellt unter Verwaltung → Pakete für Mitglieder eine gemeinsame Datei, geschützt mit dem Staffel-Passwort. Beim ersten Öffnen wählst du deinen Namen, bestätigst ihn mit deinem Geburtsdatum und legst bei Bedarf Benutzername und eigenes Passwort fest. Enthalten sind Termine, Trainingsorte, Fragenpakete und die Namensliste; Geburtstage nur mit Einwilligung – auf Wunsch mit Jahr. Kontaktdaten und Ausbildungsdaten anderer sind nicht enthalten.</li>\n<li><strong>Deine Ausbildungsdaten</strong> kommen danach per Stand-Update von der Leitung (mit dem Staffel-Passwort geschützt) – oder du trägst sie selbst ein und meldest sie.</li>\n<li><strong>📷 Aus dem drkserver übernehmen</strong> (Ausbildung → Mein Stand → Nachweis ergänzen): Screenshot der drkserver-App oder Foto der Ausbildungsliste auswählen; BARRY schlägt Kurs, Datum und Status vor, du bestätigst Zeile für Zeile. Beim ersten Mal ist Internet nötig; das Bild verlässt dein Gerät nicht.</li>\n<li><strong>Freigaben & Einwilligungen:</strong> neuer Knopf, um mündlich erteilte Einwilligungen (Geburtstag) für alle ohne Eintrag auf einmal zu erfassen, und neue Freigabe „mit Jahr“ samt Umfrage-Knopf (vollständiges Geburtsdatum für alle sichtbar).</li>\n<li><strong>2.98 – Probeprüfung & Fachfragen üben:</strong> Die Probeprüfung steht jetzt ganz oben in einem roten Kasten mit großen Knöpfen je Sparte, direkt darunter der Weg zu den offiziellen Fachfragen im DRK-Lerncampus. Fragenquelle und Fragenpakete stehen am Ende der Karte.</li>\n<li><strong>2.99 – Aus dem Ausbildungshandbuch:</strong> Im 🎡 Übungsrad stehen jetzt auch die Übungen für Menschen (Praxisband Teil D, M01–M34), die Praxisaufgaben P01–P12 mit Lösungswegen, die Fallwerkstatt (Fälle A–M), die Ergänzungsübungen E01–E26 (noch nicht in der Staffel erprobt) und die Einheiten für Partner und Schulbesuche. Karten und Skizzen der Fälle stehen im Praxisband. Dazu kommen zwei Fragenpakete zum Einlesen: die Selbsttests aus dem Lehrbuch als Multiple Choice und – nur für Ausbildende – die Lernkontrollen der Methodenkarten. Verweise wie „Lehrbuch Kap. 12“ sind anklickbar, wenn das Buch eingelesen ist.</li>\n<li><strong>3.00 – Übungen geprüft und ergänzt:</strong> Korrekturen aus dem Prüfbericht (Sicherheit, Aufsicht, Hitze nach der Arbeit, Leersuchen an wechselnden Orten, Bringselbefestigung, Einverständnis beim Filmen). Neu im Übungsrad: 15 Ergänzungen für typische Probleme (PX) und 5 bewährte Klassiker (PK) wie Wegläufer und Rückruf-Ping-Pong. Oben im Übungsrad steht kurz, wie man Übungen aufbaut und wann man kleinschrittiger arbeitet. Mantrailing ruht: Diese Übungen bleiben lesbar, werden aber nicht gezogen; Ausbildende können sie wieder aufnehmen. Bei jedem Lernstand-Check stehen passende Übungen.</li>\n<li><strong>3.01 – 🔁 Lange nicht geübt:</strong> Neuer Schalter im Glücksrad. Er zieht nur Übungen, die du schon erledigt hast und deren letztes Mal mehr als 30 Tage zurückliegt – die ältesten zuerst. So kommen bewährte Übungen wieder dran, statt in Vergessenheit zu geraten. Die übrigen Filter (Themen, Zeit, Helfer, Ausbilder) gelten weiter.</li>\n<li><strong>Katalog:</strong> neu „MTF – Zusatzausbildung Behandlungsplatz“ wie im drkserver; das Lerncampus-Modul „Regelmäßige Unterweisung zum Fahren mit Sonderrechten“ zählt als SuWR.</li>\n<li><strong>Grundsatz:</strong> Ausbildungen und Qualifikationen gelten nur aus dem drkserver. Eine Anwesenheit in HiOrg (z. B. als Helfer bei einer Prüfung) ist kein Nachweis.</li>\n</ul>\n"},
+  {id:"neu-2-97", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.97–3.02: Staffelpaket, drkserver-Bild, Probeprüfung und Übungen", rollen:["mitglied","ausbilder","leitung"], text:"\n<ul>\n<li><strong>Staffelpaket – eine Datei für alle:</strong> Die Leitung erstellt unter Verwaltung → Pakete für Mitglieder eine gemeinsame Datei, geschützt mit dem Staffel-Passwort. Beim ersten Öffnen wählst du deinen Namen, bestätigst ihn mit deinem Geburtsdatum und legst bei Bedarf Benutzername und eigenes Passwort fest. Enthalten sind Termine, Trainingsorte, Fragenpakete und die Namensliste; Geburtstage nur mit Einwilligung – auf Wunsch mit Jahr. Kontaktdaten und Ausbildungsdaten anderer sind nicht enthalten.</li>\n<li><strong>Deine Ausbildungsdaten</strong> kommen danach per Stand-Update von der Leitung (mit dem Staffel-Passwort geschützt) – oder du trägst sie selbst ein und meldest sie.</li>\n<li><strong>📷 Aus dem drkserver übernehmen</strong> (Ausbildung → Mein Stand → Nachweis ergänzen): Screenshot der drkserver-App oder Foto der Ausbildungsliste auswählen; BARRY schlägt Kurs, Datum und Status vor, du bestätigst Zeile für Zeile. Beim ersten Mal ist Internet nötig; das Bild verlässt dein Gerät nicht.</li>\n<li><strong>Freigaben & Einwilligungen:</strong> neuer Knopf, um mündlich erteilte Einwilligungen (Geburtstag) für alle ohne Eintrag auf einmal zu erfassen, und neue Freigabe „mit Jahr“ samt Umfrage-Knopf (vollständiges Geburtsdatum für alle sichtbar).</li>\n<li><strong>2.98 – Probeprüfung & Fachfragen üben:</strong> Die Probeprüfung steht jetzt ganz oben in einem roten Kasten mit großen Knöpfen je Sparte, direkt darunter der Weg zu den offiziellen Fachfragen im DRK-Lerncampus. Fragenquelle und Fragenpakete stehen am Ende der Karte.</li>\n<li><strong>2.99 – Aus dem Ausbildungshandbuch:</strong> Im 🎡 Übungsrad stehen jetzt auch die Übungen für Menschen (Praxisband Teil D, M01–M34), die Praxisaufgaben P01–P12 mit Lösungswegen, die Fallwerkstatt (Fälle A–M), die Ergänzungsübungen E01–E26 (noch nicht in der Staffel erprobt) und die Einheiten für Partner und Schulbesuche. Karten und Skizzen der Fälle stehen im Praxisband. Dazu kommen zwei Fragenpakete zum Einlesen: die Selbsttests aus dem Lehrbuch als Multiple Choice und – nur für Ausbildende – die Lernkontrollen der Methodenkarten. Verweise wie „Lehrbuch Kap. 12“ sind anklickbar, wenn das Buch eingelesen ist.</li>\n<li><strong>3.00 – Übungen geprüft und ergänzt:</strong> Korrekturen aus dem Prüfbericht (Sicherheit, Aufsicht, Hitze nach der Arbeit, Leersuchen an wechselnden Orten, Bringselbefestigung, Einverständnis beim Filmen). Neu im Übungsrad: 15 Ergänzungen für typische Probleme (PX) und 5 bewährte Klassiker (PK) wie Wegläufer und Rückruf-Ping-Pong. Oben im Übungsrad steht kurz, wie man Übungen aufbaut und wann man kleinschrittiger arbeitet. Mantrailing ruht: Diese Übungen bleiben lesbar, werden aber nicht gezogen; Ausbildende können sie wieder aufnehmen. Bei jedem Lernstand-Check stehen passende Übungen.</li>\n<li><strong>3.01 – 🔁 Lange nicht geübt:</strong> Neuer Schalter im Glücksrad. Er zieht nur Übungen, die du schon erledigt hast und deren letztes Mal mehr als 30 Tage zurückliegt – die ältesten zuerst. So kommen bewährte Übungen wieder dran, statt in Vergessenheit zu geraten. Die übrigen Filter (Themen, Zeit, Helfer, Ausbilder) gelten weiter.</li>\n<li><strong>3.02 – Dienstnachweis vollständig machen:</strong> Unter Organisation & Termine → Teilnahme kannst du vergangene Termine nachtragen („War dabei“ mit Km und Stunden) und weitere Dienste ohne Staffeltermin eintragen. Unter „Mein Dienstnachweis“ zeigt die neue Prüfliste, was noch fehlt: Zusagen ohne Anwesenheit, fehlende Km oder Stunden, noch nicht bestätigte Einträge und – nach dem Einlesen der HiOrg-Datei „Helferstunden“ – was in HiOrg steht, aber nicht in BARRY, und umgekehrt. Selbst nachgetragene Einträge gehen mit „Meine Angaben an die Leitung“ zur Bestätigung; das Stand-Update bringt den bestätigten Stand zurück. Beim Erfassen der Anwesenheit wählt BARRY Zusagen als anwesend und Absagen als entschuldigt vor. Die Leitung sieht unter Verwaltung → Anwesenheit je Person die Prüfliste und bestätigt dort.</li>\n<li><strong>Katalog:</strong> neu „MTF – Zusatzausbildung Behandlungsplatz“ wie im drkserver; das Lerncampus-Modul „Regelmäßige Unterweisung zum Fahren mit Sonderrechten“ zählt als SuWR.</li>\n<li><strong>Grundsatz:</strong> Ausbildungen und Qualifikationen gelten nur aus dem drkserver. Eine Anwesenheit in HiOrg (z. B. als Helfer bei einer Prüfung) ist kein Nachweis.</li>\n</ul>\n"},
   {id:"neu-2-96", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.96: Prüfung & Module übersichtlicher", rollen:["mitglied","ausbilder","leitung"], text:"\n<ul>\n<li><strong>Wissen & Material → Prüfung & Module:</strong> oben die Übersicht aller Module mit Sprung zum Abschnitt, dann Modul 1.0 Fachfragen, dann Module 1.1–1.3; Ausbildungsordnung, Prüfungsordnung und Ausführungsbestimmungen stehen unten.</li>\n<li><strong>Startseite:</strong> neue Kacheln „Module 1.1–1.3 üben“ und „Fachfragen & Probeprüfung“.</li>\n<li>Darstellung auf dem Handy verbessert (Stufenauswahl, Kacheln, Probeprüfung).</li>\n<li>Termine: neue Kategorie „Zusatztraining (freiwillig)“ für freiwillige Termine mit wechselnden Inhalten.</li>\n<li>Fragenpakete: Der Vermerk „Nur für den Dienstgebrauch“ entfällt, da BARRY ohnehin nur innerhalb der Staffel genutzt wird.</li>\n</ul>"},
   {id:"neu-2-95", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.95: Ausbildungshandbuch", rollen:["mitglied","ausbilder","leitung"], text:"\n<p><strong>Fünf Stufen des Könnens</strong> bei den Prüfungselementen und in der Ausbilder-Übersicht: 1 Erworben, 2 Flüssig, 3 Übertragen, 4 Belastbar, 5 Behalten (Kaltstart). Bisherige Einträge bleiben erhalten; „bestanden“ zählt ab Stufe 4. Steht ein Element seit 14 Tagen auf Stufe 3 oder 4, erscheint „Kaltstart fällig“.</p>\n<ul>\n<li><strong>Anzeigeart:</strong> Pendeln ist eine Art des Rückführens. Im Hundeprofil wählst du Rückverweiser und darunter die Rückführung.</li>\n<li><strong>📖 Mehr im Buch:</strong> Bibliothek, Lehrwerkstatt und Kataloge verweisen auf Lehrbuch, Praxisband und Ausbilderhandbuch.</li>\n<li><strong>Ampel:</strong> Jede Übung zeigt, ob sie daheim, im Hundeführer-Treffen oder nur im Training geübt wird; Filter in der Bibliothek; Hausaufgaben mit Ort und Warnung bei Rot.</li>\n<li><strong>Ausbildung &amp; Team → Lernstand &amp; Protokolle:</strong> Lernstand-Checks H-1 bis H-19 und M-1 bis M-15 mit Verlauf und Wiedervorlage, Lernpfad, fünf Protokollvorlagen und „Gefühle an der Leine“ mit Wenn-dann-Plänen auf der Startseite. Mitglieder senden Checks und Protokolle mit „Meine Angaben senden“ an die Leitung.</li>\n<li><strong>Fehlerdiagnose:</strong> Schnellsuche nach Beobachtung und Problemlösung A–Z (62 Einträge aus dem Ausbilderhandbuch) mit passenden Übungen.</li>\n<li><strong>Ausbilder-Werkzeuge</strong> (nur Ausbildende): Drehbuch einsatznahe Übung, Fallakte je Team, Checkliste „Vom Prüfungsbestehen zum ersten Einsatz“, Bewertung abgleichen.</li>\n<li><strong>📖 Ausbildungshandbuch (Buchleser):</strong> Startseite oder Unterlagen-Leiste → Bände einmal je Gerät als Buchpaket (.json) einlesen; danach offline blättern (Wischen oder Pfeile), suchen, Inhaltsverzeichnis, Lesezeichen und Sprünge zwischen den Bänden. Band 3 nur für Ausbildende. Alle „Mehr im Buch“-Hinweise öffnen die passende Stelle.</li>\n<li><strong>Mein Stand → Mein Weg in die Prüfertätigkeit:</strong> Voraussetzungen, Anwärterzeit mit Zähler für 40 Einzelsuchprüfungen und sechs Lernschritte.</li>\n</ul>"},
   {id:"neu-2-51", kategorie:"Erste Schritte", titel:"Neu in BARRY 2.51–2.55: Übungsrad", rollen:["mitglied","ausbilder","leitung"], text:"\n<p><strong>🎡 Übungsrad</strong> (Menü, direkt unter Start): 435 Übungen zu 33 Themen aus Kynologie, Rettungshundearbeit und Erster Hilfe – ohne Ausbildungsunterlagen lösbar.</p>\n<ul>\n<li><strong>Glücksrad:</strong> Wer übt (allein, mit Hund, als Helfer, in der Gruppe), Zeit und Bereich wählen, dann drehen. Übungen „Erst mit Ausbilder“ werden zuerst im Training geübt; sind sie aus dem Training bekannt oder mit dem Ausbilder abgesprochen, dürfen sie privat auch ohne Ausbilder geübt werden, ggf. mit einem erfahrenen Helfer (eigener Schalter). Übungen „Nur mit Ausbilder“ (z. B. Trümmergelände, Mantrailing) erscheinen nur mit „Ausbilderin oder Ausbilder ist heute dabei“. Ohne Haken bei „Ein Helfer bzw. eine Versteckperson ist dabei“ zeigt das Rad nur Übungen, die allein mit dem eigenen Hund möglich sind; die Anzeigeart des Teams wird berücksichtigt. Bei Regen unter „Wo?“ „Drinnen (Schlechtwetter)“ wählen: Das Rad zeigt nur Übungen, die drinnen gehen, mit Hinweisen für drinnen. Vor Übungen mit Hund kommt ein kurzer Tagesform-Check.</li>\n<li><strong>Lösungen</strong> erst nach Bestätigung, dass die Aufgabe selbst bearbeitet wurde; Hinweise schrittweise.</li>\n<li><strong>Meine Themen</strong> und <strong>Mein Stand</strong>: eigene Themen fürs Rad wählen, erledigte Übungen und Notizen sehen. Der Stand gilt je angemeldeter Person und ist in jeder Datensicherung enthalten.</li>\n<li><strong>Trainingstagebuch:</strong> Beim Abhaken bietet BARRY (bei eigenem Hund) an, einen Eintrag mit Datum, Übung und Notiz anzulegen.</li>\n<li>Ältere Übungen in BARRY zeigen, wo es eine neue Fassung gibt: „Neue Fassung im Übungsrad: …“ – ein Tipp darauf öffnet die Übung. Die bisherigen Übungen bleiben unverändert erhalten.</li>\n</ul>"},
